@@ -24,6 +24,8 @@ jobs:
     env:
       PYTHONPATH: backend
       VIDEO_FACTORY_CONTAINER: '0'
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
     steps:
       # Upstream release SHAs verified 2026-10-30. Update pins deliberately.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,7 +88,7 @@ jobs:
       - name: Check shared production contracts
         run: python scripts/build_cinematic_contracts.py --check
       - name: Run all backend tests included in the public source tree
-        run: python -m pytest tests/backend
+        run: python -m pytest -rs tests/backend
       - name: Check verified backup and restore helper
         run: python -m unittest discover -s docker -p test_volume_archive.py -v
 
