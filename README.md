@@ -2,7 +2,7 @@
 
 将 Word 剧本、人物和产品参考素材组织成可审核的视频生产流程：解析剧本、准备角色与场景、生成关键画面和视频、处理声音与画质，再合成 MP4。网页与后台由 Docker 运行，生成模型由你在设置页配置。
 
-> 发布验证进行中：仓库、MIT 许可和镜像命名已确认；在镜像公开、匿名拉取和发布记录通过前，生产部署尚未验收。源码构建使用 `compose.dev.yaml`。
+> 源码、`latest` 与固定提交镜像已公开，两轮发布工作流、两架构匿名拉取和正式镜像的本机空卷首次启动均已验证。各环境与模型范围见 [发布验收记录](docs/RELEASE_VALIDATION.md)；正式版本请对照 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及关联 Actions 的实际结果。
 
 ## 普通用户安装
 
@@ -104,7 +104,7 @@ docker compose -f compose.dev.yaml up -d --build
 
 首次从 GitHub 下载和日后提交代码见 [VS Code 与 GitHub 教程](docs/VSCODE_GITHUB_GUIDE_ZH.md)。镜像来源、版本标签、Actions、备份和升级见 [Docker 发布教程](docs/DOCKER_RELEASE_GUIDE_ZH.md)。
 
-已确认的目标镜像地址：后端 `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest`，前端 `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest`；公开发布与匿名拉取尚待验收。发布后，`latest` 指向发布流程更新的最新镜像，`vX.Y.Z` 对应正式版本，`sha-…` 对应指定源码提交。维护者应在变更记录中提供对应版本和实际测试范围。
+公开镜像地址：后端 `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest`，前端 `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest`。`latest` 随已通过发布流程的提交更新，`sha-…` 固定到对应源码提交；`vX.Y.Z` 对应正式版本。需要固定版本时，先在 Tags / Releases 查到该版本，再核对其关联 Actions；各轮已完成验证见发布验收记录。
 
 ## 问题反馈与许可
 

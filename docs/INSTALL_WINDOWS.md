@@ -2,7 +2,7 @@
 
 本教程运行网页、后端和媒体处理工具。生成模型使用你配置的云端 API 或独立本地服务。无需先安装 Python、Node.js、SQLite、FFmpeg 或模型权重。
 
-> 发布验证进行中：仓库、MIT 许可和镜像命名已确认；在镜像公开、匿名拉取和发布记录通过前，生产部署尚未验收。源码构建使用 `compose.dev.yaml`。
+> 源码与 `latest` 镜像已公开，Linux AMD64 / ARM64 匿名拉取，以及 Windows Docker Desktop 使用正式镜像的三个空卷首次启动已通过。具体范围见 [发布验收记录](RELEASE_VALIDATION.md)。普通安装使用下面的镜像拉取命令；源码开发使用 `compose.dev.yaml`。
 
 ## 1. 安装 Docker Desktop
 
@@ -46,7 +46,7 @@ cd video-factory
 docker compose up -d
 ```
 
-首次会下载匹配 AMD64 的前后端镜像、创建网络和持久化数据卷，然后启动应用。这里不用加 `--build`，也不用先复制 `.env.example`。若还未公开镜像，不能把拉取失败解释为你电脑上的模型问题。
+首次会下载匹配 AMD64 的前后端公开镜像、创建网络和持久化数据卷，然后启动应用。这里不用加 `--build`，也不用先复制 `.env.example`。镜像拉取错误应先按网络、镜像地址和标签排查，与尚未配置的模型分别处理。
 
 查看状态并打开网页：
 

@@ -1,6 +1,6 @@
 # Docker 部署、升级、备份与发布
 
-普通用户只需要 Docker Desktop 和公开项目文件。开发者才需要源码构建与 GitHub 发布流程。本项目的目标仓库与镜像命名已确认，公开发布、匿名拉取和最终镜像部署仍待验收；在这些步骤完成前，可使用 `compose.dev.yaml` 验证当前源码，不能把目标地址当成镜像已经发布的证明。
+普通用户只需要 Docker Desktop 和公开项目文件。开发者才需要源码构建与 GitHub 发布流程。本项目源码及两份 `latest` 镜像已公开，连续两轮 Actions 构建、发布与两架构匿名拉取成功，补充媒体测试及正式 GHCR 镜像的本机三空卷首次启动已通过。各项实测范围见 [发布验收记录](RELEASE_VALIDATION.md)。
 
 ## 1. 镜像与依赖来源
 
@@ -90,7 +90,7 @@ docker compose logs --tail=100 backend
 镜像标签含义：
 
 - `latest`：发布流程更新的最新公开应用镜像，适合一般用户。
-- `vX.Y.Z`：固定正式版本，用于可重复部署与升级规划。
+- `vX.Y.Z`：固定正式版本，用于可重复部署与升级规划；可用版本及关联验证以仓库 Tags、Releases 和相应 Actions 记录为准。
 - `sha-…`：某个源码提交的构建，便于定位问题。
 
 用 `docker compose images` 看正在使用的镜像引用和 ID；GitHub Releases/变更说明查看该版本更新内容。检查 OCI 标签可运行：
@@ -199,13 +199,13 @@ docker compose up -d
 
 先确认第一方许可与第三方分发权，完成纯净源码审计。公开目录不得含 `.env`、数据库、主密钥、个人素材、模型、日志、备份、私人路径和旧敏感 Git 历史。`.gitignore` 不会自动清除已经进入 Git 索引或提交历史的内容。
 
-已确认的目标地址：仓库 `https://github.com/willzhang35929924-ui/AI_Video_Creation`；后端 `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest`；前端 `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest`。仓库创建、发布权限、镜像公开和匿名拉取需要逐项验证；认证等外部条件尚未满足的步骤记为 `BLOCKED`，不能仅凭地址已确认就声称发布完成。
+公开地址：仓库 `https://github.com/willzhang35929924-ui/AI_Video_Creation`；后端 `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest`；前端 `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest`。[首轮发布工作流](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41194359645) 与[补充媒体测试后的第二轮](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41196808866) 均为 10 个任务成功，包括镜像发布和两架构匿名拉取；正式版本标签仍须独立验证。
 
 维护者使用 GitHub CLI 的浏览器授权路线时，执行 `gh auth login --hostname github.com --git-protocol https --web --scopes workflow`；已有授权需要补充工作流权限时，执行 `gh auth refresh --hostname github.com --scopes workflow`。这是为推送 `.github/workflows` 申请的权限，不等于下面的 Actions 包发布权限；登录细节见 [VS Code 与 GitHub 教程](VSCODE_GITHUB_GUIDE_ZH.md)。
 
 按照仓库实际 Actions 配置，PR 执行检查与构建而不推送正式包；发布分支或版本标签通过检查后，用 `GITHUB_TOKEN` 最小权限构建并推送多架构镜像。代码读取需要 `contents: read`，发布包的任务需要 `packages: write`；不要将个人 Token 写进工作流。维护者需要在 GitHub Packages 检查两份镜像的仓库关联和公开可见性。参见 [GitHub 官方容器镜像发布教程](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)。
 
-正式版本标签示例，只有在版本号确定后执行：
+正式版本标签示例。维护者须先确认对应提交及验证结果，再执行打标；用户选择版本时核对 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 与[关联 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions) 的实际结果：
 
 ```bash
 git tag v1.0.0

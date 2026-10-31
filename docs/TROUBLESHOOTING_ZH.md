@@ -22,7 +22,7 @@ docker compose exec backend python -m app.container_entrypoint doctor
 | 找不到 `docker` 命令 | 安装官方 Docker Desktop，关闭旧终端后重新打开；核对安装是否完成 |
 | 无法连接 Docker 引擎 | 打开 Docker Desktop 并等待引擎运行；Windows 检查 WSL 2、虚拟化与 Linux 容器模式 |
 | 提示找不到 Compose 文件 | 当前目录应能看见 `compose.yaml`，不要在 ZIP 中直接运行，先完整解压 |
-| 镜像引用为空或自定义地址错误 | 当前 Compose 已含确认的目标镜像默认值；检查是否用了旧配置，或被自己的 `.env` 覆盖。不要猜测镜像地址；公开发布尚未完成时，开发者可用 `compose.dev.yaml` 验证源码 |
+| 镜像引用为空或自定义地址错误 | 当前 Compose 已含公开 `latest` 镜像默认值；检查是否用了旧配置，或被自己的 `.env` 覆盖。核对实际已发布的标签，不自行猜测版本；开发者可另用 `compose.dev.yaml` 验证源码 |
 | GHCR 403、denied、unauthorized | 确认实际镜像地址和标签。公开发行镜像应可匿名拉取，维护者需检查 Package 可见性与仓库关联，不能把每个用户申请私人 Token 当作正式安装步骤 |
 | 下载超时、DNS 或 TLS 错误 | 检查 Docker Desktop 网络/代理、企业证书和磁盘空间；按官方配置代理，保留 TLS 校验，不把密钥改写进 URL |
 | `no matching manifest` | 检查 Docker 架构和发布镜像清单。Apple Silicon 需要 ARM64；报告缺失的架构，不直接强制 AMD64 并宣称跨平台完成 |

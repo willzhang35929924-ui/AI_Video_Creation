@@ -2,9 +2,9 @@
 
 Mac 通过 Docker Desktop 运行相同的网页、后端、SQLite、任务编排和 FFmpeg。视频生成优先配置云端 API；不能将 Windows 上的 NVIDIA/CUDA 模型目录复制进 Mac 就直接运行。
 
-> 验证边界：当前没有 Mac 实机，Mac 物理设备上的启动与完整业务验证为 **BLOCKED**。AMD64/ARM64 镜像构建情况须以真实发布记录为准。多架构构建成功也不等于 Metal/MPS 或本地视频模型已验证。
+> 验证边界：Linux AMD64 / ARM64 镜像已实际构建、发布并通过 CI 匿名拉取。当前没有 Mac 实机，Mac 物理设备上的启动与完整业务验证为 **BLOCKED**；Linux 构建、模拟运行和其他主机上的安装结果不能替代 Mac 实测或 Metal/MPS 模型验证。
 >
-> 发布验证进行中：仓库、MIT 许可和镜像命名已确认；在镜像公开、匿名拉取和发布记录通过前，生产部署尚未验收。源码构建使用 `compose.dev.yaml`。
+> 源码与 `latest` 镜像已公开，CI 已验证 Linux AMD64 / ARM64 匿名拉取。Mac 实机仍缺少设备验证，不能用这些结果替代 Mac 上的实际启动、模型推理和视频制作测试；详见 [发布验收记录](RELEASE_VALIDATION.md)。
 
 ## 1. 识别芯片与安装 Docker Desktop
 
