@@ -1,6 +1,6 @@
 # 发行验证记录
 
-公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。第一方代码许可：MIT；第三方声明分别保留。本记录已验证 `latest` 与相应 `sha-…` 快照；正式版本（包括 v0.1.0）以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及[关联 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions) 的实际结果为准。
+公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。第一方代码许可：MIT；第三方声明分别保留。本记录已验证 `latest` 与相应 `sha-…` 快照，保留 v0.1.0 的实际复核记录；本次版本化验证目标为 **v0.1.1**，以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及[关联 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions) 的实际结果为准。
 
 源码与 GHCR 镜像已经公开。[首轮 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41194359645) 与[补充媒体测试后的第二轮](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41196808866) 均为 10 个任务全部成功，两份镜像的 AMD64 / ARM64 匿名拉取均通过。第二轮实际补齐原先误跳过的媒体测试，正式 GHCR 镜像的本机空卷首次启动也已通过。新正式镜像上的额外 H3 业务案例与版本标签验证分别记录，不从启动成功推定生成或版本化验收完成。
 
@@ -32,7 +32,8 @@
 | CI 空卷启动与持久化 | PASS（两轮 CI 构建镜像） | 在 CI 加载当次构建的 AMD64 镜像，执行空卷启动、Nginx 访问、API 写入、Word 解析及三卷重建后持久化；不包含外部模型推理 |
 | 正式 GHCR 镜像本机空卷安装 | PASS（Windows Docker Desktop / Linux AMD64） | 空认证配置实际匿名拉取 `sha-2ed…` 两镜像，正式 Compose、全新三个卷；两服务 healthy、只读根文件系统、非 root；117 份业务源码哈希与 35 项锁定依赖版本匹配，初始无用户业务记录 |
 | 正式镜像上的额外 H3 案例 | 未计为通过 | 本项未收录该新增案例的完成报告；下方已有两个真实 H3 流程的技术验证独立保留，首次启动验证不代替新案例结果 |
-| 正式版本标签（含 v0.1.0） | 按关联发布记录核对 | 先查看 Tags / Releases 的对应版本，再核对该标签触发的 Actions 实际结果；本表不从 `latest` / `sha-…` 验证推定正式标签通过 |
+| v0.1.0 历史版本镜像 | PASS（额外归属复核） | 已另行逐一核对两份索引、镜像配置及四个平台运行叶，并实际匿名下载确认；保留已公开版本及历史记录 |
+| v0.1.1 版本化验证目标 | 按关联发布记录核对 | 本次修复发布检查的镜像归属；需查看该标签对应的 Release / Actions 实际结果，不从其他运行或共享提交标签推定通过 |
 | 付费云端推理 | NOT RUN | 此次新部署使用受控宿主机 ComfyUI；未把未调用的云服务记为通过 |
 
 ## 镜像和证明材料的验证范围
@@ -50,6 +51,8 @@
 第二轮发布提交为 `2ed8522d8964fbcdef16a49260e120adaf527c4c`，后端 OCI 应用索引为 `sha256:3430785ee425fb62b624f327e8ad5d09474ce41ae66172884c219e1f8491952b`，前端为 `sha256:c15bfd39212602e956e111895f16ee386b398687468968062b30f6f4d11496f6`。两份镜像均发布 `latest` 和 `sha-2ed8522d8964fbcdef16a49260e120adaf527c4c`，四次实际匿名平台下载通过。这些事实固定描述第二轮提交镜像；正式版本另行核对其标签关联的实际发布记录。
 
 已公开提交保留历史，后续修正与本文件更新正常 Commit、Push，不通过 amend 或强制推送替换首轮记录。正式版本、实机平台和各模型组合按各自的实际记录核对。
+
+后续发现同一提交的主分支与 v0.1.0 标签同时发布时，共享 `sha-…` 标签会被另一运行更新，主分支的匿名下载检查实际读到了标签运行的产物。v0.1.0 自身已通过额外的索引、配置与四个平台叶镜像归属复核及匿名下载，保留该版本。针对这一 CI 检查问题，本次 v0.1.1 修改为标签事件验证自身版本标签，主分支验证 `latest`，并逐叶核对预期版本与创建时间；是否通过以对应标签的真实 Actions 结果为准，不把已修改工作流当作已完成后续验收。
 
 ## 正式 GHCR 镜像的空卷首次启动
 

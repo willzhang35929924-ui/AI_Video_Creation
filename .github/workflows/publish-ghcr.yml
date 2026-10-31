@@ -163,7 +163,11 @@ jobs:
       matrix:
         component: [backend, frontend]
     env:
-      IMAGE: ${{ needs.release_metadata.outputs.image_base }}-${{ matrix.component }}:sha-${{ github.sha }}
+      # Main and tag builds may share a commit but have different version
+      # metadata. Verify the reference owned by this serialized ref workflow.
+      IMAGE: ${{ needs.release_metadata.outputs.image_base }}-${{ matrix.component }}:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+      EXPECTED_VERSION: ${{ needs.release_metadata.outputs.version }}
+      EXPECTED_CREATED: ${{ needs.release_metadata.outputs.created }}
     steps:
       # This fresh job never receives registry credentials. An authenticated
       # push is not evidence that first-time users can pull public packages.
@@ -202,6 +206,10 @@ jobs:
             [ "$actual" = "$platform" ]
             revision=$(docker image inspect "$pull_ref" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
             [ "$revision" = "$GITHUB_SHA" ]
+            version=$(docker image inspect "$pull_ref" --format '{{index .Config.Labels "org.opencontainers.image.version"}}')
+            [ "$version" = "$EXPECTED_VERSION" ]
+            created=$(docker image inspect "$pull_ref" --format '{{index .Config.Labels "org.opencontainers.image.created"}}')
+            [ "$created" = "$EXPECTED_CREATED" ]
           done
           {
             echo "### Anonymous pull verified: $IMAGE"
