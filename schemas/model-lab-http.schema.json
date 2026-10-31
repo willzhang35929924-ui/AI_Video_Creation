@@ -1,0 +1,795 @@
+{
+  "ModelDirectoryInput": {
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "maxLength": 2048,
+        "minLength": 1,
+        "title": "Path",
+        "type": "string"
+      },
+      "label": {
+        "default": "",
+        "maxLength": 160,
+        "title": "Label",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path"
+    ],
+    "title": "ModelDirectoryInput",
+    "type": "object"
+  },
+  "ModelScanInput": {
+    "additionalProperties": false,
+    "properties": {
+      "directory_ids": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Directory Ids"
+      }
+    },
+    "title": "ModelScanInput",
+    "type": "object"
+  },
+  "ModelDirectoryView": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "path": {
+        "title": "Path",
+        "type": "string"
+      },
+      "label": {
+        "title": "Label",
+        "type": "string"
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "scan": {
+        "additionalProperties": true,
+        "title": "Scan",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "path",
+      "label",
+      "enabled"
+    ],
+    "title": "ModelDirectoryView",
+    "type": "object"
+  },
+  "LocalModelView": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "kind": {
+        "enum": [
+          "language",
+          "image",
+          "video",
+          "encoder",
+          "vae",
+          "lora",
+          "upscale",
+          "unknown"
+        ],
+        "title": "Kind",
+        "type": "string"
+      },
+      "path": {
+        "title": "Path",
+        "type": "string"
+      },
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "service_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Service Id"
+      },
+      "workflow_path": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Workflow Path"
+      },
+      "fingerprint": {
+        "title": "Fingerprint",
+        "type": "string"
+      },
+      "component_status": {
+        "title": "Component Status",
+        "type": "string"
+      },
+      "load_status": {
+        "enum": [
+          "not_tested",
+          "verified",
+          "failed"
+        ],
+        "title": "Load Status",
+        "type": "string"
+      },
+      "eligible_for_comparison": {
+        "title": "Eligible For Comparison",
+        "type": "boolean"
+      },
+      "diagnostics": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Diagnostics",
+        "type": "array"
+      },
+      "components": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Components",
+        "type": "array"
+      },
+      "metadata": {
+        "additionalProperties": true,
+        "title": "Metadata",
+        "type": "object"
+      },
+      "evidence": {
+        "additionalProperties": true,
+        "title": "Evidence",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "kind",
+      "path",
+      "model_id",
+      "fingerprint",
+      "component_status",
+      "load_status",
+      "eligible_for_comparison"
+    ],
+    "title": "LocalModelView",
+    "type": "object"
+  },
+  "ModelCaseInput": {
+    "additionalProperties": false,
+    "properties": {
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "label": {
+        "default": "",
+        "maxLength": 160,
+        "title": "Label",
+        "type": "string"
+      },
+      "parameters": {
+        "additionalProperties": true,
+        "title": "Parameters",
+        "type": "object"
+      }
+    },
+    "required": [
+      "model_id"
+    ],
+    "title": "ModelCaseInput",
+    "type": "object"
+  },
+  "ModelExperimentInput": {
+    "$defs": {
+      "ModelCaseInput": {
+        "additionalProperties": false,
+        "properties": {
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "label": {
+            "default": "",
+            "maxLength": 160,
+            "title": "Label",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "model_id"
+        ],
+        "title": "ModelCaseInput",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "default": "视频模型对照实验",
+        "maxLength": 160,
+        "title": "Name",
+        "type": "string"
+      },
+      "shot_id": {
+        "title": "Shot Id",
+        "type": "string"
+      },
+      "prompt": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Prompt"
+      },
+      "mode": {
+        "default": "cross_model",
+        "enum": [
+          "cross_model",
+          "parameters"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "seed": {
+        "default": 20261020,
+        "maximum": 2147483647,
+        "minimum": 0,
+        "title": "Seed",
+        "type": "integer"
+      },
+      "width": {
+        "default": 1024,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Width",
+        "type": "integer"
+      },
+      "height": {
+        "default": 576,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Height",
+        "type": "integer"
+      },
+      "allow_cloud_costs": {
+        "default": false,
+        "title": "Allow Cloud Costs",
+        "type": "boolean"
+      },
+      "cases": {
+        "items": {
+          "$ref": "#/$defs/ModelCaseInput"
+        },
+        "maxItems": 6,
+        "minItems": 2,
+        "title": "Cases",
+        "type": "array"
+      }
+    },
+    "required": [
+      "shot_id",
+      "cases"
+    ],
+    "title": "ModelExperimentInput",
+    "type": "object"
+  },
+  "ModelLoadTestInput": {
+    "additionalProperties": false,
+    "properties": {
+      "shot_id": {
+        "title": "Shot Id",
+        "type": "string"
+      },
+      "prompt": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Prompt"
+      },
+      "seed": {
+        "default": 20261020,
+        "maximum": 2147483647,
+        "minimum": 0,
+        "title": "Seed",
+        "type": "integer"
+      },
+      "width": {
+        "default": 1024,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Width",
+        "type": "integer"
+      },
+      "height": {
+        "default": 576,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Height",
+        "type": "integer"
+      },
+      "steps": {
+        "default": 20,
+        "maximum": 60,
+        "minimum": 1,
+        "title": "Steps",
+        "type": "integer"
+      },
+      "allow_cloud_costs": {
+        "default": false,
+        "title": "Allow Cloud Costs",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "shot_id"
+    ],
+    "title": "ModelLoadTestInput",
+    "type": "object"
+  },
+  "ModelCaseReviewInput": {
+    "additionalProperties": false,
+    "properties": {
+      "notes": {
+        "default": "",
+        "maxLength": 4000,
+        "title": "Notes",
+        "type": "string"
+      },
+      "scores": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "title": "Scores",
+        "type": "object"
+      },
+      "best": {
+        "default": false,
+        "title": "Best",
+        "type": "boolean"
+      }
+    },
+    "title": "ModelCaseReviewInput",
+    "type": "object"
+  },
+  "ModelDefaultInput": {
+    "additionalProperties": false,
+    "properties": {
+      "confirm": {
+        "const": true,
+        "title": "Confirm",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "confirm"
+    ],
+    "title": "ModelDefaultInput",
+    "type": "object"
+  },
+  "ModelExperimentView": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "mode": {
+        "enum": [
+          "load_test",
+          "cross_model",
+          "parameters"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "source_shot_id": {
+        "title": "Source Shot Id",
+        "type": "string"
+      },
+      "test_project_id": {
+        "title": "Test Project Id",
+        "type": "string"
+      },
+      "test_shot_id": {
+        "title": "Test Shot Id",
+        "type": "string"
+      },
+      "snapshot": {
+        "additionalProperties": true,
+        "title": "Snapshot",
+        "type": "object"
+      },
+      "cases": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Cases",
+        "type": "array"
+      },
+      "results": {
+        "additionalProperties": true,
+        "title": "Results",
+        "type": "object"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Error"
+      },
+      "created_at": {
+        "title": "Created At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "mode",
+      "status",
+      "source_shot_id",
+      "test_project_id",
+      "test_shot_id",
+      "created_at"
+    ],
+    "title": "ModelExperimentView",
+    "type": "object"
+  },
+  "ModelLabOverview": {
+    "$defs": {
+      "LocalModelView": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "language",
+              "image",
+              "video",
+              "encoder",
+              "vae",
+              "lora",
+              "upscale",
+              "unknown"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Service Id"
+          },
+          "workflow_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workflow Path"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "component_status": {
+            "title": "Component Status",
+            "type": "string"
+          },
+          "load_status": {
+            "enum": [
+              "not_tested",
+              "verified",
+              "failed"
+            ],
+            "title": "Load Status",
+            "type": "string"
+          },
+          "eligible_for_comparison": {
+            "title": "Eligible For Comparison",
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          },
+          "components": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "path",
+          "model_id",
+          "fingerprint",
+          "component_status",
+          "load_status",
+          "eligible_for_comparison"
+        ],
+        "title": "LocalModelView",
+        "type": "object"
+      },
+      "ModelDirectoryView": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "scan": {
+            "additionalProperties": true,
+            "title": "Scan",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "label",
+          "enabled"
+        ],
+        "title": "ModelDirectoryView",
+        "type": "object"
+      },
+      "ModelExperimentView": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "load_test",
+              "cross_model",
+              "parameters"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "source_shot_id": {
+            "title": "Source Shot Id",
+            "type": "string"
+          },
+          "test_project_id": {
+            "title": "Test Project Id",
+            "type": "string"
+          },
+          "test_shot_id": {
+            "title": "Test Shot Id",
+            "type": "string"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "cases": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "results": {
+            "additionalProperties": true,
+            "title": "Results",
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode",
+          "status",
+          "source_shot_id",
+          "test_project_id",
+          "test_shot_id",
+          "created_at"
+        ],
+        "title": "ModelExperimentView",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "directories": {
+        "items": {
+          "$ref": "#/$defs/ModelDirectoryView"
+        },
+        "title": "Directories",
+        "type": "array"
+      },
+      "models": {
+        "items": {
+          "$ref": "#/$defs/LocalModelView"
+        },
+        "title": "Models",
+        "type": "array"
+      },
+      "experiments": {
+        "items": {
+          "$ref": "#/$defs/ModelExperimentView"
+        },
+        "title": "Experiments",
+        "type": "array"
+      },
+      "default": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Default"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      }
+    },
+    "title": "ModelLabOverview",
+    "type": "object"
+  }
+}

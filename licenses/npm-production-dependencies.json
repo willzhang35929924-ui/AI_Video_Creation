@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-10-31T01:53:32+00:00",
+  "scope": {
+    "lockfile": "frontend/package-lock.json",
+    "lockfile_version": 3,
+    "lockfile_sha256": "2bb1b5a3ff718bf6d3e8638cba4995dcc7022225aa3282911995394297eb18a2",
+    "selection_rule": "All non-root packages entries for which dev is not true; dev:true entries excluded.",
+    "production_package_count": 9,
+    "copied_license_file_count": 9,
+    "bundle_membership_analysis": false
+  },
+  "verification": {
+    "installed_root": "frontend/node_modules",
+    "all_installed_names_and_versions_match_lock": true,
+    "all_selected_packages_have_top_level_license_text": true,
+    "missing_packages": [],
+    "version_or_name_mismatches": [],
+    "missing_license_files": [],
+    "non_text_files_skipped": [],
+    "npm_tarball_integrity_verified": false
+  },
+  "limitations": [
+    "License identifiers are package metadata, not a new license grant; preserved license texts govern each component.",
+    "This inventory covers the selected production dependency graph, not exact tree-shaken bundle membership, development/build dependencies, operating-system packages, fonts, external services, or model weights.",
+    "Installed package names and versions were compared with the lockfile; source text bytes were copied unchanged and SHA-256 recorded. No npm tarballs were downloaded or independently revalidated."
+  ],
+  "packages": [
+    {
+      "name": "@remix-run/router",
+      "version": "1.23.4",
+      "lock_path": "node_modules/@remix-run/router",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/@remix-run/router/-/router-1.23.4.tgz",
+      "lock_integrity": "sha512-q7j5geK7xs3UJSdm9/iytUNclBnLmYx1EnSeCFXHPeutdqgIMeFeHtUZgS3EhlKxdBEAu8OwtJCwmLrEzpSs7Q==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/@remix-run/router/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/@remix-run/router/LICENSE.md",
+          "path": "licenses/npm/@remix-run/router/1.23.4/LICENSE.md",
+          "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49",
+          "bytes": 1161,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "@remix-run/router",
+      "installed_version": "1.23.4",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "6c3f0c8169df5475e874dd481e696ca778c6536ddca0279a62ccaab83ad23a8f",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "lock_path": "node_modules/js-tokens",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+      "lock_integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/js-tokens/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/js-tokens/LICENSE",
+          "path": "licenses/npm/js-tokens/4.0.0/LICENSE",
+          "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1",
+          "bytes": 1103,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "js-tokens",
+      "installed_version": "4.0.0",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "47345931827b3e26db9fe690abb81f856a0d040cbca8af1e69711a64cd58ce0d",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "loose-envify",
+      "version": "1.4.0",
+      "lock_path": "node_modules/loose-envify",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+      "lock_integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/loose-envify/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/loose-envify/LICENSE",
+          "path": "licenses/npm/loose-envify/1.4.0/LICENSE",
+          "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893",
+          "bytes": 1100,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "loose-envify",
+      "installed_version": "1.4.0",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "8c2e27dae366396ced36fe0f7c6d35d71a1440fd8e82df5f2005a5297888a0d4",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "lucide-react",
+      "version": "0.468.0",
+      "lock_path": "node_modules/lucide-react",
+      "lock_license": "ISC",
+      "lock_resolved": "https://registry.npmjs.org/lucide-react/-/lucide-react-0.468.0.tgz",
+      "lock_integrity": "sha512-6koYRhnM2N0GGZIdXzSeiNwguv1gt/FAjZOiPl76roBi3xKEXa4WmfpxgQwTTL4KipXjefrnf3oV4IsYhi4JFA==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/lucide-react/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/lucide-react/LICENSE",
+          "path": "licenses/npm/lucide-react/0.468.0/LICENSE",
+          "sha256": "1e7290b35280a048667bbf0ebabac1c7fd52a75300e8b2946ac165715997f2bc",
+          "bytes": 880,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "lucide-react",
+      "installed_version": "0.468.0",
+      "installed_license": "ISC",
+      "installed_package_json_sha256": "609e78dffe97aab720c105246eca516f0aaac1de60725e53c0f5abb908b08320",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "lock_path": "node_modules/react",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+      "lock_integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/react/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/react/LICENSE",
+          "path": "licenses/npm/react/18.3.1/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "react",
+      "installed_version": "18.3.1",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "d4e68a5c96babb20cad1daafea8b78822eae45b341552cf5418d06a5304fa64c",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "lock_path": "node_modules/react-dom",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+      "lock_integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/react-dom/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/react-dom/LICENSE",
+          "path": "licenses/npm/react-dom/18.3.1/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "react-dom",
+      "installed_version": "18.3.1",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "d2f29e31bd48b833e48cd7bbf41f192e8ee4ff8da249fdbe10d4ac4114b8b12e",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "react-router",
+      "version": "6.30.6",
+      "lock_path": "node_modules/react-router",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/react-router/-/react-router-6.30.6.tgz",
+      "lock_integrity": "sha512-5HfK7k5im7LTOB0EqCQmfvy4C13G92Ssj1VTmouTK3AJvyjKTnFuCV0vcMAD/JS+JC4DvDIBRrlAeJIFjh5VWg==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/react-router/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/react-router/LICENSE.md",
+          "path": "licenses/npm/react-router/6.30.6/LICENSE.md",
+          "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49",
+          "bytes": 1161,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "react-router",
+      "installed_version": "6.30.6",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "393437d196e182fdd0f2cf9b12079ba9d4a2ad6e98bb5eec1782ac781e0c9293",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "react-router-dom",
+      "version": "6.30.6",
+      "lock_path": "node_modules/react-router-dom",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-6.30.6.tgz",
+      "lock_integrity": "sha512-0RHKZz7wwffvkU+2MFVT2NnjK44ssLEV+m0CAJaS2Ksmorrwj7WxH00jO0SOCW26/tINUnJHToXblDs33I38YQ==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/react-router-dom/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/react-router-dom/LICENSE.md",
+          "path": "licenses/npm/react-router-dom/6.30.6/LICENSE.md",
+          "sha256": "77c9ee6a9c5d5782fb0c50b50d101189116314c14f7df0a1b0d385fc96a7ba49",
+          "bytes": 1161,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "react-router-dom",
+      "installed_version": "6.30.6",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "ba5ba28ce64a1d51001cb3eb0fc842d35f9950ee550d8c587a6b6ce9ee6057a2",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.23.2",
+      "lock_path": "node_modules/scheduler",
+      "lock_license": "MIT",
+      "lock_resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+      "lock_integrity": "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==",
+      "optional": false,
+      "installed_package_json": "frontend/node_modules/scheduler/package.json",
+      "license_files": [
+        {
+          "source_path": "frontend/node_modules/scheduler/LICENSE",
+          "path": "licenses/npm/scheduler/0.23.2/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "bytes": 1086,
+          "encoding": "utf-8 (byte-preserved; BOM retained when present)"
+        }
+      ],
+      "installed_name": "scheduler",
+      "installed_version": "0.23.2",
+      "installed_license": "MIT",
+      "installed_package_json_sha256": "0893643a24576d727174e639586b8833a53f2a7b4a2199a719b9cfcebe9bae88",
+      "name_matches_lock": true,
+      "version_matches_lock": true,
+      "installed_verification": "match"
+    }
+  ]
+}

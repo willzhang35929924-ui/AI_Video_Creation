@@ -1,0 +1,1859 @@
+{
+  "RouteChoice": {
+    "additionalProperties": false,
+    "properties": {
+      "service_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Service Id",
+        "type": "string"
+      },
+      "model_id": {
+        "default": "",
+        "maxLength": 240,
+        "title": "Model Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "service_id"
+    ],
+    "title": "RouteChoice",
+    "type": "object"
+  },
+  "RouteSettings": {
+    "$defs": {
+      "RouteChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "service_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id"
+        ],
+        "title": "RouteChoice",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "mode": {
+        "default": "local_only",
+        "enum": [
+          "local_only",
+          "cloud_only",
+          "local_first",
+          "cloud_first",
+          "manual",
+          "auto"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "choices": {
+        "items": {
+          "$ref": "#/$defs/RouteChoice"
+        },
+        "maxItems": 20,
+        "title": "Choices",
+        "type": "array"
+      },
+      "parameters": {
+        "additionalProperties": true,
+        "title": "Parameters",
+        "type": "object"
+      },
+      "quality_mode": {
+        "default": "standard",
+        "enum": [
+          "preview",
+          "standard",
+          "high"
+        ],
+        "title": "Quality Mode",
+        "type": "string"
+      },
+      "allow_fallback": {
+        "default": false,
+        "title": "Allow Fallback",
+        "type": "boolean"
+      },
+      "allow_paid_fallback": {
+        "default": false,
+        "title": "Allow Paid Fallback",
+        "type": "boolean"
+      },
+      "max_retries": {
+        "default": 0,
+        "maximum": 2,
+        "minimum": 0,
+        "title": "Max Retries",
+        "type": "integer"
+      }
+    },
+    "title": "RouteSettings",
+    "type": "object"
+  },
+  "RouteSave": {
+    "$defs": {
+      "RouteChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "service_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id"
+        ],
+        "title": "RouteChoice",
+        "type": "object"
+      },
+      "RouteSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "local_only",
+            "enum": [
+              "local_only",
+              "cloud_only",
+              "local_first",
+              "cloud_first",
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/$defs/RouteChoice"
+            },
+            "maxItems": 20,
+            "title": "Choices",
+            "type": "array"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "quality_mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Quality Mode",
+            "type": "string"
+          },
+          "allow_fallback": {
+            "default": false,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "allow_paid_fallback": {
+            "default": false,
+            "title": "Allow Paid Fallback",
+            "type": "boolean"
+          },
+          "max_retries": {
+            "default": 0,
+            "maximum": 2,
+            "minimum": 0,
+            "title": "Max Retries",
+            "type": "integer"
+          }
+        },
+        "title": "RouteSettings",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "settings": {
+        "$ref": "#/$defs/RouteSettings"
+      },
+      "expected_revision": {
+        "minimum": 0,
+        "title": "Expected Revision",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "settings",
+      "expected_revision"
+    ],
+    "title": "RouteSave",
+    "type": "object"
+  },
+  "RouteProfile": {
+    "$defs": {
+      "RouteChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "service_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id"
+        ],
+        "title": "RouteChoice",
+        "type": "object"
+      },
+      "RouteSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "local_only",
+            "enum": [
+              "local_only",
+              "cloud_only",
+              "local_first",
+              "cloud_first",
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/$defs/RouteChoice"
+            },
+            "maxItems": 20,
+            "title": "Choices",
+            "type": "array"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "quality_mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Quality Mode",
+            "type": "string"
+          },
+          "allow_fallback": {
+            "default": false,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "allow_paid_fallback": {
+            "default": false,
+            "title": "Allow Paid Fallback",
+            "type": "boolean"
+          },
+          "max_retries": {
+            "default": 0,
+            "maximum": 2,
+            "minimum": 0,
+            "title": "Max Retries",
+            "type": "integer"
+          }
+        },
+        "title": "RouteSettings",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "scope": {
+        "enum": [
+          "system",
+          "project",
+          "shot"
+        ],
+        "title": "Scope",
+        "type": "string"
+      },
+      "target_id": {
+        "title": "Target Id",
+        "type": "string"
+      },
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "revision": {
+        "title": "Revision",
+        "type": "integer"
+      },
+      "inherited_from": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Inherited From"
+      },
+      "settings": {
+        "$ref": "#/$defs/RouteSettings"
+      }
+    },
+    "required": [
+      "scope",
+      "target_id",
+      "slot",
+      "revision",
+      "settings"
+    ],
+    "title": "RouteProfile",
+    "type": "object"
+  },
+  "TaskCandidate": {
+    "properties": {
+      "service_id": {
+        "title": "Service Id",
+        "type": "string"
+      },
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "provider": {
+        "enum": [
+          "comfyui",
+          "openai_compatible",
+          "video_api",
+          "ffmpeg",
+          "local_runtime",
+          "local_llm",
+          "openai_tts",
+          "cloud_draft"
+        ],
+        "title": "Provider",
+        "type": "string"
+      },
+      "module": {
+        "enum": [
+          "language_processing",
+          "character_generation",
+          "video_generation",
+          "final_assembly",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check"
+        ],
+        "title": "Module",
+        "type": "string"
+      },
+      "is_cloud": {
+        "title": "Is Cloud",
+        "type": "boolean"
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "eligible": {
+        "default": false,
+        "title": "Eligible",
+        "type": "boolean"
+      },
+      "verification": {
+        "default": "not_tested",
+        "enum": [
+          "not_tested",
+          "verified",
+          "failed",
+          "unavailable"
+        ],
+        "title": "Verification",
+        "type": "string"
+      },
+      "reasons": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Reasons",
+        "type": "array"
+      },
+      "evidence": {
+        "additionalProperties": true,
+        "title": "Evidence",
+        "type": "object"
+      }
+    },
+    "required": [
+      "service_id",
+      "model_id",
+      "name",
+      "provider",
+      "module",
+      "is_cloud",
+      "enabled"
+    ],
+    "title": "TaskCandidate",
+    "type": "object"
+  },
+  "SlotOverview": {
+    "$defs": {
+      "RouteChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "service_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id"
+        ],
+        "title": "RouteChoice",
+        "type": "object"
+      },
+      "RouteProfile": {
+        "properties": {
+          "scope": {
+            "enum": [
+              "system",
+              "project",
+              "shot"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "slot": {
+            "enum": [
+              "script_planning",
+              "character_image",
+              "keyframe_image",
+              "video_generation",
+              "motion_driving",
+              "dialogue_generation",
+              "lip_sync",
+              "video_upscale",
+              "quality_check",
+              "final_assembly",
+              "screenplay_from_text",
+              "screenplay_from_image",
+              "screenplay_from_video"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "inherited_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inherited From"
+          },
+          "settings": {
+            "$ref": "#/$defs/RouteSettings"
+          }
+        },
+        "required": [
+          "scope",
+          "target_id",
+          "slot",
+          "revision",
+          "settings"
+        ],
+        "title": "RouteProfile",
+        "type": "object"
+      },
+      "RouteSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "local_only",
+            "enum": [
+              "local_only",
+              "cloud_only",
+              "local_first",
+              "cloud_first",
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/$defs/RouteChoice"
+            },
+            "maxItems": 20,
+            "title": "Choices",
+            "type": "array"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "quality_mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Quality Mode",
+            "type": "string"
+          },
+          "allow_fallback": {
+            "default": false,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "allow_paid_fallback": {
+            "default": false,
+            "title": "Allow Paid Fallback",
+            "type": "boolean"
+          },
+          "max_retries": {
+            "default": 0,
+            "maximum": 2,
+            "minimum": 0,
+            "title": "Max Retries",
+            "type": "integer"
+          }
+        },
+        "title": "RouteSettings",
+        "type": "object"
+      },
+      "TaskCandidate": {
+        "properties": {
+          "service_id": {
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "comfyui",
+              "openai_compatible",
+              "video_api",
+              "ffmpeg",
+              "local_runtime",
+              "local_llm",
+              "openai_tts",
+              "cloud_draft"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "module": {
+            "enum": [
+              "language_processing",
+              "character_generation",
+              "video_generation",
+              "final_assembly",
+              "dialogue_generation",
+              "lip_sync",
+              "video_upscale",
+              "quality_check"
+            ],
+            "title": "Module",
+            "type": "string"
+          },
+          "is_cloud": {
+            "title": "Is Cloud",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "eligible": {
+            "default": false,
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "verification": {
+            "default": "not_tested",
+            "enum": [
+              "not_tested",
+              "verified",
+              "failed",
+              "unavailable"
+            ],
+            "title": "Verification",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "service_id",
+          "model_id",
+          "name",
+          "provider",
+          "module",
+          "is_cloud",
+          "enabled"
+        ],
+        "title": "TaskCandidate",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "allowed_modules": {
+        "items": {
+          "enum": [
+            "language_processing",
+            "character_generation",
+            "video_generation",
+            "final_assembly",
+            "dialogue_generation",
+            "lip_sync",
+            "video_upscale",
+            "quality_check"
+          ],
+          "type": "string"
+        },
+        "title": "Allowed Modules",
+        "type": "array"
+      },
+      "default_route": {
+        "$ref": "#/$defs/RouteProfile"
+      },
+      "candidates": {
+        "items": {
+          "$ref": "#/$defs/TaskCandidate"
+        },
+        "title": "Candidates",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slot",
+      "name",
+      "allowed_modules",
+      "default_route"
+    ],
+    "title": "SlotOverview",
+    "type": "object"
+  },
+  "ModelServicesOverview": {
+    "$defs": {
+      "RouteChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "service_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "default": "",
+            "maxLength": 240,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "service_id"
+        ],
+        "title": "RouteChoice",
+        "type": "object"
+      },
+      "RouteProfile": {
+        "properties": {
+          "scope": {
+            "enum": [
+              "system",
+              "project",
+              "shot"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "slot": {
+            "enum": [
+              "script_planning",
+              "character_image",
+              "keyframe_image",
+              "video_generation",
+              "motion_driving",
+              "dialogue_generation",
+              "lip_sync",
+              "video_upscale",
+              "quality_check",
+              "final_assembly",
+              "screenplay_from_text",
+              "screenplay_from_image",
+              "screenplay_from_video"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "inherited_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Inherited From"
+          },
+          "settings": {
+            "$ref": "#/$defs/RouteSettings"
+          }
+        },
+        "required": [
+          "scope",
+          "target_id",
+          "slot",
+          "revision",
+          "settings"
+        ],
+        "title": "RouteProfile",
+        "type": "object"
+      },
+      "RouteSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "local_only",
+            "enum": [
+              "local_only",
+              "cloud_only",
+              "local_first",
+              "cloud_first",
+              "manual",
+              "auto"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/$defs/RouteChoice"
+            },
+            "maxItems": 20,
+            "title": "Choices",
+            "type": "array"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "quality_mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Quality Mode",
+            "type": "string"
+          },
+          "allow_fallback": {
+            "default": false,
+            "title": "Allow Fallback",
+            "type": "boolean"
+          },
+          "allow_paid_fallback": {
+            "default": false,
+            "title": "Allow Paid Fallback",
+            "type": "boolean"
+          },
+          "max_retries": {
+            "default": 0,
+            "maximum": 2,
+            "minimum": 0,
+            "title": "Max Retries",
+            "type": "integer"
+          }
+        },
+        "title": "RouteSettings",
+        "type": "object"
+      },
+      "SlotOverview": {
+        "properties": {
+          "slot": {
+            "enum": [
+              "script_planning",
+              "character_image",
+              "keyframe_image",
+              "video_generation",
+              "motion_driving",
+              "dialogue_generation",
+              "lip_sync",
+              "video_upscale",
+              "quality_check",
+              "final_assembly",
+              "screenplay_from_text",
+              "screenplay_from_image",
+              "screenplay_from_video"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "allowed_modules": {
+            "items": {
+              "enum": [
+                "language_processing",
+                "character_generation",
+                "video_generation",
+                "final_assembly",
+                "dialogue_generation",
+                "lip_sync",
+                "video_upscale",
+                "quality_check"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed Modules",
+            "type": "array"
+          },
+          "default_route": {
+            "$ref": "#/$defs/RouteProfile"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/$defs/TaskCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          }
+        },
+        "required": [
+          "slot",
+          "name",
+          "allowed_modules",
+          "default_route"
+        ],
+        "title": "SlotOverview",
+        "type": "object"
+      },
+      "TaskCandidate": {
+        "properties": {
+          "service_id": {
+            "title": "Service Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "comfyui",
+              "openai_compatible",
+              "video_api",
+              "ffmpeg",
+              "local_runtime",
+              "local_llm",
+              "openai_tts",
+              "cloud_draft"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "module": {
+            "enum": [
+              "language_processing",
+              "character_generation",
+              "video_generation",
+              "final_assembly",
+              "dialogue_generation",
+              "lip_sync",
+              "video_upscale",
+              "quality_check"
+            ],
+            "title": "Module",
+            "type": "string"
+          },
+          "is_cloud": {
+            "title": "Is Cloud",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "eligible": {
+            "default": false,
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "verification": {
+            "default": "not_tested",
+            "enum": [
+              "not_tested",
+              "verified",
+              "failed",
+              "unavailable"
+            ],
+            "title": "Verification",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "service_id",
+          "model_id",
+          "name",
+          "provider",
+          "module",
+          "is_cloud",
+          "enabled"
+        ],
+        "title": "TaskCandidate",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slots": {
+        "items": {
+          "$ref": "#/$defs/SlotOverview"
+        },
+        "title": "Slots",
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slots"
+    ],
+    "title": "ModelServicesOverview",
+    "type": "object"
+  },
+  "TaskSubmit": {
+    "additionalProperties": false,
+    "properties": {
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "shot_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Shot Id"
+      },
+      "inputs": {
+        "additionalProperties": true,
+        "title": "Inputs",
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": true,
+        "title": "Parameters",
+        "type": "object"
+      },
+      "allow_cloud_costs": {
+        "default": false,
+        "title": "Allow Cloud Costs",
+        "type": "boolean"
+      },
+      "allow_paid_fallback": {
+        "default": false,
+        "title": "Allow Paid Fallback",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "slot",
+      "project_id"
+    ],
+    "title": "TaskSubmit",
+    "type": "object"
+  },
+  "UnifiedTask": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "source_type": {
+        "title": "Source Type",
+        "type": "string"
+      },
+      "source_id": {
+        "title": "Source Id",
+        "type": "string"
+      },
+      "project_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Project Id"
+      },
+      "shot_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Shot Id"
+      },
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "unknown",
+          "cancelled",
+          "blocked",
+          "skipped"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "provider": {
+        "default": "",
+        "title": "Provider",
+        "type": "string"
+      },
+      "model_id": {
+        "default": "",
+        "title": "Model Id",
+        "type": "string"
+      },
+      "snapshot": {
+        "additionalProperties": true,
+        "title": "Snapshot",
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "title": "Output",
+        "type": "object"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Error"
+      },
+      "created_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Created At"
+      },
+      "started_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Started At"
+      },
+      "finished_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Finished At"
+      }
+    },
+    "required": [
+      "id",
+      "source_type",
+      "source_id",
+      "slot",
+      "status"
+    ],
+    "title": "UnifiedTask",
+    "type": "object"
+  },
+  "RuntimeJob": {
+    "additionalProperties": false,
+    "description": "JSON input to fixed, allowlisted CLI adapters; never shell code.\n\nPublic HTTP inputs resolve media IDs to paths before constructing this job.\nHelpers emit a receipt, but the backend independently validates output bytes.",
+    "properties": {
+      "protocol": {
+        "const": "video-factory-runtime-1",
+        "default": "video-factory-runtime-1",
+        "title": "Protocol",
+        "type": "string"
+      },
+      "task_id": {
+        "maxLength": 100,
+        "minLength": 1,
+        "title": "Task Id",
+        "type": "string"
+      },
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "inputs": {
+        "additionalProperties": true,
+        "title": "Inputs",
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": true,
+        "title": "Parameters",
+        "type": "object"
+      },
+      "output_path": {
+        "title": "Output Path",
+        "type": "string"
+      },
+      "receipt_path": {
+        "title": "Receipt Path",
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_id",
+      "slot",
+      "model_id",
+      "output_path",
+      "receipt_path"
+    ],
+    "title": "RuntimeJob",
+    "type": "object"
+  },
+  "RuntimeReceipt": {
+    "properties": {
+      "protocol": {
+        "const": "video-factory-runtime-1",
+        "default": "video-factory-runtime-1",
+        "title": "Protocol",
+        "type": "string"
+      },
+      "task_id": {
+        "title": "Task Id",
+        "type": "string"
+      },
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "status": {
+        "enum": [
+          "succeeded",
+          "failed"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "output_path": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Output Path"
+      },
+      "output_sha256": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Output Sha256"
+      },
+      "inputs_sha256": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "title": "Inputs Sha256",
+        "type": "object"
+      },
+      "actual": {
+        "additionalProperties": true,
+        "title": "Actual",
+        "type": "object"
+      },
+      "runtime": {
+        "additionalProperties": true,
+        "title": "Runtime",
+        "type": "object"
+      },
+      "elapsed_seconds": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Elapsed Seconds"
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Error"
+      }
+    },
+    "required": [
+      "task_id",
+      "slot",
+      "model_id",
+      "status"
+    ],
+    "title": "RuntimeReceipt",
+    "type": "object"
+  },
+  "RuntimeComponent": {
+    "additionalProperties": false,
+    "properties": {
+      "path": {
+        "title": "Path",
+        "type": "string"
+      },
+      "role": {
+        "title": "Role",
+        "type": "string"
+      },
+      "bytes": {
+        "minimum": 0,
+        "title": "Bytes",
+        "type": "integer"
+      },
+      "sha256": {
+        "pattern": "^[a-f0-9]{64}$",
+        "title": "Sha256",
+        "type": "string"
+      }
+    },
+    "required": [
+      "path",
+      "role",
+      "bytes",
+      "sha256"
+    ],
+    "title": "RuntimeComponent",
+    "type": "object"
+  },
+  "RuntimeManifest": {
+    "$defs": {
+      "RuntimeComponent": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "bytes": {
+            "minimum": 0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "role",
+          "bytes",
+          "sha256"
+        ],
+        "title": "RuntimeComponent",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "protocol": {
+        "const": "video-factory-deployment-1",
+        "default": "video-factory-deployment-1",
+        "title": "Protocol",
+        "type": "string"
+      },
+      "family": {
+        "pattern": "^[a-z0-9_]+$",
+        "title": "Family",
+        "type": "string"
+      },
+      "model_id": {
+        "title": "Model Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "version": {
+        "title": "Version",
+        "type": "string"
+      },
+      "task_capabilities": {
+        "items": {
+          "enum": [
+            "script_planning",
+            "character_image",
+            "keyframe_image",
+            "video_generation",
+            "motion_driving",
+            "dialogue_generation",
+            "lip_sync",
+            "video_upscale",
+            "quality_check",
+            "final_assembly",
+            "screenplay_from_text",
+            "screenplay_from_image",
+            "screenplay_from_video"
+          ],
+          "type": "string"
+        },
+        "title": "Task Capabilities",
+        "type": "array"
+      },
+      "python": {
+        "default": "",
+        "title": "Python",
+        "type": "string"
+      },
+      "repo": {
+        "default": "",
+        "title": "Repo",
+        "type": "string"
+      },
+      "model_dir": {
+        "default": "",
+        "title": "Model Dir",
+        "type": "string"
+      },
+      "helper": {
+        "default": "",
+        "title": "Helper",
+        "type": "string"
+      },
+      "helper_sha256": {
+        "default": "",
+        "title": "Helper Sha256",
+        "type": "string"
+      },
+      "workflow_path": {
+        "default": "",
+        "title": "Workflow Path",
+        "type": "string"
+      },
+      "workflow_sha256": {
+        "default": "",
+        "title": "Workflow Sha256",
+        "type": "string"
+      },
+      "components": {
+        "items": {
+          "$ref": "#/$defs/RuntimeComponent"
+        },
+        "title": "Components",
+        "type": "array"
+      },
+      "dependency_status": {
+        "default": "not_tested",
+        "enum": [
+          "not_tested",
+          "installed",
+          "failed",
+          "blocked"
+        ],
+        "title": "Dependency Status",
+        "type": "string"
+      },
+      "load_status": {
+        "default": "not_tested",
+        "enum": [
+          "not_tested",
+          "verified",
+          "failed"
+        ],
+        "title": "Load Status",
+        "type": "string"
+      },
+      "smoke_test": {
+        "additionalProperties": true,
+        "title": "Smoke Test",
+        "type": "object"
+      },
+      "sources": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Sources",
+        "type": "array"
+      },
+      "licenses": {
+        "items": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "title": "Licenses",
+        "type": "array"
+      },
+      "limitations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Limitations",
+        "type": "array"
+      },
+      "last_tested_at": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Last Tested At"
+      },
+      "failure_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Failure Reason"
+      }
+    },
+    "required": [
+      "family",
+      "model_id",
+      "name",
+      "version",
+      "task_capabilities"
+    ],
+    "title": "RuntimeManifest",
+    "type": "object"
+  },
+  "AudioAssetDTO": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "shot_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Shot Id"
+      },
+      "participant_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Participant Id"
+      },
+      "character_version_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Character Version Id"
+      },
+      "relative_path": {
+        "title": "Relative Path",
+        "type": "string"
+      },
+      "sha256": {
+        "title": "Sha256",
+        "type": "string"
+      },
+      "metadata": {
+        "additionalProperties": true,
+        "title": "Metadata",
+        "type": "object"
+      },
+      "media_url": {
+        "title": "Media Url",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "project_id",
+      "relative_path",
+      "sha256",
+      "media_url"
+    ],
+    "title": "AudioAssetDTO",
+    "type": "object"
+  },
+  "ServiceGenerationTest": {
+    "additionalProperties": false,
+    "description": "One explicitly requested adapter verification, independent of production routes.",
+    "properties": {
+      "slot": {
+        "enum": [
+          "script_planning",
+          "character_image",
+          "keyframe_image",
+          "video_generation",
+          "motion_driving",
+          "dialogue_generation",
+          "lip_sync",
+          "video_upscale",
+          "quality_check",
+          "final_assembly",
+          "screenplay_from_text",
+          "screenplay_from_image",
+          "screenplay_from_video"
+        ],
+        "title": "Slot",
+        "type": "string"
+      },
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "shot_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Shot Id"
+      },
+      "model_id": {
+        "default": "",
+        "title": "Model Id",
+        "type": "string"
+      },
+      "inputs": {
+        "additionalProperties": true,
+        "title": "Inputs",
+        "type": "object"
+      },
+      "parameters": {
+        "additionalProperties": true,
+        "title": "Parameters",
+        "type": "object"
+      },
+      "allow_cloud_costs": {
+        "default": false,
+        "title": "Allow Cloud Costs",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "slot",
+      "project_id"
+    ],
+    "title": "ServiceGenerationTest",
+    "type": "object"
+  }
+}

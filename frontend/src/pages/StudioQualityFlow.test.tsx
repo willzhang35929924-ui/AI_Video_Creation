@@ -1,0 +1,86 @@
+// Controller contract test. Mocked import preview is not real generation evidence.
+import {act,cleanup,render,screen,waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {MemoryRouter} from 'react-router-dom';
+import {afterEach,expect,it,vi} from 'vitest';
+import {request} from '../lib/api';
+import {StudioPage} from './StudioPage';
+vi.mock('../lib/api',async original=>({...await original<typeof import('../lib/api')>(),request:vi.fn()}));
+vi.mock('../components/WordImportPanel',()=>({WordImportPanel:({onImported}:{onImported:(id:string)=>Promise<void>})=><button onClick={()=>void onImported('p_new')}>确认歧义测试</button>}));
+const mocked=vi.mocked(request);
+afterEach(()=>{cleanup();mocked.mockReset();});
+it('disables project switching and generation while an explicit quality save is pending',async()=>{
+  const user=userEvent.setup();let finish!:(value:any)=>void;const save=new Promise(resolve=>{finish=resolve;});
+  const settings={resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'};
+  mocked.mockImplementation(async(url,init)=>{
+    if(url==='/api/settings/ai-services')return [];
+    if(url.startsWith('/api/model-services/routes/project/'))return {scope:'project',target_id:'p1',slot:'dialogue_generation',revision:0,inherited_from:null,settings:{mode:'local_only',choices:[],parameters:{}}};
+    if(url.includes('/voices?'))return {project_id:'p1',groups:[],services:[],tts_enabled:false,ready_to_start:true,blockers:[],summary:'本次沿用原声'};
+    if(url==='/api/quality/capabilities')return {};
+    if(url.startsWith('/api/quality/profiles/'))return init?.method==='PUT'?save:{scope:'project',target_id:'p1',revision:0,settings,plan:{}};
+    if(url==='/api/studio/projects')return [{id:'p1',name:'项目'}];
+    if(url==='/api/studio/projects/p1')return {project:{id:'p1',name:'项目'},characters:[],scenes:[],shots:[{id:'s1',order:1,title:'镜头',duration_seconds:5,status:'draft',decision:{}}]};
+    throw new Error(url);
+  });
+  render(<MemoryRouter initialEntries={['/?project=p1']}><StudioPage/></MemoryRouter>);
+  await user.selectOptions(await screen.findByLabelText('制作输出规格'),'1080p');
+  await user.click(screen.getByRole('button',{name:'保存项目制作设置'}));
+  expect(screen.getByLabelText('当前项目')).toBeDisabled();
+  expect(screen.getByRole('button',{name:'开始／增量续作'})).toBeDisabled();
+  await user.click(screen.getByRole('button',{name:'开始／增量续作'}));
+  expect(mocked.mock.calls.filter(([,init])=>init?.method==='PUT')).toHaveLength(1);
+  expect(mocked.mock.calls.some(([url])=>url.endsWith('/start'))).toBe(false);
+  await act(async()=>{finish({scope:'project',target_id:'p1',revision:1,settings:{...settings,resolution:'1080p'},plan:{}});await save;});
+  await waitFor(()=>expect(screen.getByRole('button',{name:'开始／增量续作'})).toBeEnabled());
+});
+it('keeps unsupported AI fields editable so the user can explicitly recover to Lanczos',async()=>{
+  const user=userEvent.setup();
+  mocked.mockImplementation(async url=>{
+    if(url==='/api/quality/capabilities')return {ai_super_resolution:{state:'verified',verified_resolutions:['4k'],verified_aspect_ratios:['16:9']}};
+    if(url.startsWith('/api/quality/profiles/'))return {scope:'system',target_id:'default',revision:0,settings:{resolution:'4k',mode:'standard',aspect_ratio:'16:9',processing:'ai_super_resolution'},plan:{}};
+    if(url==='/api/studio/projects')return [];
+    throw new Error(url);
+  });
+  render(<MemoryRouter><StudioPage/></MemoryRouter>);
+  await screen.findByRole('option',{name:'4K输出（Real-ESRGAN逐帧超分）'});
+  await user.selectOptions(screen.getByLabelText('制作输出规格'),'1080p');
+  expect(screen.getByRole('alert')).toHaveTextContent('不会静默降级');
+  expect(screen.getByLabelText('制作处理方式')).toBeEnabled();
+  expect(screen.getByLabelText('制作输出规格')).toBeEnabled();
+  await user.selectOptions(screen.getByLabelText('制作处理方式'),'lanczos');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('制作处理方式')).toHaveValue('lanczos');
+});
+it('retains import quality across ambiguous Word confirmation and stops for voice preparation',async()=>{
+  const user=userEvent.setup();
+  mocked.mockImplementation(async (url,init)=>{
+    if(url==='/api/settings/ai-services')return [];
+    if(url.startsWith('/api/model-services/routes/project/'))return {scope:'project',target_id:'p_new',slot:'dialogue_generation',revision:0,inherited_from:null,settings:{mode:'local_only',choices:[],parameters:{}}};
+    if(url.includes('/voices?'))return {project_id:'p_new',groups:[],services:[],tts_enabled:false,ready_to_start:true,blockers:[],summary:'本次沿用原声'};
+    if(url==='/api/studio/projects')return [];
+    if(url.startsWith('/api/quality/profiles/'))return init?.method==='PUT'?{scope:'project',target_id:'p_new',revision:1,settings:JSON.parse(String(init.body)).settings,plan:{}}:{scope:url.includes('/project/')?'project':'system',target_id:url.includes('/project/')?'p_new':'default',revision:0,settings:{resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'},plan:{}};
+    if(url==='/api/studio/import')return {status:'pending_review',import_id:'i1',issues:['人物待核对']};
+    if(url.endsWith('/start'))return {};
+    if(url==='/api/studio/projects/p_new')return {project:{id:'p_new',name:'新项目'},characters:[],scenes:[],shots:[]};
+    throw new Error(url);
+  });
+  render(<MemoryRouter><StudioPage/></MemoryRouter>);
+  await user.selectOptions(await screen.findByLabelText('制作输出规格'),'4k');
+  await user.selectOptions(screen.getByLabelText('制作质量模式'),'high');
+  await user.click(screen.getByRole('checkbox',{name:/允许本项目调用已配置的云端生成服务/}));
+  await user.click(screen.getByRole('checkbox',{name:/允许本次制作在已保存策略许可时回退/}));
+  await user.upload(screen.getByLabelText('剧本文档（.docx）'),new File(['fixture'],'test.docx',{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}));
+  await user.click(screen.getByRole('button',{name:'导入并配置制作'}));
+  const confirm=await screen.findByRole('button',{name:'确认歧义测试'});
+  const importCall=mocked.mock.calls.find(([url])=>url==='/api/studio/import')!;
+  const form=importCall[1]!.body as FormData;
+  const frozen={resolution:'4k',mode:'high',aspect_ratio:'16:9',processing:'lanczos'};
+  expect(JSON.parse(String(form.get('quality_json')))).toEqual(frozen);
+  expect(form.get('auto_start')).toBe('false');expect(form.get('allow_cloud_costs')).toBe('true');expect(form.get('allow_paid_fallback')).toBe('true');
+  await user.selectOptions(screen.getByLabelText('制作输出规格'),'1080p');
+  await user.click(confirm);
+  await screen.findByText('剧本已确认，尚未启动制作。请先配置角色配音并核对画质，再开始制作。');
+  const saved=mocked.mock.calls.find(([url,init])=>url==='/api/quality/profiles/project/p_new'&&init?.method==='PUT')!;
+  expect(JSON.parse(String(saved[1]?.body))).toEqual({settings:frozen,expected_revision:0});
+  expect(mocked.mock.calls.some(([url])=>url.endsWith('/start'))).toBe(false);
+});

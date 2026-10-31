@@ -1,0 +1,201 @@
+{
+  "_video_factory": {
+    "name": "character-klein-reference-v1",
+    "upstream": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_flux2_klein_image_edit_4b_distilled.json",
+    "mode": "reference_image",
+    "note": "Native graph already executed successfully on this machine; same input reference is mandatory. All results remain needs_review."
+  },
+  "prompt": {
+    "1000": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "REFERENCE_IMAGE"
+      }
+    },
+    "70": {
+      "class_type": "UNETLoader",
+      "inputs": {
+        "unet_name": "flux-2-klein-4b-fp8.safetensors",
+        "weight_dtype": "default"
+      }
+    },
+    "71": {
+      "class_type": "CLIPLoader",
+      "inputs": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "type": "flux2",
+        "device": "default"
+      }
+    },
+    "72": {
+      "class_type": "VAELoader",
+      "inputs": {
+        "vae_name": "flux2-vae.safetensors"
+      }
+    },
+    "74": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": [
+          "71",
+          0
+        ],
+        "text": "TASK_PROMPT"
+      }
+    },
+    "80": {
+      "class_type": "ImageScaleToTotalPixels",
+      "inputs": {
+        "image": [
+          "1000",
+          0
+        ],
+        "upscale_method": "nearest-exact",
+        "megapixels": 0.8,
+        "resolution_steps": 1
+      }
+    },
+    "122": {
+      "class_type": "VAEEncode",
+      "inputs": {
+        "pixels": [
+          "80",
+          0
+        ],
+        "vae": [
+          "72",
+          0
+        ]
+      }
+    },
+    "82": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": [
+          "74",
+          0
+        ]
+      }
+    },
+    "123": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "74",
+          0
+        ],
+        "latent": [
+          "122",
+          0
+        ]
+      }
+    },
+    "121": {
+      "class_type": "ReferenceLatent",
+      "inputs": {
+        "conditioning": [
+          "82",
+          0
+        ],
+        "latent": [
+          "122",
+          0
+        ]
+      }
+    },
+    "63": {
+      "class_type": "CFGGuider",
+      "inputs": {
+        "model": [
+          "70",
+          0
+        ],
+        "positive": [
+          "123",
+          0
+        ],
+        "negative": [
+          "121",
+          0
+        ],
+        "cfg": 1
+      }
+    },
+    "61": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "euler"
+      }
+    },
+    "73": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 0
+      }
+    },
+    "66": {
+      "class_type": "EmptyFlux2LatentImage",
+      "inputs": {
+        "width": 832,
+        "height": 1024,
+        "batch_size": 1
+      }
+    },
+    "62": {
+      "class_type": "Flux2Scheduler",
+      "inputs": {
+        "steps": 4,
+        "width": 832,
+        "height": 1024
+      }
+    },
+    "64": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "73",
+          0
+        ],
+        "guider": [
+          "63",
+          0
+        ],
+        "sampler": [
+          "61",
+          0
+        ],
+        "sigmas": [
+          "62",
+          0
+        ],
+        "latent_image": [
+          "66",
+          0
+        ]
+      }
+    },
+    "65": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "64",
+          0
+        ],
+        "vae": [
+          "72",
+          0
+        ]
+      }
+    },
+    "1001": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "images": [
+          "65",
+          0
+        ],
+        "filename_prefix": "character_factory/TASK_ID"
+      }
+    }
+  }
+}

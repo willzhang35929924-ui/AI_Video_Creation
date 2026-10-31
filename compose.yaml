@@ -1,0 +1,106 @@
+# Production: pull published images. Do not add build or private bind mounts here.
+# SQLite and all 11 task workers share one backend process; do not scale backend.
+# GPU / Metal inference stays in a separately configured host, remote or cloud service.
+name: ${COMPOSE_PROJECT_NAME:-video-factory}
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_ENV: production
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8765"
+      VIDEO_FACTORY_CONTAINER: "1"
+      DATABASE_URL: sqlite:////app/data/video_factory.db
+      MEDIA_ROOT: /app/data/media
+      VIDEO_FACTORY_SECRET_KEY_FILE: /app/data/.secrets/master.key
+      SEED_DEMO_DATA: "false"
+      SEED_LOCAL_MODEL_SERVICES: "false"
+      H3_DEMO_MODE: "false"
+      FFMPEG_PATH: /usr/bin/ffmpeg
+      FFPROBE_PATH: /usr/bin/ffprobe
+      TMPDIR: /app/data/tmp
+      HOME: /app/data/home
+      IMPORT_MAX_MB: ${IMPORT_MAX_MB:-50}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://host.docker.internal:8189}
+      H3_WORKFLOW_API_JSON: /app/workflows/h3_r2v_character_v1.json
+      TRUSTED_LOCAL_SERVICE_ORIGINS: ${TRUSTED_LOCAL_SERVICE_ORIGINS:-}
+      LOCAL_SCREENPLAY_BASE_URL: ${LOCAL_SCREENPLAY_BASE_URL:-}
+      LOCAL_SCREENPLAY_EXPECTED_WORKSPACE: ${LOCAL_SCREENPLAY_EXPECTED_WORKSPACE:-}
+      LOCAL_LLM_GPU_INDEPENDENT: ${LOCAL_LLM_GPU_INDEPENDENT:-false}
+      LOCAL_RECORDINGS_DIR: /app/data/imports/recordings
+      ALLOW_EXTERNAL_DOC_IMPORT: "false"
+      PUBLISH_REAL_ENABLED: "false"
+    volumes:
+      - app_data:/app/data
+      - app_logs:/app/logs
+      - app_reports:/app/reports
+    networks:
+      - app
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    expose:
+      - "8765"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, python, -c, "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8765/api/health/runtime',timeout=4)); assert d.get('application_ready') is True, d"]
+      interval: 20s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest}
+    pull_policy: always
+    restart: unless-stopped
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    networks:
+      - app
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O - http://127.0.0.1:8080/health | grep -qx video-factory-frontend"]
+      interval: 20s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  app:
+    driver: bridge
+
+volumes:
+  app_data:
+  app_logs:
+  app_reports:

@@ -1,0 +1,6 @@
+{
+  "status": "configuration_required",
+  "purpose": "This is metadata, not an executable or claimed MiniMax H3 workflow.",
+  "required_next_step": "Export the API-format graph from the installed ComfyUI and add the mapping documented in workflows/README.md."
+}
+

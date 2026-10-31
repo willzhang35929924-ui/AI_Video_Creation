@@ -1,0 +1,4 @@
+# Preserve exact bytes required by cinematic-generated-manifest.json.
+* -text
+*.sh text eol=lf
+*.docx binary

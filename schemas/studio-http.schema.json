@@ -1,0 +1,925 @@
+{
+  "StudioProductReferencePlan": {
+    "additionalProperties": false,
+    "properties": {
+      "product_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Product Id",
+        "type": "string"
+      },
+      "image_ids": {
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 4,
+        "minItems": 1,
+        "title": "Image Ids",
+        "type": "array"
+      },
+      "selection_reason": {
+        "maxLength": 2000,
+        "minLength": 1,
+        "title": "Selection Reason",
+        "type": "string"
+      }
+    },
+    "required": [
+      "product_id",
+      "image_ids",
+      "selection_reason"
+    ],
+    "title": "StudioProductReferencePlan",
+    "type": "object"
+  },
+  "PipelineStart": {
+    "$defs": {
+      "QualitySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "resolution": {
+            "default": "720p",
+            "enum": [
+              "720p",
+              "1080p",
+              "2k",
+              "4k"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "default": "16:9",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "processing": {
+            "default": "lanczos",
+            "enum": [
+              "lanczos",
+              "native",
+              "ai_super_resolution",
+              "seedvr2",
+              "reconstruction"
+            ],
+            "title": "Processing",
+            "type": "string"
+          }
+        },
+        "title": "QualitySettings",
+        "type": "object"
+      },
+      "StudioProductReferencePlan": {
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Product Id",
+            "type": "string"
+          },
+          "image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Image Ids",
+            "type": "array"
+          },
+          "selection_reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Selection Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "image_ids",
+          "selection_reason"
+        ],
+        "title": "StudioProductReferencePlan",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "dialogue_audio_policy": {
+        "anyOf": [
+          {
+            "enum": [
+              "auto",
+              "native",
+              "tts",
+              "skip"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dialogue Audio Policy"
+      },
+      "automatic_draft_assembly": {
+        "default": false,
+        "title": "Automatic Draft Assembly",
+        "type": "boolean"
+      },
+      "product_reference_plan": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/StudioProductReferencePlan"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "quality": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/QualitySettings"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "allow_cloud_costs": {
+        "default": false,
+        "title": "Allow Cloud Costs",
+        "type": "boolean"
+      },
+      "allow_paid_fallback": {
+        "default": false,
+        "title": "Allow Paid Fallback",
+        "type": "boolean"
+      },
+      "width": {
+        "default": 1024,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Width",
+        "type": "integer"
+      },
+      "height": {
+        "default": 576,
+        "maximum": 3840,
+        "minimum": 256,
+        "multipleOf": 8,
+        "title": "Height",
+        "type": "integer"
+      },
+      "shot_ids": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Shot Ids"
+      },
+      "max_retries": {
+        "default": 2,
+        "maximum": 3,
+        "minimum": 0,
+        "title": "Max Retries",
+        "type": "integer"
+      }
+    },
+    "title": "PipelineStart",
+    "type": "object"
+  },
+  "DecisionInput": {
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "enum": [
+          "keep",
+          "exclude",
+          "pending",
+          "regenerate",
+          "modify"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
+      "video_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Video Id"
+      },
+      "trim_start": {
+        "default": 0,
+        "minimum": 0,
+        "title": "Trim Start",
+        "type": "number"
+      },
+      "trim_end": {
+        "anyOf": [
+          {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Trim End"
+      },
+      "position": {
+        "anyOf": [
+          {
+            "minimum": 1,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Position"
+      },
+      "instruction": {
+        "default": "",
+        "title": "Instruction",
+        "type": "string"
+      },
+      "prompt_override": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Prompt Override"
+      },
+      "expected_revision": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expected Revision"
+      },
+      "operator": {
+        "default": "local-user",
+        "enum": [
+          "local-user",
+          "acceptance-test"
+        ],
+        "title": "Operator",
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "title": "DecisionInput",
+    "type": "object"
+  },
+  "ComposeInput": {
+    "additionalProperties": false,
+    "properties": {
+      "expected_decisions": {
+        "anyOf": [
+          {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expected Decisions"
+      },
+      "transition": {
+        "default": "cut",
+        "enum": [
+          "cut",
+          "crossfade"
+        ],
+        "title": "Transition",
+        "type": "string"
+      },
+      "transition_duration": {
+        "default": 0.5,
+        "maximum": 3,
+        "minimum": 0,
+        "title": "Transition Duration",
+        "type": "number"
+      },
+      "width": {
+        "default": 1280,
+        "maximum": 3840,
+        "minimum": 128,
+        "multipleOf": 2,
+        "title": "Width",
+        "type": "integer"
+      },
+      "height": {
+        "default": 720,
+        "maximum": 3840,
+        "minimum": 128,
+        "multipleOf": 2,
+        "title": "Height",
+        "type": "integer"
+      },
+      "fps": {
+        "default": 24,
+        "enum": [
+          24,
+          25,
+          30
+        ],
+        "title": "Fps",
+        "type": "integer"
+      },
+      "audio_policy": {
+        "default": "preserve",
+        "enum": [
+          "preserve",
+          "mute"
+        ],
+        "title": "Audio Policy",
+        "type": "string"
+      },
+      "subtitles": {
+        "default": false,
+        "title": "Subtitles",
+        "type": "boolean"
+      }
+    },
+    "title": "ComposeInput",
+    "type": "object"
+  },
+  "StudioProject": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "status": {
+        "default": "pending",
+        "title": "Status",
+        "type": "string"
+      },
+      "shot_count": {
+        "default": 0,
+        "title": "Shot Count",
+        "type": "integer"
+      },
+      "video_count": {
+        "default": 0,
+        "title": "Video Count",
+        "type": "integer"
+      },
+      "error_count": {
+        "default": 0,
+        "title": "Error Count",
+        "type": "integer"
+      },
+      "run_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run Id"
+      },
+      "script_revision_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Script Revision Id"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "title": "StudioProject",
+    "type": "object"
+  },
+  "StudioDecision": {
+    "properties": {
+      "action": {
+        "default": "pending",
+        "enum": [
+          "pending",
+          "keep",
+          "exclude"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
+      "video_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Video Id"
+      },
+      "trim_start": {
+        "default": 0,
+        "title": "Trim Start",
+        "type": "number"
+      },
+      "trim_end": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Trim End"
+      },
+      "position": {
+        "default": 1,
+        "title": "Position",
+        "type": "integer"
+      },
+      "instruction": {
+        "default": "",
+        "title": "Instruction",
+        "type": "string"
+      },
+      "revision": {
+        "default": 1,
+        "title": "Revision",
+        "type": "integer"
+      }
+    },
+    "title": "StudioDecision",
+    "type": "object"
+  },
+  "StudioShot": {
+    "$defs": {
+      "StudioDecision": {
+        "properties": {
+          "action": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "keep",
+              "exclude"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Video Id"
+          },
+          "trim_start": {
+            "default": 0,
+            "title": "Trim Start",
+            "type": "number"
+          },
+          "trim_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Trim End"
+          },
+          "position": {
+            "default": 1,
+            "title": "Position",
+            "type": "integer"
+          },
+          "instruction": {
+            "default": "",
+            "title": "Instruction",
+            "type": "string"
+          },
+          "revision": {
+            "default": 1,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "title": "StudioDecision",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "order": {
+        "title": "Order",
+        "type": "integer"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      },
+      "scene_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Scene Id"
+      },
+      "scene_name": {
+        "default": "",
+        "title": "Scene Name",
+        "type": "string"
+      },
+      "cast": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Cast",
+        "type": "array"
+      },
+      "duration_seconds": {
+        "title": "Duration Seconds",
+        "type": "number"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "video": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Video"
+      },
+      "decision": {
+        "$ref": "#/$defs/StudioDecision"
+      },
+      "action": {
+        "default": "",
+        "title": "Action",
+        "type": "string"
+      },
+      "dialogues": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Dialogues",
+        "type": "array"
+      }
+    },
+    "required": [
+      "id",
+      "order",
+      "title",
+      "duration_seconds",
+      "status",
+      "decision"
+    ],
+    "title": "StudioShot",
+    "type": "object"
+  },
+  "StudioOverview": {
+    "$defs": {
+      "StudioDecision": {
+        "properties": {
+          "action": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "keep",
+              "exclude"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Video Id"
+          },
+          "trim_start": {
+            "default": 0,
+            "title": "Trim Start",
+            "type": "number"
+          },
+          "trim_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Trim End"
+          },
+          "position": {
+            "default": 1,
+            "title": "Position",
+            "type": "integer"
+          },
+          "instruction": {
+            "default": "",
+            "title": "Instruction",
+            "type": "string"
+          },
+          "revision": {
+            "default": 1,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "title": "StudioDecision",
+        "type": "object"
+      },
+      "StudioShot": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scene Id"
+          },
+          "scene_name": {
+            "default": "",
+            "title": "Scene Name",
+            "type": "string"
+          },
+          "cast": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "duration_seconds": {
+            "title": "Duration Seconds",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Video"
+          },
+          "decision": {
+            "$ref": "#/$defs/StudioDecision"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "dialogues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dialogues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "title",
+          "duration_seconds",
+          "status",
+          "decision"
+        ],
+        "title": "StudioShot",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project": {
+        "additionalProperties": true,
+        "title": "Project",
+        "type": "object"
+      },
+      "script": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Script"
+      },
+      "characters": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Characters",
+        "type": "array"
+      },
+      "scenes": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Scenes",
+        "type": "array"
+      },
+      "shots": {
+        "items": {
+          "$ref": "#/$defs/StudioShot"
+        },
+        "title": "Shots",
+        "type": "array"
+      },
+      "run": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Run"
+      },
+      "exceptions": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Exceptions",
+        "type": "array"
+      },
+      "renders": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "title": "Renders",
+        "type": "array"
+      }
+    },
+    "required": [
+      "project"
+    ],
+    "title": "StudioOverview",
+    "type": "object"
+  },
+  "ComposeResult": {
+    "properties": {
+      "assembly_id": {
+        "title": "Assembly Id",
+        "type": "string"
+      },
+      "render_id": {
+        "title": "Render Id",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "assembly_id",
+      "render_id",
+      "status"
+    ],
+    "title": "ComposeResult",
+    "type": "object"
+  }
+}

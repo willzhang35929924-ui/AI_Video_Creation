@@ -1,0 +1,373 @@
+{
+  "QualitySettings": {
+    "additionalProperties": false,
+    "properties": {
+      "resolution": {
+        "default": "720p",
+        "enum": [
+          "720p",
+          "1080p",
+          "2k",
+          "4k"
+        ],
+        "title": "Resolution",
+        "type": "string"
+      },
+      "mode": {
+        "default": "standard",
+        "enum": [
+          "preview",
+          "standard",
+          "high"
+        ],
+        "title": "Mode",
+        "type": "string"
+      },
+      "aspect_ratio": {
+        "default": "16:9",
+        "enum": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
+        "title": "Aspect Ratio",
+        "type": "string"
+      },
+      "processing": {
+        "default": "lanczos",
+        "enum": [
+          "lanczos",
+          "native",
+          "ai_super_resolution",
+          "seedvr2",
+          "reconstruction"
+        ],
+        "title": "Processing",
+        "type": "string"
+      }
+    },
+    "title": "QualitySettings",
+    "type": "object"
+  },
+  "QualityProfileInput": {
+    "$defs": {
+      "QualitySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "resolution": {
+            "default": "720p",
+            "enum": [
+              "720p",
+              "1080p",
+              "2k",
+              "4k"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "default": "16:9",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "processing": {
+            "default": "lanczos",
+            "enum": [
+              "lanczos",
+              "native",
+              "ai_super_resolution",
+              "seedvr2",
+              "reconstruction"
+            ],
+            "title": "Processing",
+            "type": "string"
+          }
+        },
+        "title": "QualitySettings",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "settings": {
+        "$ref": "#/$defs/QualitySettings"
+      },
+      "expected_revision": {
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expected Revision"
+      }
+    },
+    "required": [
+      "settings"
+    ],
+    "title": "QualityProfileInput",
+    "type": "object"
+  },
+  "QualityProfileDTO": {
+    "$defs": {
+      "QualitySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "resolution": {
+            "default": "720p",
+            "enum": [
+              "720p",
+              "1080p",
+              "2k",
+              "4k"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "default": "16:9",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "processing": {
+            "default": "lanczos",
+            "enum": [
+              "lanczos",
+              "native",
+              "ai_super_resolution",
+              "seedvr2",
+              "reconstruction"
+            ],
+            "title": "Processing",
+            "type": "string"
+          }
+        },
+        "title": "QualitySettings",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "scope": {
+        "enum": [
+          "system",
+          "project",
+          "shot"
+        ],
+        "title": "Scope",
+        "type": "string"
+      },
+      "target_id": {
+        "title": "Target Id",
+        "type": "string"
+      },
+      "settings": {
+        "$ref": "#/$defs/QualitySettings"
+      },
+      "revision": {
+        "title": "Revision",
+        "type": "integer"
+      },
+      "inherited_from": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Inherited From"
+      },
+      "plan": {
+        "additionalProperties": true,
+        "title": "Plan",
+        "type": "object"
+      }
+    },
+    "required": [
+      "scope",
+      "target_id",
+      "settings",
+      "revision",
+      "plan"
+    ],
+    "title": "QualityProfileDTO",
+    "type": "object"
+  },
+  "QualityRenderInput": {
+    "$defs": {
+      "QualitySettings": {
+        "additionalProperties": false,
+        "properties": {
+          "resolution": {
+            "default": "720p",
+            "enum": [
+              "720p",
+              "1080p",
+              "2k",
+              "4k"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          },
+          "mode": {
+            "default": "standard",
+            "enum": [
+              "preview",
+              "standard",
+              "high"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "default": "16:9",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "processing": {
+            "default": "lanczos",
+            "enum": [
+              "lanczos",
+              "native",
+              "ai_super_resolution",
+              "seedvr2",
+              "reconstruction"
+            ],
+            "title": "Processing",
+            "type": "string"
+          }
+        },
+        "title": "QualitySettings",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "video_id": {
+        "title": "Video Id",
+        "type": "string"
+      },
+      "settings": {
+        "$ref": "#/$defs/QualitySettings"
+      }
+    },
+    "required": [
+      "video_id",
+      "settings"
+    ],
+    "title": "QualityRenderInput",
+    "type": "object"
+  },
+  "QualityRenderDTO": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "status": {
+        "title": "Status",
+        "type": "string"
+      },
+      "source_video_id": {
+        "title": "Source Video Id",
+        "type": "string"
+      },
+      "video_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Video Id"
+      },
+      "relative_path": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Relative Path"
+      },
+      "snapshot": {
+        "additionalProperties": true,
+        "title": "Snapshot",
+        "type": "object"
+      },
+      "result": {
+        "additionalProperties": true,
+        "title": "Result",
+        "type": "object"
+      },
+      "error_message": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Error Message"
+      }
+    },
+    "required": [
+      "id",
+      "status",
+      "source_video_id",
+      "snapshot",
+      "result"
+    ],
+    "title": "QualityRenderDTO",
+    "type": "object"
+  }
+}

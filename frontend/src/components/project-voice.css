@@ -1,0 +1,18 @@
+.project-voice-preparation { scroll-margin-top: 24px; }
+#project-voice-preparation { scroll-margin-top: 104px; }
+.project-voice-preparation .studio-section-heading { align-items: start; }
+.project-voice-preparation .studio-section-heading p { margin: 8px 0 0; }
+.project-voice-service { padding: 16px 18px; border-radius: 16px; background: var(--surface-muted, #f5f6f8); margin: 16px 0 20px; }
+.project-voice-service p { margin: 7px 0; overflow-wrap: anywhere; }
+.project-voice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.project-voice-person { min-width: 0; padding: 20px; border: 1px solid var(--border, #e5e7eb); border-radius: 18px; }
+.project-voice-person h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.project-voice-person .section-heading { gap: 10px; align-items: start; flex-wrap: wrap; margin-bottom: 10px; }
+.project-voice-person > p, .project-voice-picker > p { line-height: 1.65; overflow-wrap: anywhere; }
+.project-voice-picker .form-field { margin-top: 14px; }
+.project-voice-picker audio { width: 100%; margin: 12px 0 0; }
+.project-voice-picker input[type=file] { max-width: 100%; }
+.project-voice-picker .form-hint { font-size: 12px; overflow-wrap: anywhere; }
+.project-voice-actions, .project-voice-picker .form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.project-voice-issue { color: var(--warning-text, #8b5a12); }
+@media(max-width: 1000px) { .project-voice-grid { grid-template-columns: minmax(0, 1fr); } }

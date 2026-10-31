@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "description": "JSON input to fixed, allowlisted CLI adapters; never shell code.\n\nPublic HTTP inputs resolve media IDs to paths before constructing this job.\nHelpers emit a receipt, but the backend independently validates output bytes.",
+  "properties": {
+    "protocol": {
+      "const": "video-factory-runtime-1",
+      "default": "video-factory-runtime-1",
+      "title": "Protocol",
+      "type": "string"
+    },
+    "task_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "slot": {
+      "enum": [
+        "script_planning",
+        "character_image",
+        "keyframe_image",
+        "video_generation",
+        "motion_driving",
+        "dialogue_generation",
+        "lip_sync",
+        "video_upscale",
+        "quality_check",
+        "final_assembly",
+        "screenplay_from_text",
+        "screenplay_from_image",
+        "screenplay_from_video"
+      ],
+      "title": "Slot",
+      "type": "string"
+    },
+    "model_id": {
+      "title": "Model Id",
+      "type": "string"
+    },
+    "inputs": {
+      "additionalProperties": true,
+      "title": "Inputs",
+      "type": "object"
+    },
+    "parameters": {
+      "additionalProperties": true,
+      "title": "Parameters",
+      "type": "object"
+    },
+    "output_path": {
+      "title": "Output Path",
+      "type": "string"
+    },
+    "receipt_path": {
+      "title": "Receipt Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task_id",
+    "slot",
+    "model_id",
+    "output_path",
+    "receipt_path"
+  ],
+  "title": "RuntimeJob",
+  "type": "object"
+}

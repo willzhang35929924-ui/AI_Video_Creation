@@ -1,0 +1,511 @@
+{
+  "ProjectVoiceSave": {
+    "additionalProperties": false,
+    "properties": {
+      "version_id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Version Id",
+        "type": "string"
+      },
+      "audio_id": {
+        "anyOf": [
+          {
+            "maxLength": 64,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Audio Id"
+      },
+      "expected_token": {
+        "maxLength": 64,
+        "minLength": 64,
+        "title": "Expected Token",
+        "type": "string"
+      }
+    },
+    "required": [
+      "version_id",
+      "expected_token"
+    ],
+    "title": "ProjectVoiceSave",
+    "type": "object"
+  },
+  "ProjectVoiceGroup": {
+    "properties": {
+      "character_id": {
+        "title": "Character Id",
+        "type": "string"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "version_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version Id"
+      },
+      "version_number": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Version Number"
+      },
+      "version_state": {
+        "title": "Version State",
+        "type": "string"
+      },
+      "participant_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Participant Ids",
+        "type": "array"
+      },
+      "shot_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Shot Ids",
+        "type": "array"
+      },
+      "dialogue_count": {
+        "title": "Dialogue Count",
+        "type": "integer"
+      },
+      "audio_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Audio Id"
+      },
+      "mixed": {
+        "title": "Mixed",
+        "type": "boolean"
+      },
+      "expected_token": {
+        "title": "Expected Token",
+        "type": "string"
+      },
+      "tts_enabled": {
+        "title": "Tts Enabled",
+        "type": "boolean"
+      },
+      "requires_reference_audio": {
+        "title": "Requires Reference Audio",
+        "type": "boolean"
+      },
+      "ready": {
+        "title": "Ready",
+        "type": "boolean"
+      },
+      "issues": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Issues",
+        "type": "array"
+      },
+      "library_asset_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Library Asset Id"
+      },
+      "configuration_status": {
+        "default": "unconfigured",
+        "title": "Configuration Status",
+        "type": "string"
+      },
+      "generation_status": {
+        "default": "pending",
+        "title": "Generation Status",
+        "type": "string"
+      }
+    },
+    "required": [
+      "character_id",
+      "name",
+      "version_id",
+      "version_number",
+      "version_state",
+      "participant_ids",
+      "shot_ids",
+      "dialogue_count",
+      "audio_id",
+      "mixed",
+      "expected_token",
+      "tts_enabled",
+      "requires_reference_audio",
+      "ready",
+      "issues"
+    ],
+    "title": "ProjectVoiceGroup",
+    "type": "object"
+  },
+  "ProjectVoiceService": {
+    "properties": {
+      "shot_id": {
+        "title": "Shot Id",
+        "type": "string"
+      },
+      "enabled": {
+        "title": "Enabled",
+        "type": "boolean"
+      },
+      "service_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Service Id"
+      },
+      "name": {
+        "title": "Name",
+        "type": "string"
+      },
+      "provider": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Provider"
+      },
+      "model_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Model Id"
+      },
+      "requires_reference_audio": {
+        "title": "Requires Reference Audio",
+        "type": "boolean"
+      },
+      "issues": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Issues",
+        "type": "array"
+      }
+    },
+    "required": [
+      "shot_id",
+      "enabled",
+      "service_id",
+      "name",
+      "provider",
+      "model_id",
+      "requires_reference_audio",
+      "issues"
+    ],
+    "title": "ProjectVoiceService",
+    "type": "object"
+  },
+  "ProjectVoicePreparation": {
+    "$defs": {
+      "ProjectVoiceGroup": {
+        "properties": {
+          "character_id": {
+            "title": "Character Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          },
+          "version_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Number"
+          },
+          "version_state": {
+            "title": "Version State",
+            "type": "string"
+          },
+          "participant_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Participant Ids",
+            "type": "array"
+          },
+          "shot_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Shot Ids",
+            "type": "array"
+          },
+          "dialogue_count": {
+            "title": "Dialogue Count",
+            "type": "integer"
+          },
+          "audio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Id"
+          },
+          "mixed": {
+            "title": "Mixed",
+            "type": "boolean"
+          },
+          "expected_token": {
+            "title": "Expected Token",
+            "type": "string"
+          },
+          "tts_enabled": {
+            "title": "Tts Enabled",
+            "type": "boolean"
+          },
+          "requires_reference_audio": {
+            "title": "Requires Reference Audio",
+            "type": "boolean"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "library_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Library Asset Id"
+          },
+          "configuration_status": {
+            "default": "unconfigured",
+            "title": "Configuration Status",
+            "type": "string"
+          },
+          "generation_status": {
+            "default": "pending",
+            "title": "Generation Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "name",
+          "version_id",
+          "version_number",
+          "version_state",
+          "participant_ids",
+          "shot_ids",
+          "dialogue_count",
+          "audio_id",
+          "mixed",
+          "expected_token",
+          "tts_enabled",
+          "requires_reference_audio",
+          "ready",
+          "issues"
+        ],
+        "title": "ProjectVoiceGroup",
+        "type": "object"
+      },
+      "ProjectVoiceService": {
+        "properties": {
+          "shot_id": {
+            "title": "Shot Id",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "requires_reference_audio": {
+            "title": "Requires Reference Audio",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "shot_id",
+          "enabled",
+          "service_id",
+          "name",
+          "provider",
+          "model_id",
+          "requires_reference_audio",
+          "issues"
+        ],
+        "title": "ProjectVoiceService",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "groups": {
+        "items": {
+          "$ref": "#/$defs/ProjectVoiceGroup"
+        },
+        "title": "Groups",
+        "type": "array"
+      },
+      "services": {
+        "items": {
+          "$ref": "#/$defs/ProjectVoiceService"
+        },
+        "title": "Services",
+        "type": "array"
+      },
+      "tts_enabled": {
+        "title": "Tts Enabled",
+        "type": "boolean"
+      },
+      "ready_to_start": {
+        "title": "Ready To Start",
+        "type": "boolean"
+      },
+      "blockers": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Blockers",
+        "type": "array"
+      },
+      "summary": {
+        "title": "Summary",
+        "type": "string"
+      },
+      "audio_policy": {
+        "default": "auto",
+        "title": "Audio Policy",
+        "type": "string"
+      }
+    },
+    "required": [
+      "project_id",
+      "groups",
+      "services",
+      "tts_enabled",
+      "ready_to_start",
+      "blockers",
+      "summary"
+    ],
+    "title": "ProjectVoicePreparation",
+    "type": "object"
+  }
+}

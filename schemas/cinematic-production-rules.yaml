@@ -1,0 +1,147 @@
+# The only authored production rule source. Derived docs/prompts/Word carry its hash.
+versions:
+  production_rules_version: cinematic-1.0.1
+  screenplay_schema_version: screenplay-ir-2.0.0
+  template_version: cinematic-word-2.0.0
+  parser_version: source-preserving-parser-2.0.0
+  video_prompt_compiler_version: cinematic-compiler-1.0.1
+defaults:
+  duration_seconds: 5
+  camera_move: 固定
+  provenance_states: [explicit, suggested, inherited, reviewed, unknown, conflict]
+  missing_core: review_required
+  missing_optional: labelled_suggestion
+  max_primary_actions: 2
+  reference_limit: 9
+  human_review_required: true
+  automatic_visual_pass: false
+visual_language:
+  identity: "A believable person with the referenced facial geometry, natural asymmetry and source-appropriate skin texture. Preserve the supplied identity and any stated age across costume and emotional changes. Do not invent age facts, beautify, remodel facial proportions, invent markings, or smooth all skin texture."
+  wardrobe: "Specify garment layers, weave, weight, seams, fit, wear, reflectance and current wetness. Costume state is separate from facial identity. Preserve approved outfit features and explicitly track changes."
+  scene: "A physically coherent usable location with stable doors, windows, furnishings and prop positions. Surfaces retain plausible texture, wear, roughness, reflections and scale. Lighting is motivated by specified visible or plausible sources."
+  action: "Show grounded body weight, stable foot contact and deliberate hand contact. Separate each performer's initial state, one primary action, contact target and final state. Preserve who holds each prop and which hand is used."
+  camera: "Describe the visible framing, screen direction, focus and camera movement needed for this shot. Camera terminology is visual intent unless the workflow exposes an actual control."
+  audio: "Preserve each original spoken line and its speaker identity. Distinguish model instructions from guaranteed audio processing. Never certify cloned voices or lip sync without a verified workflow and actual review."
+  quality: "Review identities, skin, hands, contact, costumes, props, space, motion and sound. A valid decodable file is technical success only, not film quality approval. Unverified visual metrics remain unavailable."
+sections:
+  character_bible:
+    title: 人物身份与参考素材
+    instructions:
+      - 身份用稳定人物ID和明确版本；参考图须经过审核，不能靠姓名或种子维持身份。
+      - 记录面部轮廓、比例、眼眉鼻唇下颌、肤色与纹理、头发、肩部体态、明显特征和声音；未提供者标记未知。
+      - 候选标准脸由用户选定；角度、表情、全身与服装从该身份派生并逐项审核。
+      - 身份、服装、发妆、情绪、湿润或受伤等物理状态分开记录，不改写已锁定身份。
+  scene_visual_design:
+    title: 场景与材质设计
+    instructions:
+      - 场景使用独立ID和状态版本；记录时间天气、门窗家具布局、背景、主要材质与道具位置。
+      - 描述主光方向、色温和强弱关系、辅助光、阴影和反射来源；避免用电影感或8K代替具体信息。
+      - 场景参考图与分镜关键画面须审核；状态变化创建新版本，不能悄悄改历史参考。
+  shot_breakdown:
+    title: 动作与镜头拆解
+    instructions:
+      - 每个人分别记录初始状态、主动作、次动作、接触对象、重心方向、视线与结束状态。
+      - 动作按可执行时间段排序；复杂接触或目标时长无法容纳的动作提出拆镜建议，未经确认不改核心剧情。
+      - 服装、道具和动作结束状态应与下一镜初始状态衔接；明确保持左/右手与持有人。
+  cinematic_video_compiler:
+    title: 实际视频工作流编译
+    instructions:
+      - 仅编译当前镜头相关人物、场景版本、服装状态、道具状态、动作、摄影、对白和声音，并保留全剧共同约束。
+      - 标准脸、场景图与关键画面按用途标注；参考图不冒充精确首帧，未支持的尾帧、口型或相机控制不得伪装实现。
+      - 冻结规则版本、模型、工作流哈希、实际参数、参考ID及哈希；重新生成需明确采用哪个版本。
+  screenplay_parser:
+    title: 自然语言导入
+    instructions:
+      - 标准模板和未标识的自然语言文档进入同一中间结构，保留正文、表格、顺序和每项来源。
+      - 明确区分原文、建议、继承、用户确认、未知与冲突；置信度只表示规则提取依据，不是模型或画质评分。
+      - 重名、相似身份、动作主体不清、服装与场景矛盾进入待确认；未知段落不丢弃，也不自动变成确定剧情。
+  continuity_check:
+    title: 连续性与质量检查
+    instructions:
+      - 生成前核对人物版本、造型状态、道具持有人/位置/开合/干湿、场景状态、站位与镜头起止状态。
+      - 显式状态变化可衔接；缺少变化原因时报告冲突，不替用户改写原文。
+      - 生成后实际解码、帧/尺寸/时长核对；身份漂移、手部、闪烁、动作与声画质量须保留人工审核门槛。
+      - 按身份、服装、动作、场景、道具、声画、技术错误分类修复；不合格不自动批准，不无限重试。
+aliases:
+  人物: [人物, 角色, Character, CHARACTER, Cast]
+  场景: [场景, 场次, Scene, SCENE]
+  分镜: [分镜, 镜头, Shot, SHOT]
+  项目名称: [项目名称, 片名, 剧名, 标题, Title]
+  画面: [画面, 画面描述, 视觉描述, Visual, Description]
+  出场人物: [出场人物, 参与人物, 出镜角色, Cast]
+  时长: [时长, 建议时长, 时长秒, Duration]
+  运镜: [运镜, 镜头运动, 摄影机运动, Camera]
+  地点: [地点, 场景地点, Location]
+  时间: [时间, 时段, Time]
+  天气: [天气, Weather]
+  灯光: [灯光, 光线, Lighting]
+  环境声: [环境声, 环境音, 氛围声, Ambience]
+  音效: [音效, SFX]
+  音乐: [音乐, 配乐, Music]
+  对白: [对白, 台词, Dialogue]
+  动作: [动作, 动作描述, Action]
+  情绪: [情绪, Emotion]
+  位置: [位置, 站位, Position]
+fields:
+  identity: [description, facial_features, eyes, eyebrows, nose, lips, jaw, skin, hair, hairline, body, shoulders, hands, marks, movement_style, voice_profile, immutable_traits]
+  wardrobe: [layers, material, weave, weight, drape, cut, fit, length, collar, cuffs, seams, colors, reflectance, wear, accessories, wetness, damage, dirt, immutable_features, allowed_variation]
+  prop: [material, dimensions, color, wear, holder, hand, location, open_state, wetness, damage, contact]
+  scene: [location, time, weather, season, interior_exterior, layout, doors_windows, background, materials, key_light_direction, key_light_temperature, fill_light, shadows, reflections, atmosphere, palette, exposure, continuity]
+  action: [start_state, main_action, secondary_action, contact_target, speed_force, weight_direction, eyeline, expression_change, end_state, next_cut]
+  camera: [shot_size, camera_position, height, angle, composition, camera_move, move_speed, focus, depth, foreground, background, motion_blur, exposure, start_state, end_state, continuity, transition]
+performance_state_fields: [wetness, damage, dirt, physical_state, wardrobe_id, wardrobe_version]
+repair_categories:
+  identity: 检查身份版本与标准脸，减少非身份参考；不改锁定人物。
+  wardrobe: 核对造型ID、材质和干湿状态，修正本镜造型绑定后重试。
+  action: 拆分主动作，明确起止、接触对象和重心；保留原台词。
+  scene: 复用正确场景状态与已审参考，核对光源和空间布局。
+  prop: 核对道具ID、持有人、手与开合/位置状态，先消除文本矛盾。
+  audio: 使用实际支持的声音生成或上传音轨后混，人工检查说话人和口型。
+  technical: 检查模型节点、输入限制、显存、文件解码和实际输出规格。
+field_labels:
+  layers: 衣物层次
+  material: 材质
+  weave: 织纹
+  weight: 重量感
+  drape: 垂坠
+  cut: 剪裁
+  fit: 合身程度
+  length: 长度
+  collar: 领口
+  cuffs: 袖口
+  seams: 缝线
+  colors: 色彩
+  reflectance: 反光特性
+  wear: 磨损
+  accessories: 配饰
+  wetness: 干湿状态
+  damage: 破损状态
+  dirt: 沾污状态
+  immutable_features: 固定特征
+  allowed_variation: 可变细节
+  dimensions: 尺寸
+  color: 颜色
+  holder: 持有人
+  hand: 持有手
+  location: 位置
+  open_state: 开合状态
+  contact: 接触关系
+  doors_windows: 门窗关系
+  background: 背景
+  materials: 主要材质
+  key_light_direction: 主光方向
+  key_light_temperature: 主光色温
+  fill_light: 辅助光
+  shadows: 阴影
+  reflections: 反射
+  exposure: 曝光意图
+  start_state: 初始状态
+  main_action: 主要动作
+  secondary_action: 次级动作
+  contact_target: 接触对象
+  speed_force: 速度力度
+  weight_direction: 重心方向
+  eyeline: 视线
+  expression_change: 表情变化
+  end_state: 结束状态
+  next_cut: 动作衔接

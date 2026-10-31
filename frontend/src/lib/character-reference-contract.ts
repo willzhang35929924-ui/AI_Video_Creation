@@ -1,0 +1,4 @@
+export type CharacterReferencePurpose='identity_front'|'identity_side'|'full_body'|'wardrobe';
+export type CharacterReferenceAsset={id:string;project_id:string;character_id:string;state:string;purpose:CharacterReferencePurpose;order:number;sha256:string;width:number;height:number;mime_type:string;bytes:number;media_url:string;source_note:string};
+export type CharacterReferenceRow={character_id:string;name:string;description:string;revision:number;references:CharacterReferenceAsset[];drafts:CharacterReferenceAsset[];state:string;max_images?:number;limit_reason?:string;last_application:null|{job_id:string;status:string;result_asset_id?:string|null;error_message?:string|null;reference_ids:string[]}};
+export type CharacterReferenceOverview={project_id:string;characters:CharacterReferenceRow[];limits:{max_images:number;max_upload_bytes:number;formats?:string[]}};

@@ -1,0 +1,860 @@
+{
+  "$defs": {
+    "Beat": {
+      "additionalProperties": true,
+      "properties": {
+        "character_key": {
+          "title": "Character Key",
+          "type": "string"
+        },
+        "start_seconds": {
+          "minimum": 0,
+          "title": "Start Seconds",
+          "type": "number"
+        },
+        "end_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "End Seconds",
+          "type": "number"
+        },
+        "action": {
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "start_state": {
+          "default": "",
+          "title": "Start State",
+          "type": "string"
+        },
+        "end_state": {
+          "default": "",
+          "title": "End State",
+          "type": "string"
+        },
+        "contact_target": {
+          "default": "",
+          "title": "Contact Target",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "character_key",
+        "start_seconds",
+        "end_seconds",
+        "action"
+      ],
+      "title": "Beat",
+      "type": "object"
+    },
+    "CharacterIR": {
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 160,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "profile": {
+          "additionalProperties": true,
+          "title": "Profile",
+          "type": "object"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        },
+        "decision": {
+          "default": "new",
+          "enum": [
+            "new",
+            "existing",
+            "pending"
+          ],
+          "title": "Decision",
+          "type": "string"
+        },
+        "match_character_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Match Character Id"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "title": "CharacterIR",
+      "type": "object"
+    },
+    "DesignIR": {
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "wardrobe",
+            "prop",
+            "scene_state"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "character_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Character Key"
+        },
+        "scene_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene Key"
+        },
+        "spec": {
+          "additionalProperties": true,
+          "title": "Spec",
+          "type": "object"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "name"
+      ],
+      "title": "DesignIR",
+      "type": "object"
+    },
+    "LineIR": {
+      "additionalProperties": true,
+      "properties": {
+        "character_key": {
+          "title": "Character Key",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "delivery": {
+          "additionalProperties": true,
+          "title": "Delivery",
+          "type": "object"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "character_key",
+        "text"
+      ],
+      "title": "LineIR",
+      "type": "object"
+    },
+    "MotionReferenceInput": {
+      "additionalProperties": false,
+      "description": "An explicit, per-shot permission to use a bounded source segment.",
+      "properties": {
+        "video_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Video Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "minimum": 1,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "trim_start_seconds": {
+          "minimum": 0,
+          "title": "Trim Start Seconds",
+          "type": "number"
+        },
+        "trim_end_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Trim End Seconds",
+          "type": "number"
+        },
+        "authorized_for_motion": {
+          "title": "Authorized For Motion",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "video_id",
+        "expected_revision",
+        "source_sha256",
+        "trim_start_seconds",
+        "trim_end_seconds",
+        "authorized_for_motion"
+      ],
+      "title": "MotionReferenceInput",
+      "type": "object"
+    },
+    "ParticipantIR": {
+      "additionalProperties": true,
+      "properties": {
+        "character_key": {
+          "title": "Character Key",
+          "type": "string"
+        },
+        "performance": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Performance",
+          "type": "object"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "character_key"
+      ],
+      "title": "ParticipantIR",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": true,
+      "properties": {
+        "state": {
+          "enum": [
+            "explicit",
+            "suggested",
+            "inherited",
+            "reviewed",
+            "unknown",
+            "conflict"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "source_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SceneIR": {
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "order": {
+          "minimum": 1,
+          "title": "Order",
+          "type": "integer"
+        },
+        "environment": {
+          "additionalProperties": true,
+          "title": "Environment",
+          "type": "object"
+        },
+        "audio_events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Audio Events",
+          "type": "array"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "order"
+      ],
+      "title": "SceneIR",
+      "type": "object"
+    },
+    "ShotIR": {
+      "additionalProperties": true,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "scene_key": {
+          "title": "Scene Key",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "visual_prompt": {
+          "default": "",
+          "title": "Visual Prompt",
+          "type": "string"
+        },
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "duration_seconds": {
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Duration Seconds",
+          "type": "number"
+        },
+        "camera_move": {
+          "default": "",
+          "title": "Camera Move",
+          "type": "string"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/ParticipantIR"
+          },
+          "maxItems": 30,
+          "title": "Participants",
+          "type": "array"
+        },
+        "dialogues": {
+          "items": {
+            "$ref": "#/$defs/LineIR"
+          },
+          "maxItems": 300,
+          "title": "Dialogues",
+          "type": "array"
+        },
+        "audio_events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Audio Events",
+          "type": "array"
+        },
+        "photography": {
+          "additionalProperties": true,
+          "title": "Photography",
+          "type": "object"
+        },
+        "production": {
+          "$ref": "#/$defs/ShotProduction"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source",
+          "type": "array"
+        },
+        "suggested": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Suggested",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Provenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "scene_key",
+        "title",
+        "duration_seconds"
+      ],
+      "title": "ShotIR",
+      "type": "object"
+    },
+    "ShotProduction": {
+      "additionalProperties": true,
+      "properties": {
+        "scene_state_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scene State Key"
+        },
+        "wardrobe_states": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Wardrobe States",
+          "type": "object"
+        },
+        "prop_states": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Prop States",
+          "type": "array"
+        },
+        "beats": {
+          "items": {
+            "$ref": "#/$defs/Beat"
+          },
+          "title": "Beats",
+          "type": "array"
+        },
+        "start_state": {
+          "default": "",
+          "title": "Start State",
+          "type": "string"
+        },
+        "end_state": {
+          "default": "",
+          "title": "End State",
+          "type": "string"
+        },
+        "state_change_reason": {
+          "default": "",
+          "title": "State Change Reason",
+          "type": "string"
+        },
+        "visual_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 7,
+          "title": "Visual Ids",
+          "type": "array"
+        },
+        "require_visual_review": {
+          "default": true,
+          "title": "Require Visual Review",
+          "type": "boolean"
+        },
+        "requested_controls": {
+          "additionalProperties": true,
+          "title": "Requested Controls",
+          "type": "object"
+        },
+        "motion_references": {
+          "items": {
+            "$ref": "#/$defs/MotionReferenceInput"
+          },
+          "maxItems": 3,
+          "title": "Motion References",
+          "type": "array"
+        }
+      },
+      "title": "ShotProduction",
+      "type": "object"
+    },
+    "Versions": {
+      "additionalProperties": true,
+      "properties": {
+        "production_rules_version": {
+          "title": "Production Rules Version",
+          "type": "string"
+        },
+        "screenplay_schema_version": {
+          "title": "Screenplay Schema Version",
+          "type": "string"
+        },
+        "template_version": {
+          "title": "Template Version",
+          "type": "string"
+        },
+        "parser_version": {
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "video_prompt_compiler_version": {
+          "title": "Video Prompt Compiler Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "production_rules_version",
+        "screenplay_schema_version",
+        "template_version",
+        "parser_version",
+        "video_prompt_compiler_version"
+      ],
+      "title": "Versions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "versions": {
+      "$ref": "#/$defs/Versions"
+    },
+    "project": {
+      "additionalProperties": true,
+      "title": "Project",
+      "type": "object"
+    },
+    "parser": {
+      "title": "Parser",
+      "type": "string"
+    },
+    "mode": {
+      "default": "general",
+      "enum": [
+        "standard",
+        "general",
+        "legacy"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "characters": {
+      "items": {
+        "$ref": "#/$defs/CharacterIR"
+      },
+      "maxItems": 100,
+      "title": "Characters",
+      "type": "array"
+    },
+    "scenes": {
+      "items": {
+        "$ref": "#/$defs/SceneIR"
+      },
+      "maxItems": 300,
+      "title": "Scenes",
+      "type": "array"
+    },
+    "shots": {
+      "items": {
+        "$ref": "#/$defs/ShotIR"
+      },
+      "maxItems": 1000,
+      "title": "Shots",
+      "type": "array"
+    },
+    "designs": {
+      "items": {
+        "$ref": "#/$defs/DesignIR"
+      },
+      "maxItems": 1000,
+      "title": "Designs",
+      "type": "array"
+    },
+    "unrecognized": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Unrecognized",
+      "type": "array"
+    },
+    "parse_warnings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Parse Warnings",
+      "type": "array"
+    },
+    "rules_snapshot": {
+      "additionalProperties": true,
+      "title": "Rules Snapshot",
+      "type": "object"
+    },
+    "source_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Source Versions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "versions",
+    "project",
+    "parser",
+    "rules_snapshot"
+  ],
+  "title": "ScreenplayIR",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:video-factory:screenplay-ir-2.0.0",
+  "x-production-versions": {
+    "production_rules_version": "cinematic-1.0.1",
+    "screenplay_schema_version": "screenplay-ir-2.0.0",
+    "template_version": "cinematic-word-2.0.0",
+    "parser_version": "source-preserving-parser-2.0.0",
+    "video_prompt_compiler_version": "cinematic-compiler-1.0.1"
+  },
+  "x-rules-source-sha256": "85ab4955a7aaa4232639c1869179be17879fa53ad1b6506da533c4c018e05f8f",
+  "x-production-field-definitions": {
+    "identity": [
+      "description",
+      "facial_features",
+      "eyes",
+      "eyebrows",
+      "nose",
+      "lips",
+      "jaw",
+      "skin",
+      "hair",
+      "hairline",
+      "body",
+      "shoulders",
+      "hands",
+      "marks",
+      "movement_style",
+      "voice_profile",
+      "immutable_traits"
+    ],
+    "wardrobe": [
+      "layers",
+      "material",
+      "weave",
+      "weight",
+      "drape",
+      "cut",
+      "fit",
+      "length",
+      "collar",
+      "cuffs",
+      "seams",
+      "colors",
+      "reflectance",
+      "wear",
+      "accessories",
+      "wetness",
+      "damage",
+      "dirt",
+      "immutable_features",
+      "allowed_variation"
+    ],
+    "prop": [
+      "material",
+      "dimensions",
+      "color",
+      "wear",
+      "holder",
+      "hand",
+      "location",
+      "open_state",
+      "wetness",
+      "damage",
+      "contact"
+    ],
+    "scene": [
+      "location",
+      "time",
+      "weather",
+      "season",
+      "interior_exterior",
+      "layout",
+      "doors_windows",
+      "background",
+      "materials",
+      "key_light_direction",
+      "key_light_temperature",
+      "fill_light",
+      "shadows",
+      "reflections",
+      "atmosphere",
+      "palette",
+      "exposure",
+      "continuity"
+    ],
+    "action": [
+      "start_state",
+      "main_action",
+      "secondary_action",
+      "contact_target",
+      "speed_force",
+      "weight_direction",
+      "eyeline",
+      "expression_change",
+      "end_state",
+      "next_cut"
+    ],
+    "camera": [
+      "shot_size",
+      "camera_position",
+      "height",
+      "angle",
+      "composition",
+      "camera_move",
+      "move_speed",
+      "focus",
+      "depth",
+      "foreground",
+      "background",
+      "motion_blur",
+      "exposure",
+      "start_state",
+      "end_state",
+      "continuity",
+      "transition"
+    ]
+  },
+  "x-default-policy": {
+    "duration_seconds": 5,
+    "camera_move": "固定",
+    "provenance_states": [
+      "explicit",
+      "suggested",
+      "inherited",
+      "reviewed",
+      "unknown",
+      "conflict"
+    ],
+    "missing_core": "review_required",
+    "missing_optional": "labelled_suggestion",
+    "max_primary_actions": 2,
+    "reference_limit": 9,
+    "human_review_required": true,
+    "automatic_visual_pass": false
+  }
+}

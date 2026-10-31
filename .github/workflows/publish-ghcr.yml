@@ -1,0 +1,210 @@
+name: Validate and publish GHCR images
+
+'on':
+  push:
+    branches: ['**']
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release_metadata:
+    name: Resolve actual repository and release policy
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.release.outputs.publish }}
+      image_base: ${{ steps.release.outputs.image_base }}
+      version: ${{ steps.release.outputs.version }}
+      license: ${{ steps.release.outputs.license }}
+      created: ${{ steps.release.outputs.created }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Gate publication to the default branch or exact semantic tags
+        id: release
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          python - <<'PY'
+          import datetime, os, pathlib, re
+          ref = os.environ['GITHUB_REF']
+          default_ref = 'refs/heads/' + os.environ['DEFAULT_BRANCH']
+          is_tag = ref.startswith('refs/tags/')
+          if is_tag and not re.fullmatch(r'refs/tags/v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', ref):
+              raise SystemExit('Only exact vX.Y.Z release tags may publish images.')
+          publish = ref == default_ref or is_tag
+          license_id = 'NOASSERTION'
+          if publish:
+              path = pathlib.Path('LICENSE')
+              if not path.is_file():
+                  raise SystemExit('LICENSE is missing. Select the project license before publishing.')
+              text = path.read_text()
+              license_id = 'MIT' if 'MIT License' in text else 'Apache-2.0' if 'Apache License' in text and 'Version 2.0' in text else 'NOASSERTION'
+              if license_id == 'NOASSERTION':
+                  raise SystemExit('Unrecognized project license. Review this explicit SPDX gate before publishing.')
+              for required in ['THIRD_PARTY_NOTICES.md', 'licenses']:
+                  if not pathlib.Path(required).exists():
+                      raise SystemExit('Required third-party license notices are missing: ' + required)
+          values = {
+              'publish': str(publish).lower(),
+              'image_base': 'ghcr.io/' + os.environ['GITHUB_REPOSITORY'].lower(),
+              'version': ref.removeprefix('refs/tags/') if is_tag else 'sha-' + os.environ['GITHUB_SHA'],
+              'license': license_id,
+              'created': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+          }
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              for key, value in values.items():
+                  out.write(key + '=' + value + '\n')
+          print('Publication enabled:', publish)
+          print('Image names derive from the real repository:', values['image_base'] + '-backend/frontend')
+          PY
+
+  publish:
+    name: Publish ${{ matrix.component }}
+    needs: [checks, release_metadata]
+    if: needs.release_metadata.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in with this job's GITHUB_TOKEN
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate latest, exact version and full revision tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ needs.release_metadata.outputs.image_base }}-${{ matrix.component }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=semver,pattern=v{{version}}
+            type=sha,format=long,prefix=sha-
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.release_metadata.outputs.version }}
+            org.opencontainers.image.created=${{ needs.release_metadata.outputs.created }}
+            org.opencontainers.image.licenses=${{ needs.release_metadata.outputs.license }}
+      - name: Build and publish both architectures with provenance and SBOM
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.component }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            APP_VERSION=${{ needs.release_metadata.outputs.version }}
+            VCS_REF=${{ github.sha }}
+            VCS_SOURCE=${{ github.server_url }}/${{ github.repository }}
+            BUILD_DATE=${{ needs.release_metadata.outputs.created }}
+            APP_LICENSE=${{ needs.release_metadata.outputs.license }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - name: Record actual published digest
+        env:
+          IMAGE: ${{ needs.release_metadata.outputs.image_base }}-${{ matrix.component }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### Published $IMAGE"
+            echo "Digest: \`$DIGEST\`"
+            echo "Revision: \`$GITHUB_SHA\`"
+            echo 'Anonymous pulls and both platform manifests are checked in the following job.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  anonymous_pull:
+    name: Verify public ${{ matrix.component }} pulls
+    needs: [release_metadata, publish]
+    if: needs.release_metadata.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, frontend]
+    env:
+      IMAGE: ${{ needs.release_metadata.outputs.image_base }}-${{ matrix.component }}:sha-${{ github.sha }}
+    steps:
+      # This fresh job never receives registry credentials. An authenticated
+      # push is not evidence that first-time users can pull public packages.
+      - name: Use an empty Docker credential directory
+        run: |
+          directory=$(mktemp -d)
+          printf '{"auths":{}}\n' > "$directory/config.json"
+          echo "DOCKER_CONFIG=$directory" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Inspect the public multi-platform manifest
+        run: |
+          success=false
+          for attempt in 1 2 3 4 5; do
+            if docker buildx imagetools inspect --raw "$IMAGE" > /tmp/image-manifest.json; then
+              success=true
+              break
+            fi
+            sleep 10
+          done
+          if [ "$success" != true ]; then
+            echo '::error::Anonymous GHCR access failed. Confirm that the new GHCR package is Public and linked to this repository; registry credentials must not be required for installation.'
+            exit 1
+          fi
+          jq -e '[.manifests[] | select(.platform.os == "linux") | .platform.architecture] | unique | sort == ["amd64", "arm64"]' /tmp/image-manifest.json
+      - name: Pull both actual platform images without logging in
+        run: |
+          for platform in linux/amd64 linux/arm64; do
+            arch=${platform#linux/}
+            digest=$(jq -er --arg arch "$arch" '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("Expected exactly one manifest for architecture") end' /tmp/image-manifest.json)
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            pull_ref="${IMAGE%:*}@$digest"
+            docker pull --platform "$platform" "$pull_ref"
+            # Inspect a leaf digest, avoiding host-architecture selection when
+            # containerd keeps both platforms under the same multiarch tag.
+            actual=$(docker image inspect "$pull_ref" --format '{{.Os}}/{{.Architecture}}')
+            [ "$actual" = "$platform" ]
+            revision=$(docker image inspect "$pull_ref" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+            [ "$revision" = "$GITHUB_SHA" ]
+          done
+          {
+            echo "### Anonymous pull verified: $IMAGE"
+            echo 'PASS: linux/amd64 and linux/arm64 manifest entries and image pulls.'
+            echo 'This is not a physical Windows or macOS end-to-end test or AI inference quality certification.'
+          } >> "$GITHUB_STEP_SUMMARY"
