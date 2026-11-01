@@ -94,20 +94,3 @@ docker compose down
 容器里的 `localhost` 指向容器自身。连接 Docker Desktop 宿主机服务时通常使用 `host.docker.internal`，例如 `http://host.docker.internal:8189`，并配置精确的本地服务 origin 白名单。只绑定宿主机 `127.0.0.1` 的服务未必能通过该地址访问，需按实际监听、防火墙和访问权限验证。远程 Mac mini 或 GPU 主机使用可达的受控地址。详见 [使用教程](docs/USER_GUIDE_ZH.md)。
 
 能列出模型不表示视频接口可用；语言模型也不因为配置在视频用途就能返回视频。更换中转供应商时，必须确认应用已支持它的提交、查询和结果协议。
-
-## 开发与公开发布
-
-```bash
-# 开发者：使用当前源码构建，与普通用户拉取镜像的方式不同
-docker compose -f compose.dev.yaml up -d --build
-```
-
-首次从 GitHub 下载和日后提交代码见 [VS Code 与 GitHub 教程](docs/VSCODE_GITHUB_GUIDE_ZH.md)。镜像来源、版本标签、Actions、备份和升级见 [Docker 发布教程](docs/DOCKER_RELEASE_GUIDE_ZH.md)。
-
-公开镜像地址：后端 `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest`，前端 `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest`。`latest` 随已通过发布流程的提交更新，`sha-…` 固定到对应源码提交；`vX.Y.Z` 对应正式版本。需要固定版本时，先在 Tags / Releases 查到该版本，再核对其关联 Actions；各轮已完成验证见发布验收记录。
-
-## 问题反馈与许可
-
-先查 [故障排查](docs/TROUBLESHOOTING_ZH.md)。报告问题请附系统/CPU 架构、版本、步骤、错误码或请求 ID、已脱敏的关键日志；不要附 API Key、`.env`、数据库、备份或私人素材。安全问题按 [SECURITY.md](SECURITY.md) 处理，代码贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-第一方代码许可证：`MIT`，以正式 `LICENSE` 为准。第三方依赖、FFmpeg/编解码器、字体及外接模型具有各自的许可证，不能将整个依赖组合都视为同一种许可。见 [许可证审查说明](docs/LICENSING_REVIEW_ZH.md)。
