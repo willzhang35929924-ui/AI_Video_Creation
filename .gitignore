@@ -36,3 +36,5 @@ fixtures/*.mp4
 fixtures/*.png
 .DS_Store
 Thumbs.db
+/VideoFactory管理/云端配置/
+/VideoFactory管理/云端视频/
