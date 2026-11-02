@@ -1,0 +1,25 @@
+name: Windows manager checks
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'VideoFactory管理/**'
+      - 'tests/test_windows_manager.py'
+      - '.github/workflows/video-manager-windows.yml'
+  push:
+    paths:
+      - 'VideoFactory管理/**'
+      - 'tests/test_windows_manager.py'
+      - '.github/workflows/video-manager-windows.yml'
+permissions:
+  contents: read
+jobs:
+  windows-manager:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test manager and Windows Credential Manager
+        run: python -B -m unittest discover -s tests -p test_windows_manager.py -v
