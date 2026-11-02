@@ -2,3 +2,4 @@
 * -text
 *.sh text eol=lf
 *.docx binary
+/VideoFactory管理/*.bat text eol=crlf
