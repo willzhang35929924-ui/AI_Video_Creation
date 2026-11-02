@@ -1,0 +1,45 @@
+VideoFactory 本机管理程序
+
+一、打开管理程序
+Mac：双击“VideoFactory管理.command”；也可双击“云端配置与视频.command”直接打开云端窗口。需要 Colima、Docker CLI 和带 Tk 的 Python 3。
+Windows：安装带 Tk 的 Python 3.10+，安装并启动 Docker Desktop，选择 Linux 容器，然后双击“Windows管理.bat”。首次启动需要网络拉取镜像；请等待 Docker Desktop 完全启动。
+两个版本都根据管理程序所在目录定位项目；请把整个 VideoFactory管理 文件夹放在包含 compose.yaml 的项目根目录内。默认网页：http://127.0.0.1:8080（如设置 WEB_PORT，请使用对应端口）。关闭只停止本项目容器，不关闭 Docker Desktop、Colima 或其他项目。
+Windows 管理器只接受本机命名管道 Docker 上下文；若设置了 DOCKER_HOST 或 DOCKER_CONTEXT，请移除环境变量并选择本机 Docker Desktop 上下文。
+
+二、云端配置
+窗口顶部的下拉列表显示历史云端配置。选择后可使用该配置提交任务、查看该配置的历史任务，或选择历史编号查询和下载。
+“添加新配置”允许填写名称、协议、模型、提交与查询 API URL 和 API Key。支持多个配置，包括同一个平台的多个账户和模型。Mac 的 Key 保存在 macOS 登录钥匙串，Windows 的 Key 保存在当前用户的 Windows 凭据管理器；其他参数保存在本文件夹“云端配置”内。配置和密钥不会通过 GitHub 迁移到另一台电脑。添加 LinkFox 时默认填写其带货视频接口，参考图需是公网可访问地址；音频不是必填。
+添加窗口中的“测试连接”可在保存前测试；修改参数或 Key 后，旧测试状态会自动失效。选中已保存的配置后，也可点击“测试连接”；窗口显示结果和上次测试时间。连接成功只代表只读测试通过，不能证明视频模型可用或额度充足。
+
+LinkFox 使用 /v1/userPlan/info 只读接口验证凭据，不创建视频任务。自定义平台需要在添加时填写只读测试 URL、test_method、test_body、test_success_path 和 test_success_value；已有自定义配置可选择“设置测试接口”补充。只填写供应商文档明确为只读的接口；程序不能判断任意第三方接口是否收费或有副作用，也不会允许测试地址与视频提交地址相同。自定义平台的成功仅表示响应符合配置条件，不能保证该接口实际验证了密钥。
+
+“删除所选配置”删除该方案的本地配置、该方案的任务历史，以及系统凭据存储中相应的 Key；已下载的视频与供应商云端记录不会删除。删除无法保证清理系统快照、备份或 SSD 的历史副本。
+新安装默认没有云端配置，请在“添加新配置”中输入自己的信息。系统凭据存储可能提示用户授权。
+
+三、添加其他供应商
+选择“自定义异步 JSON”后，需按供应商文档填写提交、查询 URL 和高级 JSON 配置。该协议假设提交后获得任务编号、可轮询状态并最终返回视频 URL，使用 HTTPS 和可配置的请求头密钥认证；并非所有供应商都兼容。
+可使用以下占位符：{{model}}、{{prompt}}、{{image_url}}、{{duration}}、{{resolution}}、{{aspect_ratio}}、{{task_id}}。请求 JSON 中单独的 {{duration}} 会作为数字发送。查询 URL 使用 {task_id}（单层大括号），并经过 URL 编码。
+高级配置示例：
+{
+  "auth_header": "Authorization",
+  "auth_prefix": "Bearer ",
+  "poll_method": "GET",
+  "test_method": "GET",
+  "test_body": {},
+  "test_success_path": "code",
+  "test_success_value": "200",
+  "submit_template": {"model":"{{model}}", "prompt":"{{prompt}}", "image_url":"{{image_url}}", "duration":"{{duration}}"},
+  "poll_template": {},
+  "id_path": "id",
+  "status_path": "status",
+  "result_path": "output_url",
+  "success_values": "completed,succeeded",
+  "failure_values": "failed,cancelled"
+}
+例如供应商要求 X-API-Key 时，可将 auth_header 设置为 "X-API-Key"、auth_prefix 设置为空字符串。Key 不要放入 URL 或 JSON 模板。
+POST 查询时可将 poll_method 设为 POST，poll_template 例如 {"id":"{{task_id}}"}。响应字段路径使用英文句点分隔，例如 data.id、data.resultList.0.url；数组下标从 0 开始。成功和失败状态使用英文逗号分隔。具体字段、认证方式、时长与模型值请以供应商的文档为准。
+提交前会提示可能产生费用。请求超时或状态未知时，请先在供应商后台核对，使用原任务编号恢复查询，避免重复扣费。历史记录和输出地址为本地信息，不能保证云端结果永不过期。
+
+四、清空项目数据
+清理先停止 VideoFactory Compose 容器并要求两次确认，删除项目数据库中的项目、素材、任务及本项目媒体、临时数据、日志、报告、数据库备份、云端任务历史和“云端视频”文件；保留全局设置、云端配置与 Key。操作后项目保持关闭。已在隔离数据和数据库副本中测试；没有对真实项目执行清理。
+单独导出在本文件夹以外的文件、其他 Docker 项目、供应商云端任务、系统快照和备份不在清理范围。SSD、快照、备份和磁盘故障使任何软件都无法保证物理上不可恢复或任何情况下均能成功；程序将核验并报告失败。数据库结构版本改变时清理会停止，避免错误删除配置。
