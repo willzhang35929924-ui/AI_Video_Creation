@@ -1,15 +1,58 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ToastProvider';
 import { ReviewPage } from './ReviewPage';
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+const immediateEdit=vi.hoisted(()=>({value:null as string|null}));
+vi.mock('../components/ui',async original=>{
+  const actual=await original<typeof import('../components/ui')>();
+  const React=await import('react');
+  return {...actual,FormField:(props:React.ComponentProps<typeof actual.FormField>)=>{
+    React.useLayoutEffect(()=>{
+      if(props.label==='本次修改要求'&&immediateEdit.value!==null){
+        const input=props.children as React.ReactElement<{onChange:(event:{target:{value:string}})=>void}>;
+        if(React.isValidElement(input)&&input.type==='textarea'){
+          input.props.onChange({target:{value:''}});input.props.onChange({target:{value:immediateEdit.value}});
+        }
+      }
+    },[]);
+    return <actual.FormField {...props}/>;
+  }};
+});
+
+afterEach(() => { cleanup(); immediateEdit.value=null; vi.unstubAllGlobals(); });
 
 const response = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 const video = { id: 'v1', project_id: 'p1', shot_id: 's1', revision: 1, relative_path: 'original.mp4',
   review_status: 'pending', metadata_json: { mode: 'cloud', provider: 'cloud_lk888_h3_v2' } };
+
+it('keeps the first edit made before selection effects flush and does not overwrite it with late video details',async()=>{
+  // Mount-time editing deliberately precedes passive effects, reproducing the
+  // reset race without timers, sleeps or relying on CI machine speed.
+  immediateEdit.value='镜头缓慢向前';
+  let finishDetail!:(value:Response)=>void;
+  const detail=new Promise<Response>(resolve=>{finishDetail=resolve;});
+  const submitted:unknown[]=[];
+  vi.stubGlobal('fetch',vi.fn(async(url:string,init:RequestInit)=>{
+    const path=new URL(url,'http://localhost').pathname;
+    if(path==='/api/projects')return response([{id:'p1',name:'项目'}]);
+    if(path==='/api/projects/p1/videos')return response([video]);
+    if(path==='/api/videos/v1')return detail;
+    if(path.endsWith('/revision-preview')){submitted.push(JSON.parse(String(init.body)));return response({prompt:'精确预览',character_id:null,character_version_id:null});}
+    throw new Error(path);
+  }));
+  const user=userEvent.setup();
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage/></ToastProvider></MemoryRouter>);
+  const input=await screen.findByLabelText('本次修改要求');
+  expect(input).toHaveValue('镜头缓慢向前');
+  await act(async()=>{finishDetail(response({...video,metadata_json:{...video.metadata_json,detail_loaded:true}}));await detail;});
+  expect(input).toHaveValue('镜头缓慢向前');
+  await user.click(screen.getByRole('button',{name:'基于当前版本重新生成'}));
+  await screen.findByRole('dialog',{name:'修订完整提示词'});
+  expect(submitted).toEqual([{instruction:'镜头缓慢向前',use_project_video_service:false}]);
+});
 
 it('re-previews a cloud revision on explicit local opt-in and submits precisely the reviewed input', async () => {
   const preview = { prompt: '此处显示实际修订提示词', character_id: null, character_version_id: null };

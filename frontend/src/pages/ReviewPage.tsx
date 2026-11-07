@@ -29,12 +29,21 @@ export function ReviewPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [videos, setVideos] = useState<VideoRevision[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [revisionSelection, setRevisionSelection] = useState({ selectedId: "", instruction: defaultInstruction, useProjectVideoService: false });
+  const { selectedId, instruction, useProjectVideoService } = revisionSelection;
+  // Select the version and initialize its draft atomically. A passive effect
+  // must never restore defaults after the newly visible editor has been edited.
+  const setSelectedId = useCallback((value: string | ((current: string) => string)) => {
+    setRevisionSelection(current => {
+      const next = typeof value === "function" ? value(current.selectedId) : value;
+      return next === current.selectedId ? current : { selectedId: next, instruction: defaultInstruction, useProjectVideoService: false };
+    });
+  }, []);
+  const setInstruction = (value: string) => setRevisionSelection(current => current.selectedId === selectedId ? { ...current, instruction: value } : current);
+  const setUseProjectVideoService = (value: boolean) => setRevisionSelection(current => current.selectedId === selectedId ? { ...current, useProjectVideoService: value } : current);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [instruction, setInstruction] = useState(defaultInstruction);
-  const [useProjectVideoService, setUseProjectVideoService] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [approveOpen, setApproveOpen] = useState(false);
@@ -73,7 +82,7 @@ export function ReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [location.search]);
+  }, [location.search, setSelectedId]);
 
   const initialLoad = useCallback(async () => {
     setLoading(true);
@@ -97,8 +106,6 @@ export function ReviewPage() {
   }, [initialLoad]);
 
   useEffect(() => {
-    setInstruction(defaultInstruction);
-    setUseProjectVideoService(false);
     clearRevisionPreview();
     setRejectOpen(false);
     setRejectReason("");
