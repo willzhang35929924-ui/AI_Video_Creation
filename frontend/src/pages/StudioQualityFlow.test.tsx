@@ -13,6 +13,7 @@ it('disables project switching and generation while an explicit quality save is 
   const user=userEvent.setup();let finish!:(value:any)=>void;const save=new Promise(resolve=>{finish=resolve;});
   const settings={resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'};
   mocked.mockImplementation(async(url,init)=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/settings/ai-services')return [];
     if(url.startsWith('/api/model-services/routes/project/'))return {scope:'project',target_id:'p1',slot:'dialogue_generation',revision:0,inherited_from:null,settings:{mode:'local_only',choices:[],parameters:{}}};
     if(url.includes('/voices?'))return {project_id:'p1',groups:[],services:[],tts_enabled:false,ready_to_start:true,blockers:[],summary:'本次沿用原声'};
@@ -36,6 +37,7 @@ it('disables project switching and generation while an explicit quality save is 
 it('keeps unsupported AI fields editable so the user can explicitly recover to Lanczos',async()=>{
   const user=userEvent.setup();
   mocked.mockImplementation(async url=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/quality/capabilities')return {ai_super_resolution:{state:'verified',verified_resolutions:['4k'],verified_aspect_ratios:['16:9']}};
     if(url.startsWith('/api/quality/profiles/'))return {scope:'system',target_id:'default',revision:0,settings:{resolution:'4k',mode:'standard',aspect_ratio:'16:9',processing:'ai_super_resolution'},plan:{}};
     if(url==='/api/studio/projects')return [];

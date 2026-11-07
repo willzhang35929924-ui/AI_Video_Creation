@@ -195,7 +195,12 @@ def create_pipeline(session, settings, project_id, options, *, prior_quality=Non
             config=QualitySettings.model_validate({**requested,'aspect_ratio':shot.aspect_ratio}).model_dump()
             from app.services.video_quality import seedvr_capabilities
             proposal = quality_plan(config, None, seedvr_capabilities(session,settings)) if config['processing']=='seedvr2' else quality_plan(config,sr_status(settings))
-            if not proposal['supported']:raise AppError(409,'quality_method_unverified','所选画质处理没有已验证工作流，未派发模型')
+            if not proposal['supported']:
+                target=proposal['requested']
+                raise AppError(409,'quality_method_unverified',
+                    f"第{shot.order}镜实际画幅为{shot.aspect_ratio}，{config['resolution']}/{config['processing']}对应{target['width']}×{target['height']}尚未验证；请先保存镜头画幅或验证该处理规格，未派发模型。",
+                    {'shot_id':shot.id,'aspect_ratio':shot.aspect_ratio,'resolution':config['resolution'],
+                     'processing':config['processing'],'width':target['width'],'height':target['height']})
             quality_by_shot[shot.id]=config
             quality_postprocess.add(shot.id)
     raw['quality_by_shot']=quality_by_shot

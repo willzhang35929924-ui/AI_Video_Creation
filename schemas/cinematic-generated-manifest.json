@@ -28,7 +28,7 @@
     "backend/app/services/cinematic_visuals.py": "23d1d22d087a38c6dc6e0529885b951277cfa4683febe6852877fecdec82cebd",
     "backend/app/services/production_orchestrator.py": "e4bdc840f8a650091530a3692d6bc98badc936bfc0285e391a04513ad1e6b6d6",
     "backend/app/api/cinematic.py": "d3e5c85d7b16b620d01597b4752bfbf66e99363ffe04cb122c029e8c198e679f",
-    "backend/app/api/routes.py": "da095396fc568343728c37c16ed7e47e070c8776951ba4ab884a185e8900447c",
+    "backend/app/api/routes.py": "287859d7d608e69064360d51bb2b20b6ad39fa60b06c11f00d0abfe820ad930e",
     "frontend/src/pages/ProductionPage.tsx": "be948d1191493287061af3b96e0d1f9864a7ca0e1a3e126a1f69fa199b6479d1",
     "frontend/src/components/ProductionShotEditor.tsx": "dfa591581445e5e1bb521faf9d06e716cfc2e2608e6b995c86bb853683b3fd6e",
     "frontend/src/components/ProductionDesignForm.tsx": "58dec5f2a3daf1d7c3cd622ed56dfd706f0c8b1a8ebc37c2ba0f12137e7a6c0a",

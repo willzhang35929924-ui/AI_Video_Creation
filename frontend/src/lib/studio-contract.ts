@@ -101,3 +101,39 @@ export interface ComposeResult {
   render_id: string;
   status: string;
 }
+
+export interface ShotFramingTarget {
+  id: string;
+  expected_revision: number;
+}
+
+export interface ShotFramingUpdate {
+  aspect_ratio: "16:9" | "9:16" | "1:1";
+  shots: (ShotFramingTarget)[];
+}
+
+export interface ShotFramingRow {
+  id: string;
+  order: number;
+  title: string;
+  aspect_ratio: string;
+  revision: number;
+  editable: boolean;
+  block_reason?: string | null;
+}
+
+export interface ShotFramingOverview {
+  project_id: string;
+  shots: (ShotFramingRow)[];
+  supported_aspect_ratios: ("16:9" | "9:16" | "1:1")[];
+  requires_new_run?: boolean;
+}
+
+export interface ShotFramingResult {
+  project_id: string;
+  shots: (ShotFramingRow)[];
+  supported_aspect_ratios: ("16:9" | "9:16" | "1:1")[];
+  requires_new_run?: boolean;
+  updated_shot_ids?: (string)[];
+  notice?: string;
+}

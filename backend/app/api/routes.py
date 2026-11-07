@@ -1302,6 +1302,8 @@ async def revise_video(request: Request, video_id: str, payload: RevisionRequest
 @router.post("/videos/{video_id}/approve")
 def approve_video(video_id: str, payload: ReviewRequest, request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     video = required(session, VideoRevision, video_id, "视频版本")
+    from app.services.shot_framing import assert_video_framing_current, video_framing_unchanged
+    assert_video_framing_current(session,video)
     if video.review_status == "needs_regeneration":
         if video.metadata_json.get('quality_status') == 'failed':
             raise AppError(409, 'video_needs_regeneration', '云端原始视频已保存，但技术检测不合格，不能批准或合成')
@@ -1346,10 +1348,17 @@ def approve_video(video_id: str, payload: ReviewRequest, request: Request, sessi
     spec_check=session.scalar(select(QualityCheck).where(QualityCheck.video_revision_id==video.id,QualityCheck.check_type=='cinematic_output_spec').order_by(QualityCheck.created_at.desc()).limit(1))
     if spec_check and spec_check.status=='failed':raise AppError(409,'cinematic_output_spec_failed','实际视频规格与电影任务请求不符，修复后重新生成')
     if spec_check and spec_check.status=='warning':warnings.append('实际尺寸或时长与请求有偏差；已保留完整原片，请人工确认画面和声音')
-    video.review_status = "approved"
+    # Recheck at the write boundary: a concurrent framing edit must not be
+    # overwritten by this request's earlier ORM snapshot.
+    approved=session.execute(update(VideoRevision).where(VideoRevision.id==video.id,
+        VideoRevision.review_status==video.review_status,
+        VideoRevision.metadata_json==video.metadata_json,video_framing_unchanged()).values(
+            review_status='approved',review_reason=payload.reason).execution_options(synchronize_session=False))
+    if approved.rowcount!=1:
+        raise AppError(409,'video_review_changed','视频审核或镜头画幅已变化，请刷新；旧画幅不能重新批准。')
+    session.expire(video,['review_status','review_reason'])
     if job.provider == "comfyui_h3":
         job.status = "approved"
-    video.review_reason = payload.reason
     approve_record(session, "video_revision", video.id, video.revision, "approved", payload)
     session.commit()
     result = row_dict(video)

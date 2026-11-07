@@ -4,12 +4,35 @@ import userEvent from '@testing-library/user-event';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {request} from '../lib/api';
-import {QualityProfileEditor, qualitySubmissionSupported} from './QualitySettings';
+import {QualityProfileEditor, QualitySettingsFields, qualitySubmissionSupported} from './QualitySettings';
 
 vi.mock('../lib/api',async original=>({...await original<typeof import('../lib/api')>(),request:vi.fn()}));
 const mocked=vi.mocked(request);
 afterEach(()=>mocked.mockReset());
 describe('quality profiles',()=>{
+  it.each([
+    ['720p','16:9','1280×720'],['720p','9:16','720×1280'],['720p','1:1','720×720'],
+    ['1080p','16:9','1920×1080'],['1080p','9:16','1080×1920'],['1080p','1:1','1080×1080'],
+    ['2k','16:9','2560×1440'],['2k','9:16','1440×2560'],['2k','1:1','1440×1440'],
+    ['4k','16:9','3840×2160'],['4k','9:16','2160×3840'],['4k','1:1','2160×2160'],
+  ] as const)('shows the actual output dimensions for %s %s', (resolution,aspect_ratio,dimensions)=>{
+    render(<QualitySettingsFields value={{resolution,aspect_ratio,mode:'high',processing:'lanczos'}} onChange={vi.fn()}/>);
+    expect(screen.getByTestId('quality-output-dimensions')).toHaveTextContent(`${aspect_ratio} · ${dimensions}`);
+    expect(screen.getByLabelText('制作输出规格').querySelector('option:checked')).toHaveTextContent(dimensions);
+  });
+  it('exposes portrait dimensions for every resolution while preserving precise AI target validation',async()=>{
+    const onChange=vi.fn(),user=userEvent.setup();
+    const q={resolution:'1080p',mode:'fast',aspect_ratio:'9:16',processing:'seedvr2'} as const;
+    const caps={seedvr2:{state:'verified',verified_targets:[{resolution:'720p',aspect_ratio:'16:9'},{resolution:'1080p',aspect_ratio:'9:16'}]}};
+    render(<QualitySettingsFields value={q} onChange={onChange} capabilities={caps}/>);
+    expect(screen.getByRole('option',{name:'720p · 720×1280 · 当前处理方式未验证'})).toBeEnabled();
+    expect(screen.getByRole('option',{name:'1080p · 1080×1920'})).toBeEnabled();
+    expect(screen.getByRole('option',{name:'2K / QHD · 1440×2560 · 当前处理方式未验证'})).toBeEnabled();
+    expect(screen.getByRole('option',{name:'4K UHD · 2160×3840 · 当前处理方式未验证'})).toBeEnabled();
+    await user.selectOptions(screen.getByLabelText('制作画幅'),'16:9');
+    expect(onChange).toHaveBeenLastCalledWith({...q,aspect_ratio:'16:9'});
+    expect(screen.getByRole('cell',{name:'1920×1080 · 当前处理方式未验证'})).toBeInTheDocument();
+  });
   it('enables SeedVR2 only for its independently verified resolution and aspect',()=>{
     const q={resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'seedvr2'} as const;
     const caps={seedvr2:{state:'verified',verified_resolutions:['720p'],verified_aspect_ratios:['16:9']}};

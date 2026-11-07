@@ -17,6 +17,7 @@ it('keeps cloud video production available, hides Context steps and requires clo
   const settings={resolution:'720p',mode:'high',aspect_ratio:'16:9',processing:'lanczos'};
   const cloud={...contextService,id:'cloud',name:'云端视频',provider:'video_api',base_url:'https://example.com/v1',settings:{video_contract:'video-jobs-v1'}};
   mocked.mockImplementation(async(url)=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/studio/projects')return [{id:'p1',name:'云端项目'}];
     if(url==='/api/studio/projects/p1')return {project:{id:'p1',name:'云端项目'},shots:[{id:'s1',order:1,title:'产品',duration_seconds:5,status:'draft',cast:[],decision:{}}],characters:[],scenes:[],run:null};
     if(url==='/api/settings/ai-service-options')return {container:true};
@@ -48,6 +49,7 @@ it('uses one Studio generation entry and saves the chosen quality before startin
   const shots=[{id:'s1',order:1,title:'多人核对',duration_seconds:5,status:'approved',cast:[],decision:{}}];
   let settings={resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'};
   mocked.mockImplementation(async(url,init)=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/studio/projects')return [{id:'p1',name:'项目'}];
     if(url==='/api/studio/projects/p1')return {project:{id:'p1',name:'项目'},shots,characters:[],scenes:[],run:null};
     if(url.startsWith('/api/quality/profiles/')){if(init?.method==='PUT')settings=JSON.parse(String(init.body)).settings;return {scope:'project',target_id:'p1',revision:0,settings,plan:{method:'lanczos',supported:true}};}
@@ -87,6 +89,7 @@ it('configures one explicit product plan for a new run without selecting other p
   const shots=[{id:'s1',order:1,title:'产品展示',duration_seconds:5,status:'draft',cast:[],decision:{}}];
   const settings={resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'};
   mocked.mockImplementation(async(url,init)=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/studio/projects')return [{id:'p1',name:'项目'}];
     if(url==='/api/studio/projects/p1')return {project:{id:'p1',name:'项目'},shots,characters:[],scenes:[],run:{status:'paused'}};
     if(url.startsWith('/api/quality/profiles/'))return {scope:'project',target_id:'p1',revision:0,settings,plan:{method:'lanczos',supported:true}};
@@ -127,6 +130,7 @@ it('submits Fast and authorized optional media with the selected shot in one Stu
   const sourceSha='a'.repeat(64);
   let settings={resolution:'720p',mode:'high',aspect_ratio:'16:9',processing:'lanczos'};
   mocked.mockImplementation(async(url,init)=>{
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
     if(url==='/api/studio/projects')return [{id:'p1',name:'项目'}];
     if(url==='/api/studio/projects/p1')return {project:{id:'p1',name:'项目'},shots,characters:[],scenes:[],run:null};
     if(url.startsWith('/api/quality/profiles/')){

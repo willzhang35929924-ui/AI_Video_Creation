@@ -14,6 +14,16 @@ const qualityModes = [
 ] as const;
 export const qualityDefaults: Required<QualitySettings> = {resolution:'720p',mode:'high',aspect_ratio:'16:9',processing:'lanczos'};
 export const normalizedQuality = (value?: QualitySettings): Required<QualitySettings> => ({...qualityDefaults,...value});
+const outputResolutions = [
+  {value:'720p',label:'720p',width:1280,height:720},
+  {value:'1080p',label:'1080p',width:1920,height:1080},
+  {value:'2k',label:'2K / QHD',width:2560,height:1440},
+  {value:'4k',label:'4K UHD',width:3840,height:2160},
+] as const;
+function outputDimensions(resolution:Required<QualitySettings>['resolution'],aspect:Required<QualitySettings>['aspect_ratio']) {
+  const size=outputResolutions.find(item=>item.value===resolution)!;
+  return aspect==='9:16'?`${size.height}×${size.width}`:aspect==='1:1'?`${size.height}×${size.height}`:`${size.width}×${size.height}`;
+}
 export function qualitySubmissionSupported(settings:QualitySettings,capabilities:Row|null){
   const q=normalizedQuality(settings),sr=capabilities?.ai_super_resolution,seed=capabilities?.seedvr2;
   const seedTarget=Array.isArray(seed?.verified_targets)
@@ -78,7 +88,7 @@ export function QualitySettingsFields({value,onChange,disabled=false,prefix='制
   const update=(key:keyof QualitySettings,value:string)=>onChange({...q,[key]:value});
   return <><div className="workspace-grid quality-fields">
     <FormField label={`${prefix}输出规格`}><select disabled={disabled} value={q.resolution} onChange={e=>update('resolution',e.target.value)}>
-      <option value="720p">720p · 16:9参考1280×720</option><option value="1080p">1080p · 16:9参考1920×1080</option><option value="2k">2K / QHD · 16:9参考2560×1440</option><option value="4k">4K UHD · 16:9参考3840×2160</option>
+      {outputResolutions.map(size=><option key={size.value} value={size.value}>{size.label} · {outputDimensions(size.value,q.aspect_ratio)}{qualitySubmissionSupported({...q,resolution:size.value},capabilities||null)?'':' · 当前处理方式未验证'}</option>)}
     </select></FormField>
     {modeUse==='generation'||modeUse==='encoding'?<FormField label={`${prefix}质量模式`}><select disabled={disabled} value={q.mode} onChange={e=>update('mode',e.target.value)}>
       {qualityModes.map(mode=><option key={mode.value} value={mode.value}>{modeUse==='generation'?`${mode.label}（${mode.steps} 步）`:mode.value==='fast'?'快速编码':mode.label}</option>)}
@@ -86,11 +96,13 @@ export function QualitySettingsFields({value,onChange,disabled=false,prefix='制
     </select></FormField>:null}
     <FormField label={`${prefix}画幅`}><select disabled={disabled} value={q.aspect_ratio} onChange={e=>update('aspect_ratio',e.target.value)}><option value="16:9">16:9 横向</option><option value="9:16">9:16 竖向</option><option value="1:1">1:1 方形</option></select></FormField>
     <FormField label={`${prefix}处理方式`}><select disabled={disabled} value={q.processing} onChange={e=>update('processing',e.target.value)}><option value="lanczos">普通 Lanczos 缩放（已接入）</option><option value="native" disabled>原生目标分辨率（尚未验证）</option><option value="ai_super_resolution" disabled={!aiAvailable}>{aiAvailable?'4K输出（Real-ESRGAN逐帧超分）':sr?.state==='detected_not_tested'?'AI 视频超分（已检测，未实测）':sr?.state==='verified'?'AI 视频超分（此档位或画幅未验证）':sr?.state==='not_configured'?'AI 视频超分（尚未配置）':'AI 视频超分（能力尚未读取）'}</option><option value="seedvr2" disabled={!seedAvailable}>{seedAvailable?`${q.resolution}输出（SeedVR2时序视频超分）`:capabilities?.seedvr2?.state==='verified'?'SeedVR2（当前档位或画幅未验证）':'SeedVR2（尚未通过完整视频实测）'}</option><option value="reconstruction" disabled>模型高分辨率重建（尚未配置）</option></select></FormField>
-  </div>{modeUse==='generation'&&workflow?<p className="form-hint" data-testid="h3-quality-route">本地 H3 工作流 {workflow.workflow} · {workflow.steps} 步。Context-IR：已启用（自动进行素材与提示词一致性分析）。{q.mode==='preview'?'旧预览设置保留，新的本地 H3 任务按 Fast 执行。':''}</p>:null}
+  </div><p className="form-hint" data-testid="quality-output-dimensions">当前输出：{q.aspect_ratio} · {outputDimensions(q.resolution,q.aspect_ratio)}。{modeUse!=='encoding'?'制作前请在「镜头画幅」中保存实际镜头方向。':''}</p>
+    <details className="workspace-details"><summary>横屏与竖屏输出尺寸</summary><table className="quality-evidence-table"><thead><tr><th>规格</th><th>16:9 横屏</th><th>9:16 竖屏</th></tr></thead><tbody>{outputResolutions.map(size=><tr key={size.value}><td>{size.label}</td>{(['16:9','9:16'] as const).map(aspect=><td key={aspect}>{outputDimensions(size.value,aspect)} · {qualitySubmissionSupported({...q,resolution:size.value,aspect_ratio:aspect},capabilities||null)?'当前处理方式可用':'当前处理方式未验证'}</td>)}</tr>)}</tbody></table></details>
+    {modeUse==='generation'&&workflow?<p className="form-hint" data-testid="h3-quality-route">本地 H3 工作流 {workflow.workflow} · {workflow.steps} 步。Context-IR：已启用（自动进行素材与提示词一致性分析）。{q.mode==='preview'?'旧预览设置保留，新的本地 H3 任务按 Fast 执行。':''}</p>:null}
     {modeUse==='cloud'?<p className="form-hint">云端服务使用已配置的模型与接口参数，采样和工作流由供应商决定。这里调整成片输出与后处理；不会将本地 4／20／30 步配方发给云端。</p>:null}
     {modeUse==='provider'?<p className="form-hint">当前使用服务档案中的普通本地工作流。这里调整输出与后处理；切换为 Context-IR 服务后才启用三档采样。</p>:null}
     {!valid?<p role="alert" className="inline-notice warning">{showTechnicalDetails?'当前处理方式没有此分辨率／画幅的真实验证。请先验证所需规格，或明确选择普通Lanczos缩放；保存、启动和输出已阻止，不会静默降级。':'此处理方式不支持当前分辨率或画幅，请调整设置。'}</p>:null}
-    <p className="form-hint">{showTechnicalDetails?<>{q.processing==='seedvr2'?'SeedVR2采用时序分块处理完整视频，仅开放已有完整视频验证的规格组合；仍需检查边界闪烁、面容和细节。':q.processing==='ai_super_resolution'?'Real-ESRGAN使用图像模型逐帧处理完整视频，不保证时序一致性；放大后面部、细节伪造和闪烁仍需人工审片。':'普通 Lanczos 是整个视频的缩放，不是 AI 超分。'} 原始版本保留；4K文件尺寸不代表原生4K细节。非16:9尺寸与实际模型参数由后端解析，画幅与原镜头不一致时会阻断生成。</>:q.processing==='seedvr2'?'SeedVR2时序超分，仅开放已验证的规格组合。':q.processing==='ai_super_resolution'?'Real-ESRGAN逐帧超分，当前支持已验证的4K画幅。':'普通缩放不增加原生细节。'}</p>
+    <p className="form-hint">{showTechnicalDetails?<>{q.processing==='seedvr2'?'SeedVR2采用时序分块处理完整视频，仅开放已有完整视频验证的规格组合；仍需检查边界闪烁、面容和细节。':q.processing==='ai_super_resolution'?'Real-ESRGAN使用图像模型逐帧处理完整视频，不保证时序一致性；放大后面部、细节伪造和闪烁仍需人工审片。':'普通 Lanczos 是整个视频的缩放，不是 AI 超分。'} 原始版本保留；4K文件尺寸不代表原生4K细节。输出画幅不会自动修改剧本中的实际镜头画幅；请在镜头画幅中明确保存。</>:q.processing==='seedvr2'?'SeedVR2时序超分，仅开放已验证的规格组合。':q.processing==='ai_super_resolution'?'Real-ESRGAN逐帧超分，当前支持已验证的4K画幅。':'普通缩放不增加原生细节。'}</p>
     {showTechnicalDetails?processingLimits?.map((line:string,index:number)=><p className="form-hint" key={index}>{line}</p>):null}
     {capabilityError?<p role="status" className="form-hint">超分验证状态未能读取，AI处理保持禁用：{capabilityError}</p>:null}
     {onRefreshCapabilities&&(showTechnicalDetails||capabilityError)?<button type="button" className="button button-ghost button-small" disabled={disabled} onClick={()=>void onRefreshCapabilities()}>{showTechnicalDetails?'重新读取超分验证状态（不启动模型）':'重新读取处理方式'}</button>:null}</>;

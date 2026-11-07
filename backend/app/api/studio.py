@@ -8,11 +8,29 @@ from app import models as m
 from app.models.studio import StudioRun
 from app.core.db import get_db
 from app.core.errors import AppError
-from app.schemas_studio import PipelineStart, StudioOverview, StudioProject, DraftAssemblyEdit
+from app.schemas_studio import (PipelineStart, StudioOverview, StudioProject, DraftAssemblyEdit,
+    ShotFramingOverview,ShotFramingUpdate,ShotFramingResult)
 from app.services.studio_pipeline import create_pipeline, latest_run, overview, project_list, _capture_services
 from app.services.screenplay_production_status import sync_production_status
 
 router = APIRouter(prefix='/api/studio')
+
+@router.get('/projects/{project_id}/shot-framing',response_model=ShotFramingOverview)
+def shot_framing(project_id:str,session:Session=Depends(get_db)):
+    from app.services.shot_framing import overview as framing_overview
+    return framing_overview(session,project_id)
+
+@router.put('/projects/{project_id}/shot-framing',response_model=ShotFramingResult)
+async def save_shot_framing(project_id:str,payload:ShotFramingUpdate,request:Request,session:Session=Depends(get_db)):
+    from app.services.studio_project_guard import project_guard
+    from app.services.shot_framing import save as save_framing
+    async with project_guard(request.app,project_id):
+        try:
+            session.expire_all()
+            result=save_framing(session,project_id,payload)
+            session.commit();return result
+        except Exception:
+            session.rollback();raise
 
 @router.get('/projects/{project_id}/production-preferences')
 def production_preferences(project_id:str,session:Session=Depends(get_db)):
@@ -37,18 +55,21 @@ def project(project_id: str, session: Session = Depends(get_db)):
 
 
 @router.post('/projects/{project_id}/start', response_model=StudioOverview, status_code=202)
-def start(project_id: str, payload: PipelineStart, request: Request, session: Session = Depends(get_db)):
+async def start(project_id: str, payload: PipelineStart, request: Request, session: Session = Depends(get_db)):
     from app.services.studio_voice import assert_voice_preparation
     from app.services.studio_pipeline import RUN_TERMINAL
-    existing = latest_run(session, project_id)
-    if not existing or existing.status in RUN_TERMINAL | {'paused', 'exceptions'}:
-        if payload.dialogue_audio_policy is not None:
-            from app.services.studio_audio_policy import get_preferences,save_preferences
-            save_preferences(session,project_id,ProductionPreferenceEdit(expected_revision=get_preferences(session,project_id)['revision'],dialogue_audio_policy=payload.dialogue_audio_policy),commit=False)
-        assert_voice_preparation(session, request.app.state.settings, project_id, payload.allow_cloud_costs, payload.allow_paid_fallback)
-    create_pipeline(session, request.app.state.settings, project_id, payload)
-    session.commit()
-    return overview(session, project_id)
+    from app.services.studio_project_guard import project_guard
+    async with project_guard(request.app,project_id):
+        session.expire_all()
+        existing = latest_run(session, project_id)
+        if not existing or existing.status in RUN_TERMINAL | {'paused', 'exceptions'}:
+            if payload.dialogue_audio_policy is not None:
+                from app.services.studio_audio_policy import get_preferences,save_preferences
+                save_preferences(session,project_id,ProductionPreferenceEdit(expected_revision=get_preferences(session,project_id)['revision'],dialogue_audio_policy=payload.dialogue_audio_policy),commit=False)
+            assert_voice_preparation(session, request.app.state.settings, project_id, payload.allow_cloud_costs, payload.allow_paid_fallback)
+        create_pipeline(session, request.app.state.settings, project_id, payload)
+        session.commit()
+        return overview(session, project_id)
 
 
 def _run(session, project_id):
@@ -88,22 +109,28 @@ def configure_automatic_draft(project_id: str, payload: 'DraftAssemblyEdit', ses
 
 
 @router.post('/projects/{project_id}/resume', response_model=StudioOverview)
-def resume(project_id: str, session: Session = Depends(get_db)):
-    run = _run(session, project_id)
-    if run.status != 'paused': raise AppError(409, 'studio_not_paused', '只有已暂停的任务可以继续')
-    if run.snapshot_json.get('product_references_changed'):
-        raise AppError(409,'studio_product_inputs_changed','暂停期间产品参考已变化，请点击「开始／增量续作」重新核对输入；旧视频保留，未继续旧输入')
-    other = session.scalar(select(StudioRun).where(StudioRun.project_id == project_id, StudioRun.id != run.id, StudioRun.status.in_(['queued', 'running'])))
-    if other: raise AppError(409, 'studio_already_active', '项目已有另一条执行中的任务')
-    for n in run.nodes_json:
-        if n['kind'] == 'character' and n.get('child_id'):
-            batch = session.get(m.CharacterBatch, n['child_id'])
-            if batch: batch.paused = False
-        if n['kind'] in {'scene', 'keyframe'} and n.get('child_id'):
-            visual = session.get(m.ProductionVisual, n['child_id'])
-            if visual and visual.status == 'studio_paused': visual.status = 'queued'
-    run.status = 'queued'; sync_production_status(session, run)
-    session.commit(); return overview(session, project_id)
+async def resume(project_id: str, request:Request, session: Session = Depends(get_db)):
+    from app.services.studio_project_guard import project_guard
+    from app.services.shot_framing import requires_new_run
+    async with project_guard(request.app,project_id):
+        session.expire_all()
+        run = _run(session, project_id)
+        if run.status != 'paused': raise AppError(409, 'studio_not_paused', '只有已暂停的任务可以继续')
+        if requires_new_run(session,project_id,run):
+            raise AppError(409,'studio_framing_changed','镜头实际画幅已更改，请点击「开始／增量续作」创建新制作；原冻结编排和视频保留。',{'run_id':run.id})
+        if run.snapshot_json.get('product_references_changed'):
+            raise AppError(409,'studio_product_inputs_changed','暂停期间产品参考已变化，请点击「开始／增量续作」重新核对输入；旧视频保留，未继续旧输入')
+        other = session.scalar(select(StudioRun).where(StudioRun.project_id == project_id, StudioRun.id != run.id, StudioRun.status.in_(['queued', 'running'])))
+        if other: raise AppError(409, 'studio_already_active', '项目已有另一条执行中的任务')
+        for n in run.nodes_json:
+            if n['kind'] == 'character' and n.get('child_id'):
+                batch = session.get(m.CharacterBatch, n['child_id'])
+                if batch: batch.paused = False
+            if n['kind'] in {'scene', 'keyframe'} and n.get('child_id'):
+                visual = session.get(m.ProductionVisual, n['child_id'])
+                if visual and visual.status == 'studio_paused': visual.status = 'queued'
+        run.status = 'queued'; sync_production_status(session, run)
+        session.commit(); return overview(session, project_id)
 
 
 @router.post('/projects/{project_id}/retry', response_model=StudioOverview, name='retry')

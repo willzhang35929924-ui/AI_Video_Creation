@@ -39,6 +39,39 @@ class DraftAssemblyEdit(StudioInput):
     expected_run_id:str=Field(min_length=1,max_length=64)
     enabled:bool
 
+class ShotFramingTarget(StudioInput):
+    id:str=Field(min_length=1,max_length=64)
+    expected_revision:int=Field(ge=1,strict=True)
+
+class ShotFramingUpdate(StudioInput):
+    aspect_ratio:Literal['16:9','9:16','1:1']
+    shots:list[ShotFramingTarget]=Field(min_length=1,max_length=5000)
+
+    @model_validator(mode='after')
+    def unique_shots(self):
+        if len({shot.id for shot in self.shots})!=len(self.shots):
+            raise ValueError('同一批次不能重复选择镜头')
+        return self
+
+class ShotFramingRow(BaseModel):
+    id:str
+    order:int
+    title:str
+    aspect_ratio:str
+    revision:int
+    editable:bool
+    block_reason:str|None=None
+
+class ShotFramingOverview(BaseModel):
+    project_id:str
+    shots:list[ShotFramingRow]
+    supported_aspect_ratios:list[Literal['16:9','9:16','1:1']]
+    requires_new_run:bool=False
+
+class ShotFramingResult(ShotFramingOverview):
+    updated_shot_ids:list[str]=Field(default_factory=list)
+    notice:str=''
+
 class DecisionInput(StudioInput):
     action:Literal['keep','exclude','pending','regenerate','modify']
     video_id:str|None=None

@@ -1051,5 +1051,324 @@
     ],
     "title": "ComposeResult",
     "type": "object"
+  },
+  "ShotFramingTarget": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "maxLength": 64,
+        "minLength": 1,
+        "title": "Id",
+        "type": "string"
+      },
+      "expected_revision": {
+        "minimum": 1,
+        "title": "Expected Revision",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "id",
+      "expected_revision"
+    ],
+    "title": "ShotFramingTarget",
+    "type": "object"
+  },
+  "ShotFramingUpdate": {
+    "$defs": {
+      "ShotFramingTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "expected_revision": {
+            "minimum": 1,
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "expected_revision"
+        ],
+        "title": "ShotFramingTarget",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "aspect_ratio": {
+        "enum": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
+        "title": "Aspect Ratio",
+        "type": "string"
+      },
+      "shots": {
+        "items": {
+          "$ref": "#/$defs/ShotFramingTarget"
+        },
+        "maxItems": 5000,
+        "minItems": 1,
+        "title": "Shots",
+        "type": "array"
+      }
+    },
+    "required": [
+      "aspect_ratio",
+      "shots"
+    ],
+    "title": "ShotFramingUpdate",
+    "type": "object"
+  },
+  "ShotFramingRow": {
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "order": {
+        "title": "Order",
+        "type": "integer"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      },
+      "aspect_ratio": {
+        "title": "Aspect Ratio",
+        "type": "string"
+      },
+      "revision": {
+        "title": "Revision",
+        "type": "integer"
+      },
+      "editable": {
+        "title": "Editable",
+        "type": "boolean"
+      },
+      "block_reason": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Block Reason"
+      }
+    },
+    "required": [
+      "id",
+      "order",
+      "title",
+      "aspect_ratio",
+      "revision",
+      "editable"
+    ],
+    "title": "ShotFramingRow",
+    "type": "object"
+  },
+  "ShotFramingOverview": {
+    "$defs": {
+      "ShotFramingRow": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Block Reason"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "title",
+          "aspect_ratio",
+          "revision",
+          "editable"
+        ],
+        "title": "ShotFramingRow",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "shots": {
+        "items": {
+          "$ref": "#/$defs/ShotFramingRow"
+        },
+        "title": "Shots",
+        "type": "array"
+      },
+      "supported_aspect_ratios": {
+        "items": {
+          "enum": [
+            "16:9",
+            "9:16",
+            "1:1"
+          ],
+          "type": "string"
+        },
+        "title": "Supported Aspect Ratios",
+        "type": "array"
+      },
+      "requires_new_run": {
+        "default": false,
+        "title": "Requires New Run",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "project_id",
+      "shots",
+      "supported_aspect_ratios"
+    ],
+    "title": "ShotFramingOverview",
+    "type": "object"
+  },
+  "ShotFramingResult": {
+    "$defs": {
+      "ShotFramingRow": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "aspect_ratio": {
+            "title": "Aspect Ratio",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Block Reason"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "title",
+          "aspect_ratio",
+          "revision",
+          "editable"
+        ],
+        "title": "ShotFramingRow",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "project_id": {
+        "title": "Project Id",
+        "type": "string"
+      },
+      "shots": {
+        "items": {
+          "$ref": "#/$defs/ShotFramingRow"
+        },
+        "title": "Shots",
+        "type": "array"
+      },
+      "supported_aspect_ratios": {
+        "items": {
+          "enum": [
+            "16:9",
+            "9:16",
+            "1:1"
+          ],
+          "type": "string"
+        },
+        "title": "Supported Aspect Ratios",
+        "type": "array"
+      },
+      "requires_new_run": {
+        "default": false,
+        "title": "Requires New Run",
+        "type": "boolean"
+      },
+      "updated_shot_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Updated Shot Ids",
+        "type": "array"
+      },
+      "notice": {
+        "default": "",
+        "title": "Notice",
+        "type": "string"
+      }
+    },
+    "required": [
+      "project_id",
+      "shots",
+      "supported_aspect_ratios"
+    ],
+    "title": "ShotFramingResult",
+    "type": "object"
   }
 }

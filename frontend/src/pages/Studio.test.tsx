@@ -27,6 +27,7 @@ describe('Studio UI contracts', () => {
     vi.spyOn(window,'confirm').mockReturnValue(true);
     vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(()=>{});
     mockRequest.mockImplementation(async (url,init) => {
+    if(url.endsWith('/shot-framing'))return {project_id:url.split('/')[4],shots:[{id:'s1',order:1,title:'镜头',aspect_ratio:'16:9',revision:1,editable:true,block_reason:null}],supported_aspect_ratios:['16:9','9:16','1:1'],requires_new_run:false};
       if(url==='/api/settings/ai-services')return [];
       if(url.startsWith('/api/model-services/routes/project/'))return {scope:'project',target_id:'p1',slot:'dialogue_generation',revision:0,inherited_from:null,settings:{mode:'local_only',choices:[],parameters:{}}};
       if(url.includes('/voices?'))return {project_id:'p1',groups:[],services:[],tts_enabled:false,ready_to_start:true,blockers:[],summary:'本次沿用原声'};

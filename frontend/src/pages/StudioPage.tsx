@@ -13,6 +13,7 @@ import { ProjectVoicePreparation } from '../components/ProjectVoicePreparation';
 import { ProjectCharacterReferences } from '../components/ProjectCharacterReferences';
 import { QualitySettingsFields, QualityPlan, useQualityProfile } from '../components/QualitySettings';
 import { SeedVrPreparation } from '../components/SeedVrPreparation';
+import { ProjectShotFraming } from '../components/ProjectShotFraming';
 import type { QualitySettings } from '../lib/quality-contract';
 import '../studio.css';
 import '../asset-library.css';
@@ -45,24 +46,29 @@ export function StudioPage() {
   const onProductReferenceStateChange=useCallback((state:{busy:boolean;dirty:boolean;overBudget:boolean})=>setProductReferenceState(state),[]);
   const [modelState,setModelState]=useState({busy:false,dirty:false});
   const onModelStateChange=useCallback((state:{busy:boolean;dirty:boolean})=>setModelState(state),[]);
+  const framingScope=`${projectId}:${data?.run?.id||'none'}:${data?.run?.status||'none'}`;
+  const framingScopeRef=useRef(framingScope);framingScopeRef.current=framingScope;
+  const [framingState,setFramingState]=useState({scope:'',busy:false,dirty:false,requiresNewRun:false,ready:false});
+  const framingReady=framingState.scope===framingScope&&framingState.ready;
+  const onFramingStateChange=useCallback((state:{busy:boolean;dirty:boolean;requiresNewRun:boolean;ready:boolean})=>{if(framingScopeRef.current===framingScope)setFramingState({...state,scope:framingScope});},[framingScope]);
   const [audioPolicyRevision,setAudioPolicyRevision]=useState(0),[audioPolicyState,setAudioPolicyState]=useState({busy:false,dirty:false});
   const onAudioPolicyStateChange=useCallback((state:{busy:boolean;dirty:boolean})=>setAudioPolicyState(state),[]);
   const [referenceState,setReferenceState]=useState({busy:false,dirty:false});
   const onReferenceStateChange=useCallback((state:{busy:boolean;dirty:boolean})=>setReferenceState(state),[]);
   const voiceUnsettled=(voiceState.projectId===projectId&&(voiceState.busy||voiceState.dirty))||referenceState.busy||referenceState.dirty;
-  const preparationUnsettled=voiceUnsettled||audioPolicyState.busy||audioPolicyState.dirty||modelState.busy||modelState.dirty||productReferenceState.busy||productReferenceState.dirty;
+  const preparationUnsettled=voiceUnsettled||audioPolicyState.busy||audioPolicyState.dirty||modelState.busy||modelState.dirty||productReferenceState.busy||productReferenceState.dirty||framingState.busy||framingState.dirty;
   const activeRun=Boolean(data?.run&&!['completed','cancelled','failed','completed_with_errors','waiting_review'].includes(data.run.status));
   const productInputsChanged=Boolean(data?.run?.snapshot_json?.product_references_changed);
   const [focusPreparation,setFocusPreparation]=useState('');
   useEffect(()=>{if(projectId&&focusPreparation===projectId&&data?.project.id===projectId){const target=document.getElementById('project-voice-preparation');if(target){target.scrollIntoView?.({behavior:'smooth',block:'start'});setFocusPreparation('');}}},[projectId,focusPreparation,data?.project.id]);
   useEffect(()=>{if(!importReviewBusy)return;const guard=(event:MouseEvent)=>{if(event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;const target=event.target instanceof Element?event.target.closest('a[href]'):null;if(target){event.preventDefault();event.stopPropagation();setNotice('正在确认并保存剧本，请稍候再切换页面。');}};document.addEventListener('click',guard,true);return()=>document.removeEventListener('click',guard,true);},[importReviewBusy]);
   useEffect(()=>{
-    const busy=referenceState.busy||modelState.busy||audioPolicyState.busy||productReferenceState.busy,dirty=referenceState.dirty||modelState.dirty||audioPolicyState.dirty||productReferenceState.dirty;
+    const busy=referenceState.busy||modelState.busy||audioPolicyState.busy||productReferenceState.busy||framingState.busy,dirty=referenceState.dirty||modelState.dirty||audioPolicyState.dirty||productReferenceState.dirty||framingState.dirty;
     if((!busy&&!dirty)||voiceState.busy||voiceState.dirty)return;
     const unload=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue='';};
     const navigate=(event:MouseEvent)=>{if(event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;const link=event.target instanceof Element?event.target.closest<HTMLAnchorElement>('a[href]'):null;if(!link||link.hasAttribute('download')||(link.target&&link.target!=='_self'))return;const next=new URL(link.href,window.location.href),here=new URL(window.location.href);if(!['http:','https:'].includes(next.protocol)||next.origin===here.origin&&next.pathname===here.pathname&&next.search===here.search)return;if(busy){event.preventDefault();event.stopPropagation();setNotice('制作设置或人物参考图正在保存，请完成后再离开。');}else if(!window.confirm('制作设置或人物参考图有未保存的选择。确定放弃这些草稿并离开吗？')){event.preventDefault();event.stopPropagation();setNotice('已保留未保存的制作准备草稿。');}};
     document.addEventListener('click',navigate,true);window.addEventListener('beforeunload',unload);return()=>{document.removeEventListener('click',navigate,true);window.removeEventListener('beforeunload',unload);};
-  },[referenceState,modelState,audioPolicyState,productReferenceState,voiceState.busy,voiceState.dirty]);
+  },[referenceState,modelState,audioPolicyState,productReferenceState,framingState,voiceState.busy,voiceState.dirty]);
   async function perform(label: string, work: () => Promise<unknown>) {
     setBusy(label); setError(''); setNotice('');
     try { await work(); await studio.refreshList(); await studio.refreshAfterChange(); }
@@ -89,11 +95,13 @@ export function StudioPage() {
   }
   async function control(action: 'start' | 'pause' | 'resume' | 'retry', nodeId?: string) {
     await perform(action, async () => {
+      if((action==='start'||action==='resume')&&!framingReady)throw new Error('请先重新读取实际镜头画幅，确认镜头与编排状态后再开始或继续制作。');
       if(action==='start'&&(!quality.profile||!quality.supported))throw new Error('请先读取并核对制作画质配置。');
       if(action==='start'){
         if(productReferenceState.overBudget)throw new Error('此镜头产品参考超过模型预算，请在制作设置中明确减少对应图片。');
         if(productReferenceState.busy||productReferenceState.dirty)throw new Error('请先保存或放弃产品制作参考选择。');
         if(modelState.busy||modelState.dirty)throw new Error('请先保存或放弃项目模型选择。');
+        if(framingState.busy||framingState.dirty)throw new Error('请先保存或重新读取实际镜头画幅，再开始制作。');
         if(audioPolicyState.busy||audioPolicyState.dirty)throw new Error('请先保存项目声音方式。');
         if(referenceState.busy||referenceState.dirty)throw new Error('请先保存或放弃角色参考图草稿。');
         if(!voiceReady)throw new Error(voiceState.dirty?'请先保存角色配音设置。':voiceState.blockingReasons.join('；')||'请先完成角色配音准备检查。');
@@ -156,6 +164,7 @@ export function StudioPage() {
     </section>
     <section className="card studio-panel studio-preparation-step" aria-label="第二步 制作设置"><p className="studio-step-label">第二步</p><h2>制作设置</h2><p>选择本次画质，导入后核对角色配音，再开始制作。{projectId?'未覆盖的镜头继承项目设置；已接收任务和旧视频保留原快照。':'新项目使用下方设置，不会更改系统默认。'}</p>
       {projectId?<ProjectProductionModels key={`models:${projectId}`} projectId={projectId} disabled={pageBusy||voiceUnsettled||Boolean(pendingImport)||(activeRun&&data?.run?.status!=='paused')} onStateChange={onModelStateChange} onSaved={studio.refreshAfterChange}/>:null}
+      {projectId?<ProjectShotFraming key={`framing:${projectId}:${data?.run?.id||'none'}:${data?.run?.status||'none'}`} projectId={projectId} disabled={pageBusy||Boolean(pendingImport)||quality.saving} onStateChange={onFramingStateChange} onSaved={(ratio,uniform)=>{if(uniform)quality.setSettings(previous=>({...previous,aspect_ratio:ratio}));}}/>:null}
       {projectId?<ProjectAudioPolicy key={`audio-policy:${projectId}`} projectId={projectId} onStateChange={onAudioPolicyStateChange} disabled={pageBusy||voiceUnsettled||Boolean(pendingImport)||(activeRun&&data?.run?.status!=='paused')} onSaved={async()=>{setAudioPolicyRevision(value=>value+1);await studio.refreshAfterChange();}}/>:null}
       {quality.loading?<p role="status">读取制作画质设置…</p>:null}{quality.error?<p role="alert" className="inline-notice warning">{quality.error}<button type="button" className="button button-secondary button-small" onClick={()=>void quality.load()}>重新读取画质</button></p>:null}
       {quality.profile?<><p>来源：{quality.profile.inherited_from||'项目独立配置'} · 修订 {quality.profile.revision}</p><QualitySettingsFields value={quality.settings} onChange={quality.setSettings} capabilities={quality.capabilities} capabilityError={quality.capabilityError} onRefreshCapabilities={quality.refreshCapabilities} disabled={pageBusy||quality.saving||quality.loading}/>{projectId?<button type="button" className="button button-secondary" disabled={pageBusy||quality.saving||quality.loading||!quality.supported} onClick={()=>void quality.save().then(()=>setNotice('项目制作画质已保存，后续未覆盖镜头继承此配置。')).catch(()=>{})}>保存项目制作设置</button>:null}{projectId&&data?.run?<button type="button" className="button button-primary" disabled={pageBusy||quality.saving||quality.loading||!quality.supported} onClick={()=>void applyQuality()}>保存并应用到未派发画质任务</button>:null}{projectId?<SeedVrPreparation key={`seedvr:${projectId}`} projectId={projectId} settings={quality.settings} capabilities={quality.capabilities} shots={shots.map(shot=>({id:shot.id,order:shot.order,title:shot.title}))} disabled={pageBusy||quality.saving||quality.loading} onVerified={quality.refreshCapabilities}/>:null}{quality.dirty?<p className="studio-muted">本次选择尚未保存；上传时会随文档原子传入，开始续作时先保存。下方显示已保存方案。</p>:null}<QualityPlan plan={quality.profile.plan}/></>:null}
@@ -182,9 +191,9 @@ export function StudioPage() {
     {data ? <>
       <section className="studio-metrics" aria-label="制作概览"><div><strong>{characters.length}</strong><span>已关联人物</span></div><div><strong>{scenes.length}</strong><span>结构化场景</span></div><div><strong>{shots.length}</strong><span>真实分镜记录</span></div><div><strong>{videoCount} / {shots.length}</strong><span>已有视频文件</span></div></section>
       <section className="card studio-panel"><div className="studio-section-heading"><div><h2>自动制作状态</h2><StudioStatus status={data.run?.status}/></div><div className="studio-actions">
-        {!data.run || ['completed','cancelled','failed','completed_with_errors','waiting_review'].includes(data.run.status) || productInputsChanged&&['paused','exceptions'].includes(data.run.status) ? <button className="button button-primary" disabled={pageBusy||preparationUnsettled||productReferenceState.overBudget||!voiceReady||!shots.length||quality.loading||quality.saving||!quality.profile||!quality.supported} onClick={() => void control('start')}><Play size={15}/>开始／增量续作</button> : null}
-        {data.run?.status === 'paused'&&!productInputsChanged ? <button className="button button-primary" disabled={pageBusy||preparationUnsettled} onClick={() => void control('resume')}><Play size={15}/>继续制作</button> : null}
-        {data.run && !['completed','cancelled','paused','failed','completed_with_errors','waiting_review'].includes(data.run.status) ? <button className="button button-secondary" disabled={pageBusy} onClick={() => void control('pause')}><Pause size={15}/>暂停后续任务</button> : null}
+        {!data.run || ['completed','cancelled','failed','completed_with_errors','waiting_review'].includes(data.run.status) || (productInputsChanged||framingState.requiresNewRun)&&['paused','exceptions'].includes(data.run.status) ? <button className="button button-primary" disabled={pageBusy||preparationUnsettled||productReferenceState.overBudget||!voiceReady||!shots.length||quality.loading||quality.saving||!quality.profile||!quality.supported||!framingReady} onClick={() => void control('start')}><Play size={15}/>开始／增量续作</button> : null}
+        {data.run?.status === 'paused'&&!productInputsChanged&&!framingState.requiresNewRun ? <button className="button button-primary" disabled={pageBusy||preparationUnsettled||!framingReady} onClick={() => void control('resume')}><Play size={15}/>继续制作</button> : null}
+        {data.run && !['completed','cancelled','paused','failed','completed_with_errors'].includes(data.run.status) ? <button className="button button-secondary" disabled={pageBusy} onClick={() => void control('pause')}><Pause size={15}/>暂停后续任务</button> : null}
         {data.run ? <button type="button" className="button button-secondary" disabled={pageBusy} onClick={() => void oneClickRepair()}><Wrench size={15}/>{busy==='repair'?'正在诊断并修复…':'一键修复'}</button> : null}
         <Link className="button button-secondary" to={`/studio-review?project=${projectId}`}>进入统一审片</Link></div></div>
         {repairError ? <p className="inline-notice warning" role="alert" aria-live="assertive">{repairError}</p> : null}
