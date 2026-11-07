@@ -207,6 +207,7 @@ def retry(project_id: str, payload: dict | None = None, session: Session = Depen
         # A paid cloud output failed locally: keep its ID for safe recheck.
         retained_child = n.get('child_id') if n.get('code') == 'output_quality_failed' else None
         n.pop('context_dispatch_wait', None)
+        n.pop('retry_after', None)
         n.update(status='pending', child_id=retained_child, error=None, code=None)
     run.nodes_json = nodes; run.status = 'queued'; run.error_message = None
     session.add(m.AuditEvent(object_type='studio_run', object_id=run.id, action='failed_nodes_retry_requested',

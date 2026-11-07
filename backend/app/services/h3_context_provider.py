@@ -348,6 +348,43 @@ async def check_context_qwen(url, profile_settings=None, *, runtime_required=Fal
         await require_context_qwen(client, context_origin(url, profile_settings), runtime_required=runtime_required)
 
 
+async def require_context_ready(client, origin, *, required_nodes=None, runtime_required=False):
+    """Read-only admission check; never upload media or submit a graph here."""
+    try:
+        busy = await has_work(client, origin)
+        response = await client.get(origin + '/object_info', timeout=5)
+        response.raise_for_status()
+        nodes = response.json()
+    except httpx.TransportError as exc:
+        raise AppError(503, 'context_ir_comfy_starting',
+                       '本地 Context-IR ComfyUI 正在启动或暂不可达；等待就绪，视频未提交') from exc
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (429, 502, 503, 504):
+            raise AppError(503, 'context_ir_comfy_starting',
+                           '本地 Context-IR ComfyUI 正在启动或恢复；等待就绪，视频未提交') from exc
+        raise AppError(503, 'context_ir_comfy_health_invalid', 'ComfyUI 就绪检查失败，请检查服务地址；视频未提交') from exc
+    except ValueError as exc:
+        raise AppError(502, 'context_ir_nodes_invalid', 'ComfyUI 节点清单回执无效；视频未提交') from exc
+    required = set(required_nodes or {'VideoFactoryLocalH3IRCompile', 'VideoFactoryLocalVLMGuard'})
+    if not isinstance(nodes, dict):
+        raise AppError(502, 'context_ir_nodes_invalid', 'ComfyUI 节点清单回执无效；视频未提交')
+    missing = sorted(required - nodes.keys())
+    if missing:
+        raise AppError(503, 'context_ir_nodes_missing', 'ComfyUI 缺少当前工作流所需节点；视频未提交', {'missing_nodes': missing})
+    if busy:
+        raise AppError(409, 'local_gpu_busy', 'ComfyUI 队列尚未空闲；等待原任务结束，视频未提交')
+    await require_context_qwen(client, origin, runtime_required=runtime_required)
+
+
+async def check_context_ready(url, workflow, profile_settings=None, *, runtime_required=False):
+    from app.services.h3_workflow_router import _read_template
+    graph, _ = _read_template(workflow['workflow_id'])
+    required = {node['class_type'] for node in graph.values()}
+    origin = context_origin(url, profile_settings)
+    async with context_client(origin, timeout=5) as client:
+        await require_context_ready(client, origin, required_nodes=required, runtime_required=runtime_required)
+
+
 def context_client(origin, legacy=None, **kwargs):
     parts = urlsplit(origin)
     host = f'[{parts.hostname}]' if ':' in (parts.hostname or '') else parts.hostname
@@ -474,27 +511,23 @@ class ContextIRH3Provider(ComfyUIH3Provider):
         # Validate the frozen recipe and canvas before uploading anything.
         draft_tray = [{**slot, 'file': f'{folder}/pending{index}.' + ('png' if slot['kind'] == 'picture' else 'mp4') + ' [input]'}
                       for index, slot in enumerate(tray, 1)]
-        build_graph(self.workflow, tray=draft_tray, **args)
+        draft_graph = build_graph(self.workflow, tray=draft_tray, **args)
         logdir = PROJECT_ROOT / 'logs' / 'jobs' / request.job_id
         logdir.mkdir(parents=True, exist_ok=True)
         images, motion = [], []
         supervise = sys.platform == 'win32' and origin == 'http://127.0.0.1:8188'
+        prompt_started = False
         try:
             async with context_client(origin, self.legacy_origin, timeout=10) as client:
-                if await has_work(client, origin):
-                    return None
+                await require_context_ready(client, origin,
+                    required_nodes={node['class_type'] for node in draft_graph.values()},
+                    runtime_required=self.settings.container_mode or not is_loopback_service(origin)
+                    or self.profile_settings.get('h3_context_ir') is True
+                    or self.profile_settings.get('workflow_profile') == 'context_ir')
                 if (self.legacy_origin and self.legacy_origin != origin
                         and (not supervise or self.legacy_origin != 'http://127.0.0.1:8189')
                         and await has_work(client, self.legacy_origin, allow_refused=True)):
                     return None
-                await require_context_qwen(client, origin, runtime_required=self.settings.container_mode
-                                           or not is_loopback_service(origin)
-                                           or self.profile_settings.get('h3_context_ir') is True
-                                           or self.profile_settings.get('workflow_profile') == 'context_ir')
-                response = await client.get(origin + '/object_info/VideoFactoryLocalH3IRCompile')
-                response.raise_for_status()
-                if 'VideoFactoryLocalH3IRCompile' not in response.json():
-                    raise AppError(503, 'context_ir_nodes_missing', '此 ComfyUI 缺少本地 Context-IR 节点，请启动 OpenH3-IR 服务')
                 if supervise:
                     from app.services.context_peer_memory import prepare_context_peer_memory
 
@@ -534,6 +567,7 @@ class ContextIRH3Provider(ComfyUIH3Provider):
                 try:
                     # The native supervisor permits a 120s upstream validation
                     # window. Keep the caller alive through that exact one POST.
+                    prompt_started = True
                     response = await client.post(origin + '/prompt', json={'prompt': graph, 'client_id': request.job_id}, timeout=150)
                     if response.status_code == 408 or response.status_code >= 500:
                         raise AppError(502, 'context_ir_submission_unknown', 'ComfyUI 受理结果未知，请核对原任务，未重复提交')
@@ -546,8 +580,17 @@ class ContextIRH3Provider(ComfyUIH3Provider):
                 prompt_id = payload.get('prompt_id') if isinstance(payload, dict) else None
                 if not isinstance(prompt_id, str) or not prompt_id:
                     raise AppError(502, 'context_ir_submission_unknown', 'ComfyUI 未返回任务 ID，请核对原任务，未重复提交')
-        except (httpx.HTTPError, ValueError) as exc:
-            raise AppError(503, 'context_ir_comfy_unavailable', '无法连接本地 Context-IR ComfyUI 或上传参考文件') from exc
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            retryable = isinstance(exc, httpx.TransportError) or exc.response.status_code in (429, 502, 503, 504)
+            if not prompt_started and retryable:
+                (logdir / 'context-no-submit.json').write_text(json.dumps({'job_id': request.job_id,
+                    'phase': 'pre_prompt_media_or_health', 'prompt_submission_started': False,
+                    'code': 'context_ir_comfy_starting'}), encoding='utf-8')
+                raise AppError(503, 'context_ir_comfy_starting',
+                    '本地 ComfyUI 正在启动或连接中断；尚未提交生成任务，等待服务恢复') from exc
+            raise AppError(503, 'context_ir_comfy_request_failed', 'ComfyUI 提交前请求被拒绝，请检查接口地址、权限与响应；视频未提交') from exc
+        except ValueError as exc:
+            raise AppError(502, 'context_ir_comfy_response_invalid', 'ComfyUI 提交前回执无效；视频未提交') from exc
         except FileExistsError as exc:
             raise AppError(409, 'context_ir_duplicate_submission', '此任务已有提交快照，请核对原任务后新建重试') from exc
         (logdir / 'submission_response.json').write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')

@@ -74,6 +74,29 @@ def test_container_never_treats_reachable_unverified_runtime_as_ready(change, co
     assert calls == [('GET', 'http://192.168.8.42:8788/video_factory/runtime')]
 
 
+@pytest.mark.parametrize('watcher,code',[(True,None),(False,'context_ir_runtime_required')])
+def test_cold_start_preflight_preserves_remote_runtime_ownership_requirement(watcher,code):
+    calls=[]
+    def reply(request):
+        calls.append((request.method,request.url.path))
+        if request.url.path=='/queue':return httpx.Response(200,json={'queue_running':[],'queue_pending':[]})
+        if request.url.path=='/object_info':return httpx.Response(200,json={'VideoFactoryLocalH3IRCompile':{}})
+        assert request.url.path=='/video_factory/runtime'
+        return httpx.Response(200,json={**runtime_receipt(),'watcher_running':watcher})
+    async def exercise():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(reply)) as client:
+            if code:
+                with pytest.raises(AppError) as error:
+                    await context.require_context_ready(client,'http://192.168.8.42:8788',
+                        required_nodes={'VideoFactoryLocalH3IRCompile'},runtime_required=True)
+                assert error.value.code==code
+            else:
+                await context.require_context_ready(client,'http://192.168.8.42:8788',
+                    required_nodes={'VideoFactoryLocalH3IRCompile'},runtime_required=True)
+    asyncio.run(exercise())
+    assert calls==[('GET','/queue'),('GET','/object_info'),('GET','/video_factory/runtime')]
+
+
 def test_native_receipts_preserve_actual_bytes_and_refuse_hash_corruption(tmp_path, monkeypatch):
     calls = []
     corrupt = False

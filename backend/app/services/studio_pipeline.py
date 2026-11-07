@@ -828,19 +828,25 @@ def _media(session,settings,run,entry,dispatch):
 
 _CONTEXT_DISPATCH_TIMEOUTS = {
     'context_ir_qwen_starting': ('context_ir_qwen_unavailable',
-        '等待本地 Qwen 恢复超过 2 分钟。请启动或检查 8772 服务后重试本镜；视频未提交'),
+        '等待本地 Qwen 恢复超过 2 分钟。请启动或检查 8772 服务后重试本镜；视频未提交', 120),
+    'context_ir_comfy_starting': ('context_ir_comfy_unavailable',
+        '等待本地 Context-IR ComfyUI 就绪超过 5 分钟。请检查 8188 服务后重试本镜；视频未提交', 300),
     'local_gpu_busy': ('context_ir_gpu_wait_timeout',
-        '等待本地 GPU 空闲超过 2 分钟。请检查 ComfyUI 队列及本地模型状态后重试本镜；视频未提交'),
+        '等待本地 GPU 空闲超过 2 分钟。请检查 ComfyUI 队列及本地模型状态后重试本镜；视频未提交', 120),
 }
 
 
 def _defer_context_dispatch(entry, code, message, *, now=None):
     """Wait for a verified no-submit condition without using a generation attempt."""
     now = time.time() if now is None else now
-    wait = entry.get('context_dispatch_wait') or {'since': now, 'code': code}
+    wait = entry.get('context_dispatch_wait')
+    if not wait or wait.get('code') != code:
+        wait = {'since': now, 'code': code}
     entry['context_dispatch_wait'] = wait
-    if now - wait['since'] >= 120:
-        _failure(entry, *_CONTEXT_DISPATCH_TIMEOUTS[code])
+    timeout_code, timeout_message, seconds = _CONTEXT_DISPATCH_TIMEOUTS[code]
+    if now - wait['since'] >= seconds:
+        entry.pop('retry_after', None)
+        _failure(entry, timeout_code, timeout_message)
     else:
         entry.update(status='retrying', retry_after=now + 5,
                      code=code, error=message)
@@ -867,13 +873,19 @@ async def _video(app, session, settings, run, entry, dispatch):
             from app.services.jobs import recheck_cloud_duration_warning
             recheck_cloud_duration_warning(session,settings,preserved)
         if job.status in {'failed', 'cancelled', 'unknown', 'closed_unknown'}:
-            if context and job.status == 'failed' and not job.provider_job_id and job.error_code in _CONTEXT_DISPATCH_TIMEOUTS:
+            no_submit_code = job.error_code
+            if context and job.status == 'failed' and not job.provider_job_id and no_submit_code == 'context_ir_comfy_unavailable':
+                from app.core.config import PROJECT_ROOT
+                logdir = PROJECT_ROOT / 'logs' / 'jobs' / job.id
+                if logdir.is_dir() and not any((logdir / name).exists() for name in ('submitted_prompt.json', 'submission_response.json')):
+                    no_submit_code = 'context_ir_comfy_starting'
+            if context and job.status == 'failed' and not job.provider_job_id and no_submit_code in _CONTEXT_DISPATCH_TIMEOUTS:
                 # The final provider checks found a handoff or busy peer.
                 # Preserve the no-submit record and refund the dispatch attempt.
                 entry['history'] = [*entry['history'], {'child_id': job.id, 'code': job.error_code,
                                                        'error': job.error_message, 'seed': job.seed}]
                 entry.update(child_id=None, attempts=max(0, entry['attempts']-1))
-                _defer_context_dispatch(entry, job.error_code, job.error_message)
+                _defer_context_dispatch(entry, no_submit_code, job.error_message)
                 return
             retryable = job.status == 'failed' and (
                 job.error_code == 'provider_unavailable' or
@@ -926,16 +938,16 @@ async def _video(app, session, settings, run, entry, dispatch):
     if snapshot['provider'] == 'comfyui' and (width % 32 or height % 32 or max(width, height) > 1344):
         raise AppError(422, 'local_video_dimensions', '本地 H3 宽高必须为32的倍数且不超过1344')
     if context:
-        from app.services.h3_context_provider import check_context_qwen
+        from app.services.h3_context_provider import check_context_ready
 
         try:
             from app.core.trusted_service_origins import is_loopback_service
             profile = snapshot.get('settings') or {}
-            await check_context_qwen(snapshot['base_url'], profile,
+            await check_context_ready(snapshot['base_url'], snapshot['h3_workflow'], profile,
                                      runtime_required=settings.container_mode or not is_loopback_service(snapshot['base_url'])
                                      or profile.get('h3_context_ir') is True or profile.get('workflow_profile') == 'context_ir')
         except AppError as exc:
-            if exc.code != 'context_ir_qwen_starting':
+            if exc.code not in _CONTEXT_DISPATCH_TIMEOUTS:
                 raise
             _defer_context_dispatch(entry, exc.code, exc.message)
             return
@@ -954,6 +966,7 @@ async def _video(app, session, settings, run, entry, dispatch):
     frozen_retry = retry_source
     if retry_source and retry_source.parameters_json.get('context_inputs', {}).get('fingerprint') != context['inputs']['fingerprint']:
         frozen_retry = None  # Explicit input refresh keeps the run's model and seed but builds a new job snapshot.
+    entry.pop('retry_after', None)
     entry.update(status='dispatching', attempts=attempt, inputs_hash=current_hash, seed=seed if seed is not None else video_seed(run.id,shot.id,attempt))
     _persist(session, run, run.nodes_json)  # node is the same dict as in current durable list
     from app.api.routes import generate_for_shot
