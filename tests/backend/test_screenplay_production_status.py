@@ -3,6 +3,7 @@ import asyncio
 import copy
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
+from fastapi import Request
 import pytest
 from app import models as m
 from app.core.db import Base, build_engine, build_session_factory
@@ -139,11 +140,21 @@ def test_older_run_and_wrong_origin_cannot_overwrite(context):
     assert c.job.receipt_json == old
 
 
-def test_pause_and_resume_api_commit_source_stage(context):
+def test_pause_and_resume_api_commit_source_stage(context, client):
     c = context
     studio_api.pause(c.project.id, session=c.session)
     assert state(c)[0] == 'paused'
-    studio_api.resume(c.project.id, session=c.session)
+
+    async def scenario():
+        request = Request({'type': 'http', 'app': client.app})
+        async with project_guard(client.app, c.project.id):
+            resuming = asyncio.create_task(studio_api.resume(c.project.id, request, session=c.session))
+            await asyncio.sleep(0)
+            assert not resuming.done()
+            assert state(c)[0] == 'paused'
+        await asyncio.wait_for(resuming, timeout=5)
+
+    asyncio.run(scenario())
     assert state(c)[0] == 'generating'
 
 
