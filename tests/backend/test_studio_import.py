@@ -1,8 +1,10 @@
 """Isolated database/API contracts. These are not real model-generation evidence."""
 import asyncio
+import json
 from io import BytesIO
 
 from docx import Document
+import pytest
 from sqlalchemy import func, select
 
 from app import models as m
@@ -10,9 +12,9 @@ from app.services.studio_import import content_fingerprint, language_extract
 from app.services.word_screenplay import read_blocks
 
 
-def screenplay(*, same_scene=False, second_weather='雨', extra_line='', name='赵舟', stable='studio_zhaozhou'):
+def screenplay(*, same_scene=False, second_weather='雨', extra_line='', name='赵舟', stable='studio_zhaozhou', aspect_ratio='16:9'):
     doc=Document();doc.add_heading('自动化三人剧本',0)
-    lines=['项目基本信息','项目名称：自动化夜班','画幅：16:9','人物设定']
+    lines=['项目基本信息','项目名称：自动化夜班','画幅：'+aspect_ratio,'人物设定']
     for n,person in enumerate([name,'周青','罗宁']):
         lines += ['人物 '+person,'人物ID：'+(stable if n==0 else ['','studio_zhouqing','studio_luoning'][n]),
             '年龄：'+str(32+n),'身份：海岸站成年值班工程师','外观：普通成人脸，真实皮肤纹理',
@@ -68,6 +70,20 @@ def test_import_defaults_to_preparation_without_creating_a_pipeline(client):
         assert db.scalar(select(func.count()).select_from(m.StudioRun))==0
         assert db.scalar(select(func.count()).select_from(m.GenerationJob))==0
         assert db.scalar(select(func.count()).select_from(m.MediaProcessTask))==0
+
+
+@pytest.mark.parametrize('processing',['native','reconstruction'])
+def test_import_keeps_unverified_quality_methods_blocked_before_persistence(client,monkeypatch,processing):
+    from app.services import super_resolution,video_quality
+    monkeypatch.setattr(super_resolution,'status',lambda *_:None)
+    monkeypatch.setattr(video_quality,'seedvr_capabilities',lambda *_:{'state':'unavailable','verified_targets':[]})
+    response=upload(client,quality_json=json.dumps({'resolution':'720p','mode':'standard',
+        'aspect_ratio':'16:9','processing':processing}))
+    assert response.status_code==409,response.text
+    assert response.json()['error']['code']=='quality_method_unverified'
+    with client.app.state.session_factory() as db:
+        for model in (m.Project,m.WordImport,m.StudioRun,m.GenerationJob,m.QualityRender,m.MediaProcessTask):
+            assert db.scalar(select(func.count()).select_from(model))==0
 
 
 def test_explicit_import_auto_start_checks_voice_preparation_before_pipeline(client,monkeypatch):

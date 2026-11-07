@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import models as m
 from app.core.config import PROJECT_ROOT
@@ -107,6 +107,64 @@ def test_complete_target_proof_adds_only_its_exact_pair(native_proof):
     target = next(target for target in capabilities['verified_targets'] if target['resolution'] == '1080p')
     assert target['render_id'] == f.render.id and target['frames'] == 107
     assert target['output_sha256'] == digest(f.output)
+
+
+def test_word_import_accepts_saved_complete_target_proof_beyond_legacy_manifest(native_proof,monkeypatch):
+    """Real DOCX/API import; native proof is explicitly an isolated receipt fixture."""
+    from app.services import super_resolution
+    from test_studio_import import screenplay
+    f=native_proof
+    monkeypatch.setattr(super_resolution,'status',lambda *_:None)
+    requested=QualitySettings(resolution='1080p',aspect_ratio='9:16',mode='standard',processing='seedvr2')
+    legacy=quality.seedvr_status(f.settings)
+    capabilities=seed.capabilities(f.session,f.settings)
+    assert not quality.plan(requested,None,legacy)['supported']
+    assert quality.plan(requested,None,capabilities)['supported']
+    saved=f.client.put('/api/quality/profiles/system/default',json={
+        'settings':requested.model_dump(),'expected_revision':0})
+    assert saved.status_code==200,saved.text
+    assert saved.json()['plan']['supported'] is True
+    tracked=(m.Project,m.StudioRun,m.GenerationJob,m.QualityRender,m.MediaProcessTask)
+    before={model: f.session.scalar(select(func.count()).select_from(model)) for model in tracked}
+    source_hash=digest(f.source);output_hash=digest(f.output)
+    response=f.client.post('/api/studio/import',files={'file':('verified-portrait.docx',screenplay(aspect_ratio='9:16'))},
+        data={'auto_start':'false','quality_json':json.dumps(saved.json()['settings'])})
+    assert response.status_code==200,response.text
+    result=response.json()
+    assert result['status']=='imported' and result['parser']['language_model_called'] is False
+    assert not result.get('pipeline_run_id') and not result.get('pipeline')
+    with f.client.app.state.session_factory() as db:
+        profile=db.scalar(select(m.QualityProfile).where(m.QualityProfile.scope=='project',m.QualityProfile.target_id==result['project_id']))
+        assert profile and profile.settings_json==requested.model_dump() and profile.revision==1
+        assert db.scalar(select(func.count()).select_from(m.Project))==before[m.Project]+1
+        for model in tracked[1:]:
+            assert db.scalar(select(func.count()).select_from(model))==before[model]
+        assert db.scalar(select(func.count()).select_from(m.GenerationJob).where(m.GenerationJob.project_id==result['project_id']))==0
+        assert all(db.get(m.StoryboardShot,shot_id).aspect_ratio=='9:16' for shot_id in result['shot_ids'])
+    assert digest(f.source)==source_hash and digest(f.output)==output_hash
+
+
+@pytest.mark.parametrize('resolution,aspect_ratio',[('1080p','16:9'),('720p','9:16')])
+@pytest.mark.parametrize('auto_start',[False,True])
+def test_word_import_still_rejects_unverified_exact_target_before_any_persistence(native_proof,monkeypatch,resolution,aspect_ratio,auto_start):
+    from app.services import super_resolution
+    from test_studio_import import screenplay
+    f=native_proof
+    monkeypatch.setattr(super_resolution,'status',lambda *_:None)
+    capabilities=seed.capabilities(f.session,f.settings)
+    assert resolution in capabilities['verified_resolutions']
+    assert aspect_ratio in capabilities['verified_aspect_ratios']
+    requested=QualitySettings(resolution=resolution,aspect_ratio=aspect_ratio,processing='seedvr2')
+    assert not quality.plan(requested,None,capabilities)['supported']
+    tracked=(m.Project,m.WordImport,m.StudioRun,m.GenerationJob,m.QualityRender,m.MediaProcessTask)
+    before={model:f.session.scalar(select(func.count()).select_from(model)) for model in tracked}
+    response=f.client.post('/api/studio/import',files={'file':('unverified-pair.docx',screenplay(aspect_ratio=aspect_ratio))},
+        data={'auto_start':str(auto_start).lower(),'quality_json':json.dumps(requested.model_dump())})
+    assert response.status_code==409,response.text
+    assert response.json()['error']['code']=='quality_method_unverified'
+    with f.client.app.state.session_factory() as db:
+        for model in tracked:
+            assert db.scalar(select(func.count()).select_from(model))==before[model]
 
 
 @pytest.mark.parametrize('damage', [

@@ -157,8 +157,10 @@ async def import_word(session, settings, filename, data, *, project_id=None,
     if quality:
         from app.services.video_quality import plan as quality_plan
         from app.services.super_resolution import status as sr_status
-        from app.services.video_quality import seedvr_status
-        if not quality_plan(quality,sr_status(settings),seedvr_status(settings))['supported']:raise AppError(409,'quality_method_unverified','所选画质方式尚未验证，未创建项目或提交模型')
+        from app.services.video_quality import seedvr_capabilities
+        # Use the same exact-target, full-video evidence as Settings and
+        # save_profile. The legacy manifest probe only knows 720p landscape.
+        if not quality_plan(quality,sr_status(settings),seedvr_capabilities(session,settings))['supported']:raise AppError(409,'quality_method_unverified','所选画质方式尚未验证，未创建项目或提交模型')
     if Path(filename).suffix.lower()!='.docx':
         raise AppError(415,'docx_required','请上传真正的 .docx；旧 .doc 请另存为 .docx')
     if len(data)>settings.import_max_bytes:raise AppError(413,'document_too_large','文档超过大小限制')
