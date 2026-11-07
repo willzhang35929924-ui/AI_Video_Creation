@@ -519,11 +519,16 @@ class ContextIRH3Provider(ComfyUIH3Provider):
         prompt_started = False
         try:
             async with context_client(origin, self.legacy_origin, timeout=10) as client:
-                await require_context_ready(client, origin,
-                    required_nodes={node['class_type'] for node in draft_graph.values()},
-                    runtime_required=self.settings.container_mode or not is_loopback_service(origin)
-                    or self.profile_settings.get('h3_context_ir') is True
-                    or self.profile_settings.get('workflow_profile') == 'context_ir')
+                try:
+                    await require_context_ready(client, origin,
+                        required_nodes={node['class_type'] for node in draft_graph.values()},
+                        runtime_required=self.settings.container_mode or not is_loopback_service(origin)
+                        or self.profile_settings.get('h3_context_ir') is True
+                        or self.profile_settings.get('workflow_profile') == 'context_ir')
+                except AppError as exc:
+                    if exc.code == 'local_gpu_busy':
+                        return None  # No upload or /prompt has been attempted.
+                    raise
                 if (self.legacy_origin and self.legacy_origin != origin
                         and (not supervise or self.legacy_origin != 'http://127.0.0.1:8189')
                         and await has_work(client, self.legacy_origin, allow_refused=True)):
