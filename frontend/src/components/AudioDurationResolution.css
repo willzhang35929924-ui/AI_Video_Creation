@@ -1,0 +1,8 @@
+.audio-duration-resolution { flex-basis:100%; width:100%; min-width:0; padding:14px 0 4px; overflow-wrap:anywhere; }
+.audio-duration-resolution p { margin:10px 0; }
+.audio-duration-originals { padding:10px 14px; margin:12px 0; background:var(--surface-muted); border-radius:10px; }
+.audio-duration-originals p { white-space:pre-wrap; }
+.audio-duration-fields { margin:16px 0; padding:16px; border:1px solid var(--line); border-radius:10px; }
+.audio-duration-fields .form-field { margin:12px 0; }
+.audio-duration-fields textarea { width:100%; }
+.audio-duration-preview { padding:16px; margin:16px 0; border:1px solid #a5cffa; border-radius:10px; }

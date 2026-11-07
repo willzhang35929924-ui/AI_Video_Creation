@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, type VideoRevisionInput, type VideoRevisionPreview } from "../lib/api";
 import { formatBytes, formatDate, formatDuration, statusLabel } from "../lib/format";
 import type { Project, QualityCheck, VideoRevision } from "../lib/types";
@@ -26,6 +26,9 @@ const defaultInstruction = "保持当前绑定人物的脸型、发型、固定�
 
 export function ReviewPage() {
   const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
+  const videoRequest = useRef(0), projectRequest = useRef(0), currentSearch = useRef(location.search);
+  currentSearch.current = location.search;
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
   const [videos, setVideos] = useState<VideoRevision[]>([]);
@@ -64,6 +67,8 @@ export function ReviewPage() {
   useEffect(() => () => previewRequest.current?.abort(), []);
 
   const loadVideos = useCallback(async (id: string) => {
+    const requestId = ++videoRequest.current;
+    const search = location.search;
     if (!id) {
       setVideos([]);
       return;
@@ -71,24 +76,30 @@ export function ReviewPage() {
     setLoading(true);
     try {
       const result = await api.listVideos(id);
+      if (requestId !== videoRequest.current || currentSearch.current !== search) return;
       const ordered = result.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
       setVideos(ordered);
-      const requestedJob = new URLSearchParams(location.search).get("job");
-      const requestedVideo = ordered.find(video => video.generationJobId === requestedJob);
+      const requested = new URLSearchParams(location.search);
+      const requestedVideo = ordered.find(video => video.id === requested.get('video'))
+        ?? ordered.find(video => video.generationJobId === requested.get('job'))
+        ?? ordered.find(video => video.shotId === requested.get('shot'));
       setSelectedId((current) => requestedVideo?.id ?? (ordered.some((video) => video.id === current) ? current : ordered[0]?.id ?? ""));
       setError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "成片列表加载失败");
+      if (requestId === videoRequest.current && currentSearch.current === search) setError(cause instanceof Error ? cause.message : "成片列表加载失败");
     } finally {
-      setLoading(false);
+      if (requestId === videoRequest.current && currentSearch.current === search) setLoading(false);
     }
   }, [location.search, setSelectedId]);
 
   const initialLoad = useCallback(async () => {
+    const requestId = ++projectRequest.current;
+    const search = location.search;
     setLoading(true);
     setError("");
     try {
       const nextProjects = await api.listProjects();
+      if (requestId !== projectRequest.current || currentSearch.current !== search) return;
       setProjects(nextProjects);
       const requested = new URLSearchParams(location.search).get("project");
       const target = nextProjects.find((project) => project.id === requested)?.id ?? nextProjects[0]?.id ?? "";
@@ -96,13 +107,16 @@ export function ReviewPage() {
       if (target) await loadVideos(target);
       else setLoading(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "无法加载成片审核");
-      setLoading(false);
+      if (requestId === projectRequest.current && currentSearch.current === search) {
+        setError(cause instanceof Error ? cause.message : "无法加载成片审核");
+        setLoading(false);
+      }
     }
   }, [loadVideos, location.search]);
 
   useEffect(() => {
     void initialLoad();
+    return () => { ++projectRequest.current; ++videoRequest.current; };
   }, [initialLoad]);
 
   useEffect(() => {
@@ -235,8 +249,10 @@ export function ReviewPage() {
             projects={projects}
             value={projectId}
             onChange={(id) => {
-              setProjectId(id);
-              void loadVideos(id);
+              const next = new URLSearchParams(location.search);
+              next.set('project', id);
+              for (const key of ['shot','video','job','quality_render','qualityrender','workspace']) next.delete(key);
+              setSearchParams(next, {replace:true});
             }}
           />
         }
@@ -393,7 +409,7 @@ export function ReviewPage() {
                 {showLocalRecovery ? <div>
                   <label className="studio-check"><input type="checkbox" checked={useProjectVideoService}
                     disabled={Boolean(revisionJobId)} onChange={event => { setUseProjectVideoService(event.target.checked); clearRevisionPreview(); }} />使用本项目的本地 H3 服务</label>
-                  <p className="form-hint">{cloudSource ? "此版本来自云端。勾选后，按本项目的本地 H3 配置重新生成。" : "勾选后，按本项目的本地 H3 配置重新生成。"} <Link to={`/video-production?${productionParams}`}>查看项目视频服务与画质</Link></p>
+                  <p className="form-hint">{cloudSource ? "此版本来自云端。勾选后，按本项目的本地 H3 配置重新生成。" : "勾选后，按本项目的本地 H3 配置重新生成。"} <Link to={`/?${productionParams}`}>查看项目视频服务与画质</Link></p>
                 </div> : null}
                 <div className="form-actions">
                   <button className="button button-primary" type="button" onClick={() => revise()} disabled={!instruction.trim() || busy === "revise" || !!revisionJobId}>

@@ -143,8 +143,9 @@ def test_draft_shot_change_invalidates_kept_approved_video_without_touching_orig
         assert decision.action=='keep' and decision.video_id==case.videos[0]
     approve=case.client.post(f'/api/videos/{case.videos[0]}/approve',json={'reason':'Cannot revive stale framing'})
     assert approve.status_code==409 and approve.json()['error']['code']=='video_needs_regeneration'
-    compose=case.client.post(f'/api/studio/projects/{case.project_id}/compose',json={})
-    assert compose.status_code==409 and compose.json()['error']['code']=='studio_review_stale'
+    compose=case.client.post('/api/assemblies',json={'project_id':case.project_id,'name':'Stale framing blocked',
+        'timeline':{'clips':[{'video_id':case.videos[0]}],'transitions':[],'output':{'resolution_mode':'source'}}})
+    assert compose.status_code==422 and compose.json()['error']['code']=='unapproved_input'
     assert [path.read_bytes() for path in case.paths]==before
 
 
@@ -162,11 +163,15 @@ def test_framing_change_and_change_back_cannot_revive_legacy_rejected_video(case
     assert case.client.put(endpoint(case),json=payload(case,ids=[case.first])).status_code==200
     restored=case.client.put(endpoint(case),json={'aspect_ratio':'16:9','shots':[{'id':case.first,'expected_revision':4}]})
     assert restored.status_code==200,restored.text
-    for response in (
-        case.client.post(f'/api/videos/{rejected}/approve',json={'reason':'Old framing stays stale'}),
-        case.client.post(f'/api/studio/projects/{case.project_id}/shots/{case.first}/decision',json={'action':'keep','video_id':rejected})):
-        assert response.status_code==409,response.text
-        assert response.json()['error']['code']=='video_needs_regeneration'
+    response=case.client.post(f'/api/videos/{rejected}/approve',json={'reason':'Old framing stays stale'})
+    assert response.status_code==409,response.text
+    assert response.json()['error']['code']=='video_needs_regeneration'
+    assembly=case.client.post('/api/assemblies',json={'project_id':case.project_id,'name':'Rejected source blocked',
+        'timeline':{'clips':[{'video_id':rejected}],'transitions':[],'output':{'resolution_mode':'source'}}})
+    assert assembly.status_code==422 and assembly.json()['error']['code']=='unapproved_input'
+    retired=case.client.post(f'/api/studio/projects/{case.project_id}/shots/{case.first}/decision',
+        json={'action':'keep','video_id':rejected})
+    assert retired.status_code==404
     with case.client.app.state.session_factory() as db:
         old=db.get(m.VideoRevision,rejected)
         assert old.review_status=='rejected'

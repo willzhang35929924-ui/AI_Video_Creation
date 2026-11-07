@@ -28,6 +28,34 @@ const response = (body: unknown) => new Response(JSON.stringify(body), { headers
 const video = { id: 'v1', project_id: 'p1', shot_id: 's1', revision: 1, relative_path: 'original.mp4',
   review_status: 'pending', metadata_json: { mode: 'cloud', provider: 'cloud_lk888_h3_v2' } };
 
+it.each([
+  ['video=v1&job=j2&shot=s2','v1'],
+  ['job=j1&shot=s2','v1'],
+  ['shot=s1','v3'],
+  ['video=another-project-video&job=j1&shot=s2','v1'],
+  ['video=another-project-video&shot=s1','v3'],
+])('continues retained deep-link selection %s using only current-project versions',async(query,expected)=>{
+  const versions=[
+    {...video,generation_job_id:'j1',created_at:'2026-11-01T00:00:00Z'},
+    {...video,id:'v2',shot_id:'s2',generation_job_id:'j2',revision:2,relative_path:'second.mp4',created_at:'2026-11-03T00:00:00Z'},
+    {...video,id:'v3',generation_job_id:'j3',revision:3,relative_path:'third.mp4',created_at:'2026-11-02T00:00:00Z'},
+  ];
+  const fetcher=vi.fn(async(url:string)=>{
+    const path=new URL(url,'http://localhost').pathname;
+    if(path==='/api/projects')return response([{id:'p1',name:'项目'}]);
+    if(path==='/api/projects/p1/videos')return response(versions);
+    const detail=versions.find(item=>path===`/api/videos/${item.id}`);
+    if(detail)return response(detail);
+    throw new Error(path);
+  });
+  vi.stubGlobal('fetch',fetcher);
+  render(<MemoryRouter initialEntries={[`/review?project=p1&${query}`]}><ToastProvider><ReviewPage/></ToastProvider></MemoryRouter>);
+  const selected=versions.find(item=>item.id===expected)!;
+  expect(await screen.findByLabelText(`镜头版本 ${selected.revision} 视频播放器`)).toHaveAttribute('src',expect.stringContaining(selected.relative_path));
+  await waitFor(()=>expect(fetcher.mock.calls.some(([url])=>new URL(url,'http://localhost').pathname===`/api/videos/${expected}`)).toBe(true));
+  expect(fetcher.mock.calls.some(([url])=>String(url).includes('another-project-video'))).toBe(false);
+});
+
 it('keeps the first edit made before selection effects flush and does not overwrite it with late video details',async()=>{
   // Mount-time editing deliberately precedes passive effects, reproducing the
   // reset race without timers, sleeps or relying on CI machine speed.
@@ -78,7 +106,7 @@ it('re-previews a cloud revision on explicit local opt-in and submits precisely 
   const start = screen.getByRole('button', { name: '基于当前版本重新生成' });
   const dialog = () => screen.queryByRole('dialog', { name: '修订完整提示词' });
   expect(local).not.toBeChecked();
-  expect(screen.getByRole('link', { name: '查看项目视频服务与画质' })).toHaveAttribute('href', '/video-production?project=p1&shot=s1');
+  expect(screen.getByRole('link', { name: '查看项目视频服务与画质' })).toHaveAttribute('href', '/?project=p1&shot=s1');
   await user.clear(instruction);
   await user.type(instruction, '镜头缓慢向前');
   await user.click(start);

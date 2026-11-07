@@ -23,22 +23,21 @@ import { Badge } from "./ui";
 const navigation = [
   { to: "/", label: "项目工作台", icon: Gauge, end: true },
   { to: "/screenplay-generation", label: "剧本生成", icon: BookOpenText },
-  { to: "/studio-review", label: "审片与成片", icon: PlaySquare },
+  { to: "/storyboard", label: "脚本与分镜", icon: BookOpenText },
+  { to: "/review", label: "成片审核", icon: PlaySquare },
+  { to: "/final", label: "合成成片", icon: Clapperboard },
   { to: "/settings", label: "系统设置", icon: Settings },
 ];
 const advancedNavigation = [
   { to: "/dashboard", label: "运行概览", icon: Gauge },
-  { to: "/storyboard", label: "脚本与分镜", icon: BookOpenText },
-  { to: "/video-production", label: "视频制作", icon: Clapperboard },
   { to: "/characters", label: "人物素材库", icon: Users },
   { to: "/assets/products", label: "产品图库", icon: Images },
   { to: "/assets/videos", label: "参考视频库", icon: Clapperboard },
   { to: "/assets/voices", label: "配音库", icon: Mic },
-  { to: "/review", label: "成片审核", icon: PlaySquare },
-  { to: "/final", label: "合成成片", icon: Clapperboard },
   { to: "/publishing", label: "批量发布", icon: Send },
   { to: "/content", label: "内容管理", icon: Boxes },
 ];
+const projectNavigation = new Set(['/', '/storyboard', '/review', '/final']);
 
 function resolveMode(health?: ProviderHealth | null): ProviderMode {
   if (!health) return "unknown";
@@ -57,6 +56,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const probeSequence = useRef(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const location = useLocation();
+  const projectId = new URLSearchParams(location.search).get('project')?.trim();
+  const navigationTarget = (path: string) => projectId && projectNavigation.has(path)
+    ? `${path}?${new URLSearchParams({project: projectId}).toString()}` : path;
 
   const refreshHealth = useCallback(async () => {
     const probe = ++probeSequence.current;
@@ -126,7 +128,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             return (
               <NavLink
                 key={item.to}
-                to={item.to}
+                to={navigationTarget(item.to)}
                 end={item.end}
                 className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
                 title={collapsed ? item.label : undefined}

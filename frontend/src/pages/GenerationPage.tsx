@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 
-// Compatibility export. Production controls live in VideoProductionPage/VideoTaskPanel.
+// Compatibility export for callers that still import this retired page.
 export function GenerationPage(){
   const location=useLocation();
-  return <Navigate replace to={`/video-production${location.search}${location.hash||'#tasks'}`}/>;
+  return <Navigate replace to={`/storyboard${location.search}${location.hash}`}/>;
 }

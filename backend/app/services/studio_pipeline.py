@@ -778,7 +778,8 @@ def _media(session,settings,run,entry,dispatch):
             asset=get(session,m.AudioAsset,result.get('audio_id'))
             participant=get(session,m.ShotCharacter,entry['participant_id'])
             line=get(session,m.DialogueLine,entry['target_id'])
-            if task.snapshot_json.get('inputs',{}).get('text') not in (None,line.text):
+            expected_text=entry.get('tts_text_override',line.text)
+            if task.snapshot_json.get('inputs',{}).get('text') not in (None,expected_text):
                 raise AppError(409,'studio_dialogue_changed','配音期间对白文本已变化；旧音频保留，不用于当前镜头')
             if asset.project_id!=run.project_id or asset.shot_id!=shot_id or asset.participant_id!=participant.id or asset.character_version_id!=participant.character_version_id:
                 raise AppError(409,'studio_audio_output_ownership','配音输出没有绑定本镜头与说话人')
@@ -795,6 +796,8 @@ def _media(session,settings,run,entry,dispatch):
     if not dispatch:return
     options=run.snapshot_json['options'];kind=entry['kind'];slot='lip_sync' if kind=='lip_sync' else 'dialogue_generation'
     route=_route(run,slot,shot_id)
+    if kind=='tts' and entry.get('tts_route_override'):
+        route=copy.deepcopy(entry['tts_route_override'])
     if kind=='lip_sync' and (not route or not route.get('selected')):
         raise AppError(409,'task_route_blocked','必须执行的口型槽没有已验证且已授权模型；未把此步骤当作成功或可选跳过')
     inputs={}
@@ -818,8 +821,10 @@ def _media(session,settings,run,entry,dispatch):
             if not source.get('audio_id'):raise AppError(409,'studio_lip_audio_required','口型需要前一道完整混音音轨；未拿某一句配音替换全片声音')
             inputs.update(audio_id=source['audio_id'],participant_id=participants[0].id)
     parameters=_route_parameters(run,slot,shot_id) if kind!='audio_mix' else {}
+    if kind=='tts':parameters={**parameters,**entry.get('tts_parameters_override',{})}
+    override={'dialogue_text_override':entry['tts_text_override']} if kind=='tts' and 'tts_text_override' in entry else {}
     task=create_task(session,settings,TaskSubmit(slot=slot,project_id=run.project_id,shot_id=shot_id,inputs=inputs,parameters=parameters,
-                     allow_cloud_costs=options['allow_cloud_costs'],allow_paid_fallback=options.get('allow_paid_fallback',False)),kind=kind,route=route)
+                     allow_cloud_costs=options['allow_cloud_costs'],allow_paid_fallback=options.get('allow_paid_fallback',False)),kind=kind,route=route,**override)
     entry.update(child_id=task.id,status='running',attempts=entry['attempts']+1)
     # Persist the actual typed child before any worker can dispatch it. Unknown
     # children remain attached to this node across requests/restarts.
@@ -1190,6 +1195,41 @@ async def studio_worker(app, settings, session_factory):
         await asyncio.sleep(2)
 
 
+def _overview_video(session, shot, leaf):
+    """Choose current production/review output; retired decisions are history.
+
+    An unfinished required processing leaf must never expose an old/raw clip.
+    After that leaf completes, an explicitly approved newer take can supersede
+    it only when its own job belongs to this shot and froze the current inputs.
+    """
+    query = (select(m.VideoRevision).join(m.GenerationJob,
+             m.VideoRevision.generation_job_id == m.GenerationJob.id)
+             .where(m.VideoRevision.project_id == shot.project_id,
+                    m.VideoRevision.shot_id == shot.id,
+                    m.GenerationJob.project_id == shot.project_id,
+                    m.GenerationJob.shot_id == shot.id,
+                    m.VideoRevision.relative_path != '')
+             .order_by(m.VideoRevision.revision.desc(), m.VideoRevision.created_at.desc(), m.VideoRevision.id.desc()))
+    if not leaf:
+        return session.scalar(query.where(m.VideoRevision.review_status.in_(['pending', 'approved'])).limit(1))
+    if leaf.get('status') != 'succeeded' or not leaf.get('video_id'):
+        return None
+    baseline = session.scalar(query.where(m.VideoRevision.id == leaf['video_id']))
+    if not baseline:
+        return None
+    candidates = list(session.scalars(query.where(m.VideoRevision.review_status == 'approved',
+                                                  m.VideoRevision.revision > baseline.revision)))
+    if candidates:
+        current_hash = generation_inputs_hash(session, shot)
+        for candidate in candidates:
+            job = session.get(m.GenerationJob, candidate.generation_job_id)
+            expected = (job.parameters_json.get('screenplay_snapshot', {}).get('cinematic', {})
+                        .get('preflight', {}).get('generation_inputs_hash'))
+            if expected and expected == current_hash:
+                return candidate
+    return baseline if baseline.review_status in {'pending', 'approved'} else None
+
+
 def overview(session, project_id):
     project = get(session, m.Project, project_id)
     script = session.scalar(select(m.ScriptRevision).where(m.ScriptRevision.project_id == project_id).order_by(m.ScriptRevision.revision.desc()).limit(1))
@@ -1206,8 +1246,7 @@ def overview(session, project_id):
                 'acceptance': (session.get(m.CharacterVersion, participant['character_version_id']).identity_json.get('studio_acceptance') if participant['character_version_id'] else None)}
         video_node = _leaf(nodes,shot.id)
         decision = session.scalar(select(StudioDecision).where(StudioDecision.project_id == project_id, StudioDecision.shot_id == shot.id))
-        video = session.get(m.VideoRevision, decision.video_id) if decision and decision.video_id else session.get(m.VideoRevision, video_node['video_id']) if video_node and video_node.get('video_id') else None
-        if not video and not video_node: video = session.scalar(select(m.VideoRevision).where(m.VideoRevision.shot_id == shot.id).order_by(m.VideoRevision.revision.desc()).limit(1))
+        video = _overview_video(session, shot, video_node)
         shots.append({'id': shot.id, 'order': display_order, 'title': shot.scene_title,
           'scene_id': scene['id'] if scene else None, 'scene_name': scene['name'] if scene else shot.location,
           'cast': bundle['participants'], 'duration_seconds': shot.duration_seconds,

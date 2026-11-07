@@ -1,5 +1,5 @@
 // UI contract tests only. Fixtures below are not evidence of real media generation.
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, request } from '../lib/api';
 import type { StudioOverview } from '../lib/studio-contract';
 import { StudioPage } from './StudioPage';
-import { StudioReviewPage } from './StudioReviewPage';
 
 vi.mock('../lib/api', async importOriginal => {
   const original = await importOriginal<typeof import('../lib/api')>();
@@ -39,13 +38,6 @@ describe('Studio UI contracts', () => {
       if(url==='/api/projects/p1/videos')return data.shots!.filter(shot=>shot.video).map(shot=>({...shot.video,shot_id:shot.id}));
       if(url==='/api/shots/s1/prompt-preview')return {prompt:'原始生成提示词',reference_order:['<Picture 1>']};
       if(url==='/api/studio/projects/p1') return structuredClone(data);
-      if(url.endsWith('/decision')) {
-        const body=JSON.parse(String(init?.body));
-        const shot=data.shots!.find(item=>url.includes('/'+item.id+'/'))!;
-        shot.decision={...shot.decision,...body,revision:(shot.decision.revision||0)+1};
-        return shot.decision;
-      }
-      if(url.endsWith('/compose')) return {assembly_id:'a1',render_id:'r1',status:'queued'};
       throw new Error('Unexpected contract URL: '+url);
     });
   });
@@ -99,6 +91,33 @@ describe('Studio UI contracts', () => {
     const report=screen.getByText('一键修复诊断结果').closest('[role="status"]');
     expect(report).toHaveTextContent('prompt1');
     expect(report).toHaveTextContent('capability_unverified');
+  });
+
+  it('handles audio overrun at its exception with measured evidence and explicit application rather than blind retry',async()=>{
+    const user=userEvent.setup();
+    data.run={id:'run1',status:'exceptions',nodes_json:[]};
+    data.exceptions=[{node_id:'audio_mix:s1',kind:'audio_mix',status:'exception',target_id:'s1',code:'audio_longer_than_video',message:'对白音频超过原片长度，未静默截断'}];
+    const base=mockRequest.getMockImplementation()!;
+    const context={project_id:'p1',run_id:'run1',node_id:'audio_mix:s1',source_fingerprint:'frozen-source',shot:{id:'s1',title:'检查记录',order:1,revision:2},video:{id:'v1',duration_seconds:3},audio_duration_seconds:5,dialogues:[{id:'line1',text:'Look! A basket!',original_text:'Look! A basket!',duration_seconds:5,language:'ZH',speed:1}],capabilities:{extend_video:{available:true,recommended_duration_seconds:6},shorten_dialogue:{available:true},adjust_speed:{available:true,min:.5,max:2,languages:['ZH','EN'],recommended_speed:1.8}}};
+    let finish!:(value:unknown)=>void;const applying=new Promise(resolve=>{finish=resolve;});
+    mockRequest.mockImplementation(async(url,init)=>{
+      if(url.endsWith('/audio-duration/audio_mix%3As1'))return context;
+      if(url.endsWith('/audio-duration/audio_mix%3As1/preview'))return {preview_token:'checked',action:'extend_video',summary:'重新处理本镜视频及混音',affected_nodes:['video:s1','audio_mix:s1'],warnings:[],parameters:{}};
+      if(url.endsWith('/audio-duration/audio_mix%3As1/apply'))return applying;
+      return base(url,init);
+    });
+    render(<MemoryRouter initialEntries={['/?project=p1']}><StudioPage/></MemoryRouter>);
+    const region=await screen.findByRole('region',{name:'音频超长处理'});
+    expect(region).toHaveTextContent('实际原片 3.000 秒，配音 5.000 秒');expect(screen.queryByRole('button',{name:'重试此任务'})).toBeNull();
+    await user.click(await within(region).findByRole('button',{name:'延长镜头'}));await user.click(within(region).getByRole('button',{name:'预览处理影响'}));
+    expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/apply'))).toBe(false);
+    await user.click(await within(region).findByRole('button',{name:'确认并开始重新处理'}));
+    expect(screen.getByLabelText('当前项目')).toBeDisabled();expect(screen.getByRole('button',{name:'一键修复'})).toBeDisabled();
+    const detailReads=mockRequest.mock.calls.filter(([url])=>url==='/api/studio/projects/p1').length;
+    data.exceptions=[];
+    await act(async()=>{finish({run_id:'run1',node_id:'audio_mix:s1',status:'running',affected_nodes:['video:s1','audio_mix:s1'],replayed:false,notice:'已提交'});await applying;});
+    await waitFor(()=>expect(mockRequest.mock.calls.filter(([url])=>url==='/api/studio/projects/p1').length).toBeGreaterThan(detailReads));
+    expect(mockRequest.mock.calls.some(([url])=>url==='/api/studio/projects/p1/retry')).toBe(false);
   });
 
   it('saves quality before explicitly applying its returned revision to undispatched work',async()=>{
@@ -170,129 +189,4 @@ describe('Studio UI contracts', () => {
     expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/start'))).toBe(false);
   });
 
-  it('saves review decision, video identity, trim, position and concurrency revision before allowing compose', async () => {
-    const user=userEvent.setup();
-    for(const shot of data.shots||[])if(shot.video)shot.video.metadata_json={...shot.video.metadata_json,width:1080,height:1920};
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    expect(await screen.findByTestId('studio-review-video')).toHaveAttribute('src',expect.stringContaining('test/shot1.mp4'));
-    expect(screen.getByRole('button',{name:'按审核结果合成成片'})).toBeDisabled();
-    await user.clear(screen.getByLabelText('裁剪起点（秒）'));await user.type(screen.getByLabelText('裁剪起点（秒）'),'0.5');
-    await user.click(screen.getByRole('button',{name:'保留／保存裁剪'}));
-    await waitFor(()=>expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/decision'))).toBe(true));
-    const call=mockRequest.mock.calls.find(([url])=>url.endsWith('/decision'))!;
-    expect(JSON.parse(String(call[1]?.body))).toEqual(expect.objectContaining({action:'keep',video_id:'v1',trim_start:.5,trim_end:null,position:1,expected_revision:2}));
-    const confirmation=screen.getByLabelText('我已审核所有镜头，并确认上述顺序、裁剪和输出设置。');
-    await waitFor(()=>expect(confirmation).toBeEnabled());await user.click(confirmation);
-    await user.click(screen.getByRole('button',{name:'按审核结果合成成片'}));
-    await waitFor(()=>expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/compose'))).toBe(true));
-    const compose=mockRequest.mock.calls.find(([url])=>url.endsWith('/compose'))!;
-    expect(JSON.parse(String(compose[1]?.body))).toEqual({transition:'cut',transition_duration:.5,width:1080,height:1920,resolution_mode:'source',allow_downscale:false,fps:24,audio_policy:'preserve',subtitles:false,expected_decisions:{s1:3,s2:3}});
-  });
-
-  it('lets review edit and submit an over-7000-character prompt without truncating it',async()=>{
-    const user=userEvent.setup();
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    await user.click(screen.getByText('修改此镜头／重生成'));
-    await user.click(screen.getByRole('button',{name:'编辑本次提示词'}));
-    const prompt='电影提示词：'+'景'.repeat(8000);
-    fireEvent.change(await screen.findByLabelText('本次生成提示词'),{target:{value:prompt}});
-    fireEvent.change(screen.getByLabelText('希望修改的内容'),{target:{value:'保留本镜表演和环境'}});
-    expect(screen.getAllByRole('status').find(element=>element.textContent?.includes('提示词 8006 字'))).toBeTruthy();
-    await user.click(screen.getByRole('button',{name:'提交修改并重生成此镜'}));
-    await waitFor(()=>expect(mockRequest.mock.calls.some(([url,init])=>url==='/api/studio/projects/p1/shots/s1/decision'&&JSON.parse(String(init?.body)).prompt_override===prompt)).toBe(true));
-    expect(mockRequest.mock.calls.some(([url,init])=>url==='/api/studio/projects/p1/shots/s1/decision'&&JSON.parse(String(init?.body)).action==='modify')).toBe(true);
-  });
-
-  it('discards late prompt responses after switching shots and confirms before replacing edits',async()=>{
-    const user=userEvent.setup();
-    let resolvePrompt!:(value:{prompt:string})=>void;
-    const pending=new Promise<{prompt:string}>(resolve=>{resolvePrompt=resolve;});
-    const base=mockRequest.getMockImplementation()!;
-    mockRequest.mockImplementation(async(url,init)=>url==='/api/shots/s1/prompt-preview'?pending:url==='/api/shots/s2/prompt-preview'?{prompt:'镜头二的提示词'}:base(url,init));
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    await user.click(screen.getByText('修改此镜头／重生成'));
-    await user.click(screen.getByRole('button',{name:'编辑本次提示词'}));
-    await user.click(screen.getByRole('button',{name:'下一个镜头'}));
-    await act(async()=>{resolvePrompt({prompt:'镜头一迟到的内容'});await pending;});
-    expect(screen.queryByLabelText('本次生成提示词')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button',{name:'编辑本次提示词'}));
-    expect(await screen.findByLabelText('本次生成提示词')).toHaveValue('镜头二的提示词');
-    fireEvent.change(screen.getByLabelText('本次生成提示词'),{target:{value:'镜头二已编辑文本'}});
-    vi.mocked(window.confirm).mockReturnValue(false);
-    await user.click(screen.getByRole('button',{name:'重新读取原始提示词'}));
-    expect(screen.getByLabelText('本次生成提示词')).toHaveValue('镜头二已编辑文本');
-    expect(mockRequest.mock.calls.filter(([url])=>url==='/api/shots/s2/prompt-preview')).toHaveLength(1);
-  });
-
-  it('keeps pending decisions when the trim is invalid and navigates actual shot sources with keyboard', async () => {
-    const user=userEvent.setup();
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    await user.clear(screen.getByLabelText('裁剪起点（秒）'));await user.type(screen.getByLabelText('裁剪起点（秒）'),'8');
-    await user.click(screen.getByRole('button',{name:'保留／保存裁剪'}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('裁剪范围应在实际视频内');
-    expect(mockRequest.mock.calls.filter(([url])=>url.endsWith('/decision'))).toHaveLength(0);
-    await user.keyboard('{ArrowRight}');
-    await waitFor(()=>expect(screen.getByTestId('studio-review-video')).toHaveAttribute('src',expect.stringContaining('test/shot2.mp4')));
-    expect(within(screen.getByRole('complementary',{name:'分镜视频列表'})).getByRole('button',{current:true})).toHaveTextContent('观察雨棚');
-  });
-
-  it('previews a retained quality version without writing until keep, resets trim, and invalidates compose confirmation',async()=>{
-    const user=userEvent.setup();
-    data.shots![0].decision={action:'keep',video_id:'v1',revision:2,position:1,trim_start:1,trim_end:4};
-    const revised={id:'v3',shot_id:'s1',relative_path:'test/shot1-4k.mp4',duration_seconds:2,revision:3,metadata_json:{width:3840,height:2160,quality_render_id:'q3'}};
-    const base=mockRequest.getMockImplementation()!;
-    mockRequest.mockImplementation(async(url,init)=>{
-      if(url==='/api/projects/p1/videos')return [...data.shots!.filter(shot=>shot.video).map(shot=>({...shot.video,shot_id:shot.id})),revised];
-      if(url.endsWith('/decision')&&JSON.parse(String(init?.body)).video_id==='v3')data.shots![0].video=revised;
-      return base(url,init);
-    });
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    const confirmation=screen.getByLabelText('我已审核所有镜头，并确认上述顺序、裁剪和输出设置。');
-    await waitFor(()=>expect(confirmation).toBeEnabled());await user.click(confirmation);
-    expect(screen.getByRole('button',{name:'按审核结果合成成片'})).toBeEnabled();
-    await user.selectOptions(screen.getByLabelText('本镜预览与采用版本'),'v3');
-    expect(screen.getByTestId('studio-review-video')).toHaveAttribute('src','/api/media/test/shot1-4k.mp4');
-    expect(screen.getByLabelText('裁剪起点（秒）')).toHaveValue(0);expect(screen.getByLabelText('裁剪终点（秒）')).toHaveValue(null);
-    expect(confirmation).not.toBeChecked();expect(screen.getByRole('button',{name:'按审核结果合成成片'})).toBeDisabled();
-    expect(mockRequest.mock.calls.some(([url,init])=>url.endsWith('/decision')&&init?.method==='POST')).toBe(false);
-    await user.click(screen.getByRole('button',{name:'保留／保存裁剪'}));
-    await waitFor(()=>expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/decision'))).toBe(true));
-    const call=mockRequest.mock.calls.find(([url])=>url.endsWith('/decision'))!;
-    expect(JSON.parse(String(call[1]?.body))).toEqual(expect.objectContaining({action:'keep',video_id:'v3',trim_start:0,trim_end:null,expected_revision:2}));
-  });
-  it('protects an unsaved review draft from timeline moves and allows cancelling a shot switch',async()=>{
-    const user=userEvent.setup();vi.mocked(window.confirm).mockReturnValue(false);
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    await user.clear(screen.getByLabelText('裁剪起点（秒）'));await user.type(screen.getByLabelText('裁剪起点（秒）'),'0.5');
-    expect(screen.getByRole('button',{name:'下移镜头 1'})).toBeDisabled();
-    await user.click(screen.getByRole('button',{name:'下一个镜头'}));
-    expect(window.confirm).toHaveBeenCalled();
-    expect(screen.getByTestId('studio-review-video')).toHaveAttribute('src','/api/media/test/shot1.mp4');
-    expect(screen.getByLabelText('裁剪起点（秒）')).toHaveValue(.5);
-    expect(mockRequest.mock.calls.some(([url,init])=>url.endsWith('/decision')&&init?.method==='POST')).toBe(false);
-  });
-  it('seeds custom output from the project profile if source dimensions are missing and preserves a manual edit',async()=>{
-    const user=userEvent.setup();data.shots![0].decision.action='keep';
-    const base=mockRequest.getMockImplementation()!;
-    mockRequest.mockImplementation(async(url,init)=>url==='/api/quality/profiles/project/p1'?{scope:'project',target_id:'p1',revision:1,settings:{resolution:'4k',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'},plan:{requested:{width:3840,height:2160}}}:base(url,init));
-    render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
-    await screen.findByTestId('studio-review-video');
-    await user.selectOptions(screen.getByLabelText('输出尺寸模式'),'custom');
-    await waitFor(()=>expect(screen.getByLabelText('输出宽度')).toHaveValue(3840));
-    expect(screen.getByLabelText('输出高度')).toHaveValue(2160);
-    await user.clear(screen.getByLabelText('输出宽度'));await user.type(screen.getByLabelText('输出宽度'),'1920');
-    await user.clear(screen.getByLabelText('输出高度'));await user.type(screen.getByLabelText('输出高度'),'1080');
-    await user.click(screen.getByRole('button',{name:'刷新实际状态'}));
-    expect(screen.getByLabelText('输出宽度')).toHaveValue(1920);expect(screen.getByLabelText('输出高度')).toHaveValue(1080);
-    await user.click(screen.getByLabelText('我已审核所有镜头，并确认上述顺序、裁剪和输出设置。'));
-    await user.click(screen.getByRole('button',{name:'按审核结果合成成片'}));
-    await waitFor(()=>expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/compose'))).toBe(true));
-    const call=mockRequest.mock.calls.find(([url])=>url.endsWith('/compose'))!;
-    expect(JSON.parse(String(call[1]?.body))).toEqual(expect.objectContaining({width:1920,height:1080}));
-  });
 });

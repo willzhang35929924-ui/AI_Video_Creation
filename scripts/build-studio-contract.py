@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'backend'))
 from app import schemas_studio as s
 from app import schemas_quality as q
 from app import schemas_studio_voice as v
-names=['StudioProductReferencePlan','PipelineStart','DecisionInput','ComposeInput','StudioProject','StudioDecision','StudioShot','StudioOverview','ComposeResult',
+names=['StudioProductReferencePlan','PipelineStart','StudioProject','StudioDecision','StudioShot','StudioOverview',
        'ShotFramingTarget','ShotFramingUpdate','ShotFramingRow','ShotFramingOverview','ShotFramingResult']
 schemas={name:getattr(s,name).model_json_schema() for name in names}
 def ts(schema):

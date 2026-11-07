@@ -40,7 +40,7 @@ def test_direct_shot_and_structured_dialogue_editors_accept_long_local_video_tex
     assert VisualInput(kind='keyframe',shot_id=shot['id'],instructions=text).instructions==text
 
 
-def test_review_accepts_and_persists_long_prompt_override_and_instruction(client, monkeypatch):
+def test_retained_video_revision_accepts_and_persists_long_prompt_override_and_instruction(client, monkeypatch):
     project_id = shot_id = None
     with client.app.state.session_factory() as session:
         project = m.Project(name='长提示词审片回归')
@@ -56,37 +56,43 @@ def test_review_accepts_and_persists_long_prompt_override_and_instruction(client
         session.add(shot)
         session.flush()
         session.add(m.ShotDetail(shot_id=shot.id, scene_id=scene.id))
+        original=m.GenerationJob(project_id=project.id,shot_id=shot.id,provider='isolated_revision_contract',
+                                 status='generated',prompt='Original retained prompt')
+        session.add(original);session.flush()
+        video=m.VideoRevision(project_id=project.id,shot_id=shot.id,generation_job_id=original.id,
+                              revision=1,relative_path='isolated_original_not_read_by_transport_test.mp4')
+        session.add(video);session.flush()
         session.commit()
-        project_id, shot_id = project.id, shot.id
+        project_id, shot_id, video_id = project.id, shot.id, video.id
 
     captured = {}
 
-    def capture_pipeline(_session, _settings, _project_id, options, *, prior_quality=None):
-        captured.update(options)
-        captured['prior_quality'] = prior_quality
+    async def capture_generation(_request, session, shot, generation, *, instruction, **kwargs):
+        captured.update(prompt_override=generation.prompt_override,instruction=instruction)
+        job=m.GenerationJob(project_id=shot.project_id,shot_id=shot.id,provider='isolated_revision_contract',
+            status='queued',prompt=generation.prompt_override,parameters_json={'revision_instruction':instruction})
+        session.add(job);session.flush()
+        return job,None
 
-    from app.services import studio_pipeline
-    monkeypatch.setattr(studio_pipeline, 'create_pipeline', capture_pipeline)
+    from app.api import routes
+    monkeypatch.setattr(routes, 'generate_for_shot', capture_generation)
     prompt = '自定义完整提示词：' + '场' * 12000
     instruction = '仅修改本镜头：' + '动作' * 2500
     response = client.post(
-        f'/api/studio/projects/{project_id}/shots/{shot_id}/decision',
-        json={'action': 'modify', 'instruction': instruction, 'prompt_override': prompt},
+        f'/api/videos/{video_id}/revise',
+        json={'instruction': instruction, 'prompt_override': prompt},
     )
 
-    assert response.status_code == 200, response.text
-    assert captured['prompt_overrides'][shot_id] == prompt
-    assert captured['instructions'][shot_id] == instruction
-    # This first review has no saved run/video quality to freeze or fabricate.
-    assert captured['prior_quality'] is None
+    assert response.status_code == 202, response.text
+    assert captured['prompt_override'] == prompt
+    assert captured['instruction'] == instruction
     with client.app.state.session_factory() as session:
-        decision = session.scalar(
-            select(m.StudioDecision).where(
-                m.StudioDecision.project_id == project_id,
-                m.StudioDecision.shot_id == shot_id,
-            )
-        )
-        assert decision.instruction == instruction
+        job=session.get(m.GenerationJob,response.json()['job']['id'])
+        assert job.prompt==prompt
+        assert job.parameters_json['revision_instruction']==instruction
+        assert job.parameters_json['based_on_video_id']==video_id
+        assert job.parameters_json['original_prompt']=='Original retained prompt'
+        assert session.get(m.VideoRevision,video_id).relative_path=='isolated_original_not_read_by_transport_test.mp4'
 
 
 def test_generic_cloud_video_prompt_limit_is_enforced_before_submission(settings, monkeypatch):

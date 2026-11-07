@@ -6,7 +6,7 @@ import type { AIService } from '../pages/AIServicesPage';
 import { FormField } from './ui';
 
 type VideoBinding = { module: string; service_id: string; model_id?: string };
-type SelectionState = { busy: boolean; dirty: boolean; contextEnabled: boolean; hasCloud: boolean };
+type SelectionState = { busy: boolean; dirty: boolean; contextEnabled: boolean; hasContext: boolean; hasCloud: boolean };
 type VideoConfig = { services: AIService[]; binding?: VideoBinding; profile: RouteProfile; candidates: TaskCandidate[]; container: boolean };
 const selectionKey = (serviceId: string, modelId: string) => JSON.stringify([serviceId, modelId]);
 const hasExplicitRoute = (profile: RouteProfile) => profile.revision > 0 || Boolean(profile.inherited_from && profile.inherited_from !== 'legacy_module_default');
@@ -44,7 +44,7 @@ export function VideoServiceSelector({ projectId, disabled = false, onStateChang
   const bindingsUrl = `/api/projects/${project}/ai-services`;
   const busy = loading || saving;
 
-  useEffect(() => () => callbacks.current.onStateChange?.({ busy: false, dirty: false, contextEnabled: false, hasCloud: false }), []);
+  useEffect(() => () => callbacks.current.onStateChange?.({ busy: false, dirty: false, contextEnabled: false, hasContext: false, hasCloud: false }), []);
   useEffect(() => {
     const abort = new AbortController();
     const init = { signal: abort.signal };
@@ -101,7 +101,11 @@ export function VideoServiceSelector({ projectId, disabled = false, onStateChang
       return usesContext(service, choice.model_id || service?.default_model || '', config?.container ?? true);
     });
   const hasCloud = draft ? displayedService?.provider === 'video_api' : routeHasCloud;
-  useEffect(() => { callbacks.current.onStateChange?.({ busy, dirty: Boolean(draft), contextEnabled, hasCloud }); }, [busy, draft, contextEnabled, hasCloud]);
+  const hasContext = draft ? contextEnabled : activeChoices.some(choice => {
+    const service = services.find(item => item.id === choice.service_id);
+    return usesContext(service, choice.model_id || service?.default_model || '', config?.container ?? true);
+  });
+  useEffect(() => { callbacks.current.onStateChange?.({ busy, dirty: Boolean(draft), contextEnabled, hasContext, hasCloud }); }, [busy, draft, contextEnabled, hasContext, hasCloud]);
 
   async function save(restore = false) {
     if (!profile || busy || disabled || (restore ? !canRestore : !selected)) return;

@@ -52,6 +52,60 @@ def _uncertain_model_health(reason):
     return True
 
 
+def _windows_process_state(pid, *, native_api=None, last_error=None):
+    """Query a process handle without sending any Windows console signal.
+
+    os.kill(pid, 0) is CTRL_C_EVENT on Windows, not a harmless POSIX probe.
+    SYNCHRONIZE grants only the wait used here; no terminate access is opened.
+    Permission/API failures remain unknown so they cannot permit GPU overlap.
+    """
+    if type(pid) is not int or not 0 < pid <= 0xffffffff:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        api = native_api if native_api is not None else ctypes.WinDLL('kernel32', use_last_error=True)
+        read_error = last_error if last_error is not None else ctypes.get_last_error
+        api.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        api.OpenProcess.restype = wintypes.HANDLE
+        api.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        api.WaitForSingleObject.restype = wintypes.DWORD
+        api.CloseHandle.argtypes = [wintypes.HANDLE]
+        api.CloseHandle.restype = wintypes.BOOL
+        handle = api.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE, not PROCESS_TERMINATE
+        if not handle:
+            return False if read_error() in {87, 1168} else None
+        state = None
+        try:
+            waited = api.WaitForSingleObject(handle, 0)
+            if waited == 0x00000102:  # WAIT_TIMEOUT: the process has not exited
+                state = True
+            elif waited == 0:  # WAIT_OBJECT_0: the process exited
+                state = False
+        finally:
+            if not api.CloseHandle(handle):
+                state = None
+        return state
+    except (OSError, AttributeError, TypeError, ValueError, OverflowError):
+        return None
+
+
+def _process_state(pid):
+    if type(pid) is not int or not 0 < pid <= 0xffffffff:
+        return None
+    if os.name == 'nt':
+        return _windows_process_state(pid)
+    try:
+        os.kill(pid, 0)  # POSIX only: zero performs permission/existence checking.
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return None
+    except OSError as exc:
+        return False if exc.errno == errno.ESRCH else None
+    return True
+
+
 def _managed_screenplay_process_state():
     """Return True/False when the workstation process registry proves state.
 
@@ -76,25 +130,19 @@ def _managed_screenplay_process_state():
         return False
     for entry in entries:
         try:
-            pid = int(entry['pid'])
+            raw_pid = entry['pid']
+            if type(raw_pid) is not int and not (isinstance(raw_pid, str) and raw_pid.isdecimal()):
+                return None
+            pid = int(raw_pid)
             working_directory = Path(entry['workingDirectory']).resolve()
-            if pid <= 0 or os.path.normcase(str(working_directory)) != os.path.normcase(str(project_root)):
+            if not 0 < pid <= 0xffffffff or os.path.normcase(str(working_directory)) != os.path.normcase(str(project_root)):
                 return None
         except (KeyError, ValueError, TypeError, OSError):
             return None
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            # A recorded PID which no longer exists is a stale record.
+        state = _process_state(pid)
+        if state is False:
             continue
-        except PermissionError:
-            # The process exists but cannot be inspected by this account.
-            return True
-        except OSError as exc:
-            if getattr(exc, 'winerror', None) in {87, 1168} or exc.errno == errno.ESRCH:
-                continue
-            return None
-        return True
+        return state
     return False
 
 

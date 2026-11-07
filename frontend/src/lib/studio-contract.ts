@@ -24,31 +24,6 @@ export interface PipelineStart {
   max_retries?: number;
 }
 
-export interface DecisionInput {
-  action: "keep" | "exclude" | "pending" | "regenerate" | "modify";
-  video_id?: string | null;
-  trim_start?: number;
-  trim_end?: number | null;
-  position?: number | null;
-  instruction?: string;
-  prompt_override?: string | null;
-  expected_revision?: number | null;
-  operator?: "local-user" | "acceptance-test";
-}
-
-export interface ComposeInput {
-  expected_decisions?: Record<string, any> | null;
-  transition?: "cut" | "crossfade";
-  transition_duration?: number;
-  resolution_mode?: "source" | "custom" | null;
-  allow_downscale?: boolean;
-  width?: number;
-  height?: number;
-  fps?: 24 | 25 | 30;
-  audio_policy?: "preserve" | "mute";
-  subtitles?: boolean;
-}
-
 export interface StudioProject {
   id: string;
   name: string;
@@ -94,12 +69,6 @@ export interface StudioOverview {
   run?: Record<string, any> | null;
   exceptions?: (Record<string, any>)[];
   renders?: (Record<string, any>)[];
-}
-
-export interface ComposeResult {
-  assembly_id: string;
-  render_id: string;
-  status: string;
 }
 
 export interface ShotFramingTarget {

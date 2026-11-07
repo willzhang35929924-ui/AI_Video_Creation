@@ -8,7 +8,7 @@ from app import models as m
 from app.models.studio import StudioRun
 from app.core.db import get_db
 from app.core.errors import AppError
-from app.schemas_studio import (PipelineStart, StudioOverview, StudioProject, DraftAssemblyEdit,
+from app.schemas_studio import (PipelineStart, StudioOverview, StudioProject,
     ShotFramingOverview,ShotFramingUpdate,ShotFramingResult)
 from app.services.studio_pipeline import create_pipeline, latest_run, overview, project_list, _capture_services
 from app.services.screenplay_production_status import sync_production_status
@@ -91,20 +91,6 @@ def pause(project_id: str, session: Session = Depends(get_db)):
             if visual and visual.status == 'queued': visual.status = 'studio_paused'
     session.add(m.AuditEvent(object_type='studio_run', object_id=run.id, action='paused_pending_dispatch', details_json={'accepted_provider_tasks_continue': True}))
     sync_production_status(session, run)
-    session.commit(); return overview(session, project_id)
-
-
-@router.post('/projects/{project_id}/automatic-draft', response_model=StudioOverview)
-def configure_automatic_draft(project_id: str, payload: 'DraftAssemblyEdit', session: Session = Depends(get_db)):
-    run = _run(session, project_id)
-    if run.id != payload.expected_run_id or run.status != 'paused':
-        raise AppError(409, 'draft_run_not_paused', '请刷新并暂停当前编排，再更改自动草稿设置')
-    if run.result_json.get('render_id'):
-        raise AppError(409, 'draft_render_already_exists', '本次编排已有合成记录；不能覆盖原记录')
-    options={**run.snapshot_json.get('options',{}),'automatic_draft_assembly':payload.enabled}
-    run.snapshot_json={**run.snapshot_json,'options':options}
-    session.add(m.AuditEvent(object_type='studio_run',object_id=run.id,action='automatic_draft_configured',details_json={
-        'enabled':payload.enabled,'transition':'cut','preserve_full_streams':True,'human_review_required':True}))
     session.commit(); return overview(session, project_id)
 
 

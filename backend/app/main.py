@@ -20,8 +20,8 @@ from app.api.workspace import router as workspace_router
 from app.api.cinematic import router as cinematic_router
 from app.api.studio import router as studio_router
 from app.api.studio_import import router as studio_import_router
-from app.api.studio_review import router as studio_review_router
 from app.api.studio_voice import router as studio_voice_router
+from app.api.studio_audio_resolution import router as studio_audio_resolution_router
 from app.api.quality_settings import router as quality_router
 from app.services.video_quality import quality_worker
 from app.api.model_lab import router as model_lab_router
@@ -202,8 +202,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(cinematic_router)
     application.include_router(studio_router)
     application.include_router(studio_import_router)
-    application.include_router(studio_review_router)
     application.include_router(studio_voice_router)
+    application.include_router(studio_audio_resolution_router)
     application.include_router(quality_router)
     application.include_router(model_lab_router)
     application.include_router(model_services_router)

@@ -1,6 +1,24 @@
 # 发行验证记录
 
-公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。当前源码第一方许可以根目录 Apache-2.0 LICENSE 为准；第三方声明分别保留。下文是此前镜像批次的历史记录，不能作为本次 Context-IR 便携化改造的验收结果。本次范围见 [本地节点与 Docker 更新验收](PORTABLE_LOCAL_ACCEPTANCE.md)。历史记录保留 v0.1.0/v0.1.1 的实际复核，以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及关联 Actions 的实际结果为准。
+公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。当前源码第一方许可以根目录 Apache-2.0 LICENSE 为准；第三方声明分别保留。各批次分开记录：Context-IR 便携化范围见 [本地节点与 Docker 更新验收](PORTABLE_LOCAL_ACCEPTANCE.md)，本次对白及导航更新见下节。历史记录保留 v0.1.0/v0.1.1 的实际复核，以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及关联 Actions 的实际结果为准。
+
+## 2026-11-07：对白超长处理与导航调整
+
+维护者 Windows 原生环境在隔离 SQLite 和复制的真实素材中，通过网页分别选择三种处理。三路均由程序执行配音/视频、混音、SeedVR2 和技术检查，最终五个节点成功并进入待人工审核。源视频、源配音、历史任务及正式项目的镜头时长保留。
+
+| 实测选择 | 实际配音秒数 | 最终视频秒数 / 帧数 | 最终规格与检查 |
+| --- | ---: | --- | --- |
+| 延长到 6 秒 | 5.189660，复用原配音 | 6.583333 / 158 帧，保留 H3 实际完整长度 | 1080×1920、24fps，视频与音轨完整解码通过 |
+| 缩短台词 | 2.066576，EN、1.0 倍 | 3.041667 / 73 帧，复用原视频 | 同上 |
+| 调整语速 | 2.287166，保留整句、EN、2.0 倍，实际时长因子 0.5 | 3.041667 / 73 帧，复用原视频 | 同上 |
+
+另实测完成后重发同一修复请求，返回幂等回执，模型任务数不增加。网页实点分镜、审核、合成入口及项目选择后刷新，保持所选项目。后续补齐项目切换迟到回包和同一合成方案保存后的状态轮询保护，原生工程前端最终 225 项、公版前端 237 项通过，两边 TypeScript 与生产构建通过；原生对白与导航后端 99 项专项通过。公开版完整后端、Linux 镜像、持久化与 GHCR 发布以本次提交对应的 [Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/workflows/publish-ghcr.yml) 为准。
+
+本次移除两个重复页面及其专用接口，保留共用自动制作、审核修订和时间线合成。旧审片选择不再遮住输入谱系匹配的新批准版本；必需下游未完成时不回退旧片。原始验收数据库、素材、模型与日志不随源码发布。真实生成范围为维护者原生 Windows 环境，不等同于 Mac 或 Linux GPU 的实机验收；技术通过也不代替人物、声音与口型的人工审核。
+
+Windows 的后台进程探活改用只读进程句柄查询，不再使用控制台信号进行存活检查。进程权限不足或系统查询失败时保持未知状态，继续阻止未经确认的 GPU 重叠派发。
+
+## 历史镜像与持久化记录
 
 源码与 GHCR 镜像已经公开。[首轮 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41194359645) 与[补充媒体测试后的第二轮](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41196808866) 均为 10 个任务全部成功，两份镜像的 AMD64 / ARM64 匿名拉取均通过。第二轮实际补齐原先误跳过的媒体测试，正式 GHCR 镜像的本机空卷首次启动也已通过。新正式镜像上的额外 H3 业务案例与版本标签验证分别记录，不从启动成功推定生成或版本化验收完成。
 

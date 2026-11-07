@@ -51,6 +51,11 @@ const blankShot = (order: number): Partial<StoryboardShot> => ({
 
 export function StoryboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const requestedShotId = searchParams.get('shot');
+  const requestedSearch = searchParams.toString();
+  const currentSearch = useRef(requestedSearch), projectRequest = useRef(0), detailRequest = useRef(0);
+  const initiallyLoaded = useRef(false);
+  currentSearch.current = requestedSearch;
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(searchParams.get("project") ?? "");
   const [script, setScript] = useState<ScriptRevision | null>(null);
@@ -110,13 +115,14 @@ export function StoryboardPage() {
   );
 
   const loadProjects = useCallback(async () => {
+    const search = currentSearch.current;
     const nextProjects = await api.listProjects();
-    setProjects(nextProjects);
-    setProjectId((current) => current || nextProjects[0]?.id || "");
+    if (currentSearch.current === search) setProjects(nextProjects);
     return nextProjects;
   }, []);
 
   const loadProjectDetail = useCallback(async (id: string,history=false) => {
+    const requestId = ++detailRequest.current;
     if (!id) {
       setScript(null);
       setShots([]);
@@ -131,6 +137,7 @@ export function StoryboardPage() {
       api.listShots(id,undefined,history),
       api.listCharacters().then((rows) => Promise.all(rows.map((character) => api.getCharacter(character.id)))),
     ]);
+    if (requestId !== detailRequest.current || currentSearch.current !== requestedSearch) return;
     if (scriptResult.status === "fulfilled") {
       setScript(scriptResult.value);
     } else if (scriptResult.reason instanceof ApiError && scriptResult.reason.status === 404) {
@@ -141,7 +148,8 @@ export function StoryboardPage() {
     if (shotsResult.status === "fulfilled") {
       setShots(shotsResult.value);
       setSelectedShotId((current) =>
-        shotsResult.value.some((shot) => shot.id === current) ? current : shotsResult.value[0]?.id ?? "",
+        shotsResult.value.find((shot) => shot.id === requestedShotId)?.id
+          ?? (shotsResult.value.some((shot) => shot.id === current) ? current : shotsResult.value[0]?.id ?? ""),
       );
     } else {
       setShots([]);
@@ -149,29 +157,32 @@ export function StoryboardPage() {
     }
     if (charactersResult.status === "fulfilled") setCharacters(charactersResult.value);
     setDetailLoading(false);
-  }, []);
+  }, [requestedShotId, requestedSearch]);
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
+    const requestId = ++projectRequest.current;
+    if (!initiallyLoaded.current) setLoading(true);
+    setDetailLoading(true);
+    setShots([]); setScript(null); setSelectedShotId('');
     setError("");
     try {
       const next = await loadProjects();
+      if (requestId !== projectRequest.current || currentSearch.current !== requestedSearch) return;
       const requested = searchParams.get("project");
       const target = requested && next.some((project) => project.id === requested) ? requested : next[0]?.id ?? "";
       setProjectId(target);
       if (target) await loadProjectDetail(target);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "无法加载项目");
+      if (requestId === projectRequest.current && currentSearch.current === requestedSearch) setError(cause instanceof Error ? cause.message : "无法加载项目");
     } finally {
-      setLoading(false);
+      if (requestId === projectRequest.current && currentSearch.current === requestedSearch) { initiallyLoaded.current = true; setLoading(false); }
     }
   }, [loadProjectDetail, loadProjects, searchParams]);
 
   useEffect(() => {
     void loadAll();
-    // Initial load only; subsequent query updates are controlled locally.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { ++projectRequest.current; ++detailRequest.current; };
+  }, [loadAll]);
 
   useEffect(() => {
     if (selectedShot) {
@@ -185,14 +196,14 @@ export function StoryboardPage() {
   }, [selectedShot]);
 
   function selectProject(nextId: string) {
+    if (nextId === projectId) return;
     if ((dirty||structuredDirty) && !window.confirm("当前分镜有未保存修改，切换项目会丢失这些修改。仍要继续吗？")) return;
     setIncludeHistory(false);setSceneFilter('');
-    setProjectId(nextId);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("project", nextId);
     nextParams.delete("import");
+    for (const key of ['shot','video','job','quality_render','qualityrender','workspace']) nextParams.delete(key);
     setSearchParams(nextParams, { replace: true });
-    void loadProjectDetail(nextId);
   }
 
   function updateDraft<Key extends keyof StoryboardShot>(key: Key, value: StoryboardShot[Key]) {
@@ -371,7 +382,7 @@ export function StoryboardPage() {
         if (!nextProjects.some((project) => project.id === nextId) && resultProject) {
           setProjects((current) => [...current, resultProject]);
         }
-        await loadProjectDetail(nextId);
+        if (nextParams.toString() === searchParams.toString()) await loadProjectDetail(nextId);
       }
       notify("脚本导入成功，请检查预览后执行解析", "success");
     } catch (cause) {

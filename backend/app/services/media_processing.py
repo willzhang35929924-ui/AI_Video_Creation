@@ -82,7 +82,7 @@ def _video(session,settings,identifier,project_id,shot_id):
     if row.metadata_json.get('sha256') and row.metadata_json['sha256']!=sha:raise AppError(409,'media_input_changed','输入视频SHA发生变化')
     return row,{'id':row.id,'path':str(path),'sha256':sha}
 
-def create_task(session,settings,payload,kind=None,route=None):
+def create_task(session,settings,payload,kind=None,route=None,*,dialogue_text_override=None):
     _owned(session,m.Project,payload.project_id,payload.project_id)
     shot=_owned(session,m.StoryboardShot,payload.shot_id,payload.project_id) if payload.shot_id else None
     if shot and shot.status=='deleted':raise AppError(409,'shot_deleted','已删除镜头不再派发任务')
@@ -103,6 +103,13 @@ def create_task(session,settings,payload,kind=None,route=None):
             if inputs.get('participant_id'):
                 participant=session.get(m.ShotCharacter,inputs['participant_id'])
                 if not participant or not shot or participant.shot_id!=shot.id:raise AppError(422,'participant_ownership','人物不属于当前镜头')
+        # Only the trusted Studio duration-repair command can set this keyword.
+        # Keep the original DialogueLine and its ownership attached to the new
+        # task while freezing the explicitly approved effective spoken text.
+        if dialogue_text_override is not None:
+            if not line or not isinstance(dialogue_text_override,str):
+                raise AppError(422,'tts_override_source','配音台词覆盖必须绑定明确的本镜对白')
+            compiled['text']=dialogue_text_override
         if not isinstance(compiled['text'],str) or not 1<=len(compiled['text'].strip())<=20000:raise AppError(422,'tts_text','对白文本长度必须是1到20000')
         reference=inputs.get('reference_audio_asset_id') or inputs.get('reference_audio_id') or inputs.get('audio_event_id')
         if reference:
@@ -170,6 +177,9 @@ def create_task(session,settings,payload,kind=None,route=None):
     frozen={'kind':kind,'route':snapshot_route,'parameters':parameters,'inputs':compiled,'sources':sources,
         'participant_id':participant.id if participant else None,'character_version_id':participant.character_version_id if participant else None,
         'dialogue_line_id':line.id if line else None,'project_id':payload.project_id,'shot_id':payload.shot_id}
+    if dialogue_text_override is not None:
+        frozen['dialogue_text_override']={'original_text':line.text,'effective_text':dialogue_text_override,
+                                        'scope':'this Studio run audio only; screenplay preserved'}
     fingerprint=_fingerprint(frozen)
     for old in session.scalars(select(m.MediaProcessTask).where(m.MediaProcessTask.project_id==payload.project_id,m.MediaProcessTask.kind==kind).order_by(m.MediaProcessTask.created_at.desc())):
         if old.snapshot_json.get('fingerprint')==fingerprint and old.status in {'queued','running','succeeded','unknown'}:return old

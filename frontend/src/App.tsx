@@ -11,9 +11,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { FinalPage } from "./pages/FinalPage";
 import { AssemblyPage } from './pages/AssemblyPage';
 import { ContentPage } from './pages/ContentPage';
-import { VideoProductionPage } from './pages/VideoProductionPage';
 import { StudioPage } from './pages/StudioPage';
-import { StudioReviewPage } from './pages/StudioReviewPage';
 import { ScreenplayGenerationPage } from './pages/ScreenplayGenerationPage';
 import { ProductLibraryPage } from './pages/ProductLibraryPage';
 import { ReferenceVideoLibraryPage } from './pages/ReferenceVideoLibraryPage';
@@ -54,7 +52,13 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, BoundaryState>
   }
 }
 
-function LegacyVideoRedirect(){const location=useLocation();return <Navigate replace to={`/video-production${location.search}${location.hash||(location.pathname==='/generation'?'#tasks':'')}`}/>;}
+function LegacyWorkspaceRedirect({ target }: { target: '/storyboard' | '/review' }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.delete('workspace');
+  const search = params.toString();
+  return <Navigate replace to={`${target}${search ? `?${search}` : ''}${location.hash}`}/>;
+}
 
 export default function App() {
   return (
@@ -66,14 +70,14 @@ export default function App() {
           <Route path="/assets/products" element={<ProductLibraryPage />} />
           <Route path="/assets/videos" element={<ReferenceVideoLibraryPage />} />
           <Route path="/assets/voices" element={<VoiceLibraryPage />} />
-          <Route path="/studio-review" element={<StudioReviewPage />} />
+          <Route path="/studio-review" element={<LegacyWorkspaceRedirect target="/review" />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/storyboard" element={<StoryboardPage />} />
           <Route path="/characters" element={<CharacterFactoryPage />} />
           <Route path="/characters/legacy" element={<CharactersPage />} />
           <Route path="/characters/:characterId" element={<CharacterFactoryPage />} />
-          <Route path="/generation" element={<LegacyVideoRedirect />} />
-          <Route path="/video-production" element={<VideoProductionPage />} />
+          <Route path="/generation" element={<LegacyWorkspaceRedirect target="/storyboard" />} />
+          <Route path="/video-production" element={<LegacyWorkspaceRedirect target="/storyboard" />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/final" element={<AssemblyPage />} />
           <Route path="/final/legacy" element={<FinalPage />} />
@@ -82,7 +86,7 @@ export default function App() {
           <Route path="/settings/ai-services" element={<SettingsPage />} />
           <Route path="/settings/:section" element={<SettingsPage />} />
           <Route path="/content" element={<ContentPage />} />
-          <Route path="/production" element={<LegacyVideoRedirect />} />
+          <Route path="/production" element={<LegacyWorkspaceRedirect target="/storyboard" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppShell>

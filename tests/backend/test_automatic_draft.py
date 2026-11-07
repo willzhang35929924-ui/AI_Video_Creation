@@ -97,16 +97,18 @@ def test_failed_or_incomplete_shots_cannot_queue_draft(studio):
     assert studio.session.scalar(select(m.AssemblyRender.id)) is None
 
 
-def test_paused_run_opt_in_preserves_service_snapshot_and_checks_run_id(studio):
-    from app.api.studio import configure_automatic_draft
-    from app.schemas_studio import DraftAssemblyEdit
-    run=create_pipeline(studio.session,studio.settings,studio.project.id,{})
+def test_start_opt_in_is_frozen_for_paused_history(studio):
+    # Keep the public native/legacy fixture; Context-IR is independently covered
+    # by its explicit production profile tests, not forced onto every service.
+    run=create_pipeline(studio.session,studio.settings,studio.project.id,{'automatic_draft_assembly':True})
     run.status='paused'; studio.session.commit()
     frozen=run.snapshot_json['services'].copy()
-    with pytest.raises(Exception) as exc:
-        configure_automatic_draft(studio.project.id,DraftAssemblyEdit(expected_run_id='wrong-run',enabled=True),studio.session)
-    assert getattr(exc.value,'code',None)=='draft_run_not_paused'
-    configure_automatic_draft(studio.project.id,DraftAssemblyEdit(expected_run_id=run.id,enabled=True),studio.session)
+    studio.session.expire_all()
     assert run.status=='paused' and run.snapshot_json['options']['automatic_draft_assembly'] is True
     assert run.snapshot_json['services']==frozen
-    assert studio.session.scalar(select(m.AuditEvent.id).where(m.AuditEvent.action=='automatic_draft_configured'))
+
+
+def test_duplicate_page_automatic_draft_http_entry_is_retired(client):
+    result=client.post('/api/studio/projects/no-project/automatic-draft',json={
+        'expected_run_id':'old-run','enabled':True})
+    assert result.status_code==404

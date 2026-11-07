@@ -22,7 +22,7 @@ def frozen(slot, service=None, *, configured=False, parameters=None):
             'allow_cloud_costs':False,'allow_paid_fallback':False}
 
 
-def prepare(studio, monkeypatch, *, dialogue=False, lip=False, selected=True, quality=False):
+def prepare(studio, monkeypatch, *, dialogue=False, lip=False, selected=True, quality=False, context_mode=False):
     shot=studio.shots[1];session=studio.session
     person=session.scalar(select(m.ShotCharacter).where(m.ShotCharacter.shot_id==shot.id))
     if dialogue:
@@ -31,6 +31,11 @@ def prepare(studio, monkeypatch, *, dialogue=False, lip=False, selected=True, qu
         detail=session.scalar(select(m.ShotDetail).where(m.ShotDetail.shot_id==shot.id))
         detail.source_json={'production':{'requested_controls':{'require_lip_sync':True}}}
     service=session.scalar(select(m.AIService).where(m.AIService.module=='video_generation'))
+    if context_mode:
+        # Public services opt into Context-IR explicitly on every OS. Leave the
+        # default fixture native/legacy so its existing route coverage remains.
+        service.default_model='MiniMax_H3_w6a8.safetensors'
+        service.settings_json={**service.settings_json,'workflow_profile':'context_ir'}
     import app.services.task_routing as routing
     def freeze(session,settings,project_id,shot_id,slot,*args):
         active=slot in {'dialogue_generation','lip_sync'} and dialogue
@@ -47,11 +52,16 @@ def find(run,kind):
     return next(n for n in run.nodes_json if n['kind']==kind)
 
 
-def test_every_slot_and_shot_snapshot_is_frozen_without_dispatch(studio,monkeypatch):
-    run,shot,_=prepare(studio,monkeypatch,dialogue=True,lip=True,quality=True)
+@pytest.mark.parametrize('context_mode',[False,True])
+def test_every_slot_and_shot_snapshot_is_frozen_without_dispatch(studio,monkeypatch,context_mode):
+    run,shot,_=prepare(studio,monkeypatch,dialogue=True,lip=True,quality=True,context_mode=context_mode)
     assert set(run.snapshot_json['routes'])==set(SLOTS)
     assert set(run.snapshot_json['routes_by_shot'][shot.id])==set(SLOTS)
-    for kind in ('keyframe','video','tts','lip_sync','quality','quality_check'):
+    assert run.snapshot_json['context_production'] is context_mode
+    if context_mode:
+        assert run.snapshot_json['h3_context_by_shot'][shot.id]['service']['h3_workflow']['actual_steps']==20
+        assert not any(n['kind']=='keyframe' for n in run.nodes_json)
+    for kind in (*([] if context_mode else ['keyframe']),'video','tts','lip_sync','quality','quality_check'):
         assert 'route' in find(run,kind)
     assert find(run,'audio_mix')['dependencies']==['video:'+shot.id,find(run,'tts')['id']]
     assert find(run,'lip_sync')['dependencies']==['audio_mix:'+shot.id]
