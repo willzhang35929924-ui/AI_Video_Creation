@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "openh3_node_files": [
+    {
+      "file": "compiler.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/compiler.py",
+      "sha256": "6b5de1530053fdd6e0aeea52fd9e04c146561c07078d95577e77075e11dbcf3f",
+      "expected": "6b5de1530053fdd6e0aeea52fd9e04c146561c07078d95577e77075e11dbcf3f",
+      "match": true
+    },
+    {
+      "file": "conftest.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/conftest.py",
+      "sha256": "fb478a7c8b12e0cb6109bcc599a31c0e89e8093a4b3781f8912f32275f0464ad",
+      "expected": "fb478a7c8b12e0cb6109bcc599a31c0e89e8093a4b3781f8912f32275f0464ad",
+      "match": true
+    },
+    {
+      "file": "contract.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/contract.py",
+      "sha256": "9c5ec5d93b16c650cc4aaf768dfcc866fe927dc68703e0dcf0deeccd8bc9062d",
+      "expected": "9c5ec5d93b16c650cc4aaf768dfcc866fe927dc68703e0dcf0deeccd8bc9062d",
+      "match": true
+    },
+    {
+      "file": "h3ir_client.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/h3ir_client.py",
+      "sha256": "d207a3acac34dcb0081322c6c5ab3b7a0c2eb2b557491fc9044e230dbe580c95",
+      "expected": "d207a3acac34dcb0081322c6c5ab3b7a0c2eb2b557491fc9044e230dbe580c95",
+      "match": true
+    },
+    {
+      "file": "media.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/media.py",
+      "sha256": "5a78753feab6de30f59db126019b6397ad55c73bc6c07b446c8ffe1210580f45",
+      "expected": "5a78753feab6de30f59db126019b6397ad55c73bc6c07b446c8ffe1210580f45",
+      "match": true
+    },
+    {
+      "file": "nodes.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/nodes.py",
+      "sha256": "acbca94950022fda305ed72b817b8c4a1b97737d648a7679f374f9ef3f9c974a",
+      "expected": "acbca94950022fda305ed72b817b8c4a1b97737d648a7679f374f9ef3f9c974a",
+      "match": true
+    },
+    {
+      "file": "tray.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/tray.py",
+      "sha256": "e7b21b7dbb86a1038a03aa8ae2a01a66677ca1a24e351855be5432e13e1487f9",
+      "expected": "e7b21b7dbb86a1038a03aa8ae2a01a66677ca1a24e351855be5432e13e1487f9",
+      "match": true
+    },
+    {
+      "file": "web_api.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/web_api.py",
+      "sha256": "a92c7e7183170f40a42a199a99c91bc68474da584619460ecc1b6fafac32a2c2",
+      "expected": "a92c7e7183170f40a42a199a99c91bc68474da584619460ecc1b6fafac32a2c2",
+      "match": true
+    },
+    {
+      "file": "__init__.py",
+      "source": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/__init__.py",
+      "sha256": "a69f21a6892de624c2d695ff4ba3b572bf7cd28f99af00be476a4a075fcfc28c",
+      "expected": "a69f21a6892de624c2d695ff4ba3b572bf7cd28f99af00be476a4a075fcfc28c",
+      "match": true
+    }
+  ],
+  "openh3_all_match": true,
+  "compiler_wheel": {
+    "url": "https://files.pythonhosted.org/packages/82/d6/b667ecff43c16532fa84e84e0a4aef3e37cb9850e3a33d86ba5f8e52b160/open_h3_ir-0.4.1-py3-none-any.whl",
+    "sha256": "3c475d1dced6cc7ea1b5ca88871a5ca8aedeb6b1fba032fc2d6d21ad752046c8"
+  },
+  "scoped_interrupt_server": {
+    "source": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/server.py",
+    "sha256": "8ee5389b439d4676c59b208d43099d573dadfbee1f2c3740311ed7213832d3f5",
+    "match": true
+  },
+  "compiler_all_sources_match": true,
+  "compiler_changed_files": [],
+  "weights_downloaded": false
+}

@@ -17,10 +17,10 @@ def test_structured_identity_does_not_inherit_lan_features():
 
 
 def test_legacy_identity_and_revision_still_preserved():
-    version = CharacterVersion(character_id="sample_hero_001", version=1, identity_json={"fixed_identity": "角色甲，左眼下小痣，黑色齐肩发", "default_clothing": "鼠尾草绿风衣", "negative_prompt": "wrong face"})
+    version = CharacterVersion(character_id="hero_lan_001", version=1, identity_json={"fixed_identity": "林岚，左眼下小痣，黑色齐肩发", "default_clothing": "鼠尾草绿风衣", "negative_prompt": "wrong face"})
     shot = StoryboardShot(project_id="project", order=1, scene_title="Door", visual_prompt="Opens door", negative_prompt="extra people")
     prompt, negative = build_prompt(shot, version, "Keep the door still")
-    assert "角色甲，左眼下小痣，黑色齐肩发" in prompt and "鼠尾草绿风衣" in prompt
+    assert "林岚，左眼下小痣，黑色齐肩发" in prompt and "鼠尾草绿风衣" in prompt
     assert "Keep the door still" in prompt and "wrong face" in negative
 
 

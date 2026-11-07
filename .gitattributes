@@ -1,5 +1,10 @@
 # Preserve exact bytes required by cinematic-generated-manifest.json.
-* -text
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 *.sh text eol=lf
 *.docx binary
-/VideoFactory管理/*.bat text eol=crlf
+/scripts/local_inference/**/*.py text eol=lf
+/scripts/local_inference/*.py text eol=lf
+/runtime-manifests/*.json text eol=lf
+/licenses/ComfyUI-OpenH3-IR/LICENSE text eol=lf
+/licenses/ComfyUI-OpenH3-IR/NOTICE text eol=lf
+/VideoFactory管理/*.bat -text

@@ -59,7 +59,7 @@ export function ProjectProductPreparation({projectId,shots,disabled,onStateChang
     {open?<>
       <fieldset className="asset-picker" disabled={blocked}><legend>批量上传到产品图库</legend>
         <FormField label="上传归属"><select value={uploadTarget} disabled={files.length>0&&Boolean(uploadTarget)} onChange={e=>{setUploadTarget(e.target.value);setName('');}}><option value="">新建产品／道具</option>{library?.items.filter(item=>item.state==='active').map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
-        {!uploadTarget?<FormField label="产品／道具名称" hint="使用剧本中的同一名称，便于匹配分镜。"><input value={name} maxLength={200} onChange={e=>setName(e.target.value)} placeholder="例如：示例产品礼盒"/></FormField>:null}
+        {!uploadTarget?<FormField label="产品／道具名称" hint="使用剧本中的同一名称，便于匹配分镜。"><input value={name} maxLength={200} onChange={e=>setName(e.target.value)} placeholder="例如：捏捏乐礼盒"/></FormField>:null}
         <FormField label="批量选择产品／道具图" hint="PNG、JPEG、WebP，每批最多32张，单张10MB。上传后再选择本次制作需要的图片。"><input key={fileKey} type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={e=>setFiles(Array.from(e.target.files||[]))}/></FormField>
         {files.length?<p>待上传 {files.length} 张：{files.map(file=>file.name).join('、')}</p>:null}
         <div className="asset-actions"><button type="button" className="button button-secondary" disabled={!files.length||(!uploadTarget&&!name.trim())} onClick={()=>void upload()}>{busy==='upload'?'正在上传并校验原图…':'上传并保存到图库'}</button>{files.length||name?<button type="button" className="button button-ghost" onClick={()=>{setFiles([]);setName('');setFileKey(n=>n+1);}}>清空上传草稿</button>:null}</div>

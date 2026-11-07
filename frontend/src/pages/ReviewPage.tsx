@@ -12,9 +12,9 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { api, request } from "../lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { api, type VideoRevisionInput, type VideoRevisionPreview } from "../lib/api";
 import { formatBytes, formatDate, formatDuration, statusLabel } from "../lib/format";
 import type { Project, QualityCheck, VideoRevision } from "../lib/types";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -34,17 +34,25 @@ export function ReviewPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [instruction, setInstruction] = useState(defaultInstruction);
+  const [useProjectVideoService, setUseProjectVideoService] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [approveOpen, setApproveOpen] = useState(false);
   const [approvalOperator, setApprovalOperator] = useState("local-user");
   const [approvalReason, setApprovalReason] = useState("");
   const [mediaFailed, setMediaFailed] = useState(false);
-  const [revisionPreview, setRevisionPreview] = useState<{ prompt: string; character_id: string | null; character_version_id: string | null; asset_ids: string[] } | null>(null);
+  const [revisionPreview, setRevisionPreview] = useState<{ videoId: string; input: VideoRevisionInput; result: VideoRevisionPreview } | null>(null);
+  const previewRequest = useRef<AbortController | null>(null);
   const [revisionJobId, setRevisionJobId] = useState("");
   const { notify } = useToast();
 
   const selected = videos.find((video) => video.id === selectedId) ?? null;
+  const reviewedRevision = revisionPreview?.videoId === selectedId ? revisionPreview : null;
+  const clearRevisionPreview = useCallback(() => {
+    previewRequest.current?.abort();
+    setRevisionPreview(null);
+  }, []);
+  useEffect(() => () => previewRequest.current?.abort(), []);
 
   const loadVideos = useCallback(async (id: string) => {
     if (!id) {
@@ -90,10 +98,12 @@ export function ReviewPage() {
 
   useEffect(() => {
     setInstruction(defaultInstruction);
+    setUseProjectVideoService(false);
+    clearRevisionPreview();
     setRejectOpen(false);
     setRejectReason("");
     setMediaFailed(false);
-  }, [selectedId]);
+  }, [clearRevisionPreview, selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -141,21 +151,28 @@ export function ReviewPage() {
   }, [revisionJobId, projectId, loadVideos, notify]);
 
   async function revise(confirmed = false) {
-    if (!selected || !instruction.trim()) return;
+    if (!selected || !instruction.trim() || (confirmed && !reviewedRevision)) return;
+    const input = confirmed && reviewedRevision ? reviewedRevision.input : {
+      instruction: instruction.trim(), use_project_video_service: useProjectVideoService,
+    };
+    const controller = confirmed ? undefined : new AbortController();
+    if (controller) previewRequest.current = controller;
     setBusy("revise");
     try {
-      if (!confirmed) {
-        setRevisionPreview(await request(`/api/videos/${selected.id}/revision-preview`, { method: "POST", body: JSON.stringify({ instruction: instruction.trim() }) }));
+      if (controller) {
+        const result = await api.previewVideoRevision(selected.id, input, controller.signal);
+        if (!controller.signal.aborted) setRevisionPreview({ videoId: selected.id, input, result });
         return;
       }
-      const result = await api.reviseVideo(selected.id, instruction.trim()) as { job?: { id: string } };
-      setRevisionPreview(null);
+      const result = await api.reviseVideo(selected.id, input);
+      clearRevisionPreview();
       if (result.job) setRevisionJobId(result.job.id);
       await loadVideos(projectId);
       notify("修订生成已提交；旧视频仍保留在版本历史中", "success");
     } catch (cause) {
-      notify(cause instanceof Error ? cause.message : "提交修订失败", "error");
+      if (!controller?.signal.aborted) notify(cause instanceof Error ? cause.message : "提交修订失败", "error");
     } finally {
+      if (controller && previewRequest.current === controller) previewRequest.current = null;
       setBusy("");
     }
   }
@@ -191,6 +208,12 @@ export function ReviewPage() {
   }
 
   const metadata = selected?.metadata ?? selected?.metadata_json ?? {};
+  const provider = String(metadata.provider || "").toLowerCase();
+  const service = metadata.service_snapshot as { provider?: string; is_cloud?: boolean } | undefined;
+  const cloudSource = metadata.mode === "cloud" || provider.startsWith("cloud_") || service?.provider === "video_api" || service?.is_cloud === true;
+  const showLocalRecovery = cloudSource || !(metadata.mode === "local" || metadata.mode === "demo" || provider === "comfyui_h3" || provider === "demo");
+  const productionParams = new URLSearchParams({ project: selected?.projectId || projectId });
+  if (selected?.shotId) productionParams.set("shot", selected.shotId);
   const qualityChecks = selected?.qualityChecks ?? selected?.quality_checks ?? [];
   const mediaSrc = selected ? api.mediaUrl(selected.mediaUrl ?? selected.media_url ?? selected.relativePath ?? selected.relative_path, selected.id) : "";
 
@@ -358,8 +381,13 @@ export function ReviewPage() {
                   <Badge tone="neutral">旧版本保留</Badge>
                 </div>
                 <FormField label="本次修改要求" required hint="身份固定块与同一人物参考会再次带入；仅在工作流真实支持时才使用旧视频作为参考。">
-                  <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} />
+                  <textarea rows={4} value={instruction} onChange={(event) => { setInstruction(event.target.value); clearRevisionPreview(); }} />
                 </FormField>
+                {showLocalRecovery ? <div>
+                  <label className="studio-check"><input type="checkbox" checked={useProjectVideoService}
+                    disabled={Boolean(revisionJobId)} onChange={event => { setUseProjectVideoService(event.target.checked); clearRevisionPreview(); }} />使用本项目的本地 H3 服务</label>
+                  <p className="form-hint">{cloudSource ? "此版本来自云端。勾选后，按本项目的本地 H3 配置重新生成。" : "勾选后，按本项目的本地 H3 配置重新生成。"} <Link to={`/video-production?${productionParams}`}>查看项目视频服务与画质</Link></p>
+                </div> : null}
                 <div className="form-actions">
                   <button className="button button-primary" type="button" onClick={() => revise()} disabled={!instruction.trim() || busy === "revise" || !!revisionJobId}>
                     {busy === "revise" ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
@@ -396,7 +424,7 @@ export function ReviewPage() {
         <FormField label="审核人"><input value={approvalOperator} onChange={event => setApprovalOperator(event.target.value)} /></FormField>
         <FormField label="通过意见"><textarea rows={3} value={approvalReason} onChange={event => setApprovalReason(event.target.value)} placeholder="记录实际观看结果及保留意见…" /></FormField>
       </ConfirmDialog>
-      {revisionPreview ? <div className="dialog-backdrop"><section className="dialog-card wide-dialog prompt-preview" role="dialog" aria-label="修订完整提示词"><h2>修订将新建任务和视频文件</h2><p>{revisionPreview.character_id ? `人物 ${revisionPreview.character_id} · 版本 ${revisionPreview.character_version_id ?? "未记录"}` : "纯产品镜头 · 无人物版本绑定"}</p><pre>{revisionPreview.prompt}</pre><p>保留旧版本；H3 是参考引导式重新生成，不承诺像素级局部编辑。</p><div className="dialog-actions"><button className="button button-secondary" onClick={() => setRevisionPreview(null)}>返回修改</button><button className="button button-primary" disabled={busy === "revise"} onClick={() => revise(true)}>提交真实修订</button></div></section></div> : null}
+      {reviewedRevision ? <div className="dialog-backdrop"><section className="dialog-card wide-dialog prompt-preview" role="dialog" aria-label="修订完整提示词"><h2>修订将新建任务和视频文件</h2>{reviewedRevision.input.use_project_video_service ? <p>生成服务 · 本项目的本地 H3</p> : null}<p>{reviewedRevision.result.character_id ? `人物 ${reviewedRevision.result.character_id} · 版本 ${reviewedRevision.result.character_version_id ?? "未记录"}` : "此镜没有绑定人物版本"}</p><pre>{reviewedRevision.result.prompt}</pre><p>系统会按参考素材重新生成，并保留旧版本。</p><div className="dialog-actions"><button className="button button-secondary" onClick={clearRevisionPreview}>返回修改</button><button className="button button-primary" disabled={busy === "revise"} onClick={() => revise(true)}>提交真实修订</button></div></section></div> : null}
     </>
   );
 }

@@ -21,6 +21,8 @@ const configuredBase = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(
 export const API_BASE_URL = configuredBase;
 
 type JsonRecord = Record<string, unknown>;
+export type VideoRevisionInput = { instruction: string; use_project_video_service: boolean };
+export type VideoRevisionPreview = { prompt: string; character_id: string | null; character_version_id: string | null };
 
 export class ApiError extends Error {
   status: number;
@@ -356,6 +358,9 @@ export const api = {
   getProviderHealth: async (signal?: AbortSignal) =>
     normalizeProviderHealth(unwrap<ProviderHealth>(await request("/api/providers/h3/health", { signal }))),
 
+  getContextProviderHealth: async (signal?: AbortSignal) =>
+    normalizeProviderHealth(unwrap<ProviderHealth>(await request("/api/providers/h3/context-health", { signal }))),
+
   getProviderCapabilities: async (signal?: AbortSignal) =>
     normalizeCapabilities(unwrap<ProviderCapabilities>(await request("/api/providers/h3/capabilities", { signal }))),
 
@@ -652,11 +657,16 @@ export const api = {
   getVideo: async (id: string, signal?: AbortSignal) =>
     normalizeVideo(unwrap<VideoRevision>(await request(`/api/videos/${encodeURIComponent(id)}`, { signal }))),
 
-  reviseVideo: async (id: string, instruction: string) =>
-    unwrap<GenerationJob | VideoRevision>(
+  previewVideoRevision: async (id: string, input: VideoRevisionInput, signal?: AbortSignal) =>
+    unwrap<VideoRevisionPreview>(
+      await request(`/api/videos/${encodeURIComponent(id)}/revision-preview`, { method: "POST", body: json(input), signal }),
+    ),
+
+  reviseVideo: async (id: string, input: VideoRevisionInput) =>
+    unwrap<{ job?: Pick<GenerationJob, "id"> }>(
       await request(`/api/videos/${encodeURIComponent(id)}/revise`, {
         method: "POST",
-        body: json({ instruction }),
+        body: json(input),
       }),
     ),
 

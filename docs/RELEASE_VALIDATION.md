@@ -1,6 +1,6 @@
 # 发行验证记录
 
-公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。第一方代码许可：MIT；第三方声明分别保留。本记录已验证 `latest` 与相应 `sha-…` 快照，保留 v0.1.0 的实际复核记录；本次版本化验证目标为 **v0.1.1**，以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及[关联 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions) 的实际结果为准。
+公开仓库：[AI_Video_Creation](https://github.com/willzhang35929924-ui/AI_Video_Creation)。当前源码第一方许可以根目录 Apache-2.0 LICENSE 为准；第三方声明分别保留。下文是此前镜像批次的历史记录，不能作为本次 Context-IR 便携化改造的验收结果。本次范围见 [本地节点与 Docker 更新验收](PORTABLE_LOCAL_ACCEPTANCE.md)。历史记录保留 v0.1.0/v0.1.1 的实际复核，以 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及关联 Actions 的实际结果为准。
 
 源码与 GHCR 镜像已经公开。[首轮 Actions](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41194359645) 与[补充媒体测试后的第二轮](https://github.com/willzhang35929924-ui/AI_Video_Creation/actions/runs/41196808866) 均为 10 个任务全部成功，两份镜像的 AMD64 / ARM64 匿名拉取均通过。第二轮实际补齐原先误跳过的媒体测试，正式 GHCR 镜像的本机空卷首次启动也已通过。新正式镜像上的额外 H3 业务案例与版本标签验证分别记录，不从启动成功推定生成或版本化验收完成。
 

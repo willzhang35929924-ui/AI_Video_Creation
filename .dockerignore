@@ -47,6 +47,12 @@
 !scripts/upscale_video_realesrgan.py
 !scripts/deploy_seedvr2.py
 !scripts/deployment_common.py
+# Host-only model/node installers ship in Git, not in the CPU application image.
+# Their source, manifests, CUDA environment and model weights stay on the user
+# controlled inference host. The application needs only workflows/ and its HTTP
+# adapters; do not broaden !scripts/** to include private acceptance tools.
+scripts/local_inference/**
+runtime-manifests/**
 !docker/
 !docker/**
 # Public legal notices and upstream license texts.

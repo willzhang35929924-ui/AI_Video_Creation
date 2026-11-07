@@ -9,6 +9,13 @@
 *.py[cod]
 node_modules/
 frontend/dist/
+# TypeScript project-reference outputs beside the authored config sources.
+/frontend/vite.config.js
+/frontend/vite.config.d.ts
+/frontend/vitest.config.js
+/frontend/vitest.config.d.ts
+/frontend/tailwind.config.js
+/frontend/tailwind.config.d.ts
 *.tsbuildinfo
 .pytest_cache/
 .pytest-*/

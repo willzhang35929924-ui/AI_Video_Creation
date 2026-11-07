@@ -47,7 +47,7 @@ def resolve_motion_references(session, settings, shot, values=None):
         output=round(shot.duration_seconds*24);output=output+(5-output%17)%17
         frames=_grid_frames(min(wanted,output))
         if frames<48:raise AppError(422,'motion_reference_too_short','H3对齐后不足2秒；请扩大参考片段或镜头时长')
-        result.append({**ref.model_dump(),'relative_path':video.relative_path,'absolute_path':str(source),
+        result.append({**ref.model_dump(exclude_none=True),'relative_path':video.relative_path,'absolute_path':str(source),
                        'effective_frames':frames,'effective_duration_seconds':frames/24,
                        'source_duration_seconds':duration,'fps':24,'audio_included':False})
     return result

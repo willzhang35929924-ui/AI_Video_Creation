@@ -1,4 +1,5 @@
 """Isolated real SQLite projection tests; no model inference or file success claim."""
+import asyncio
 import copy
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from app import models as m
 from app.core.db import Base, build_engine, build_session_factory
 from app.services.screenplay_production_status import sync_production_status
 from app.services.studio_pipeline import _persist
+from app.services.studio_project_guard import project_guard
 from app.api import studio as studio_api
 from app.core.errors import AppError
 
@@ -156,6 +158,39 @@ def test_known_failure_retry_api_updates_stage_and_preserves_history(context):
     assert state(c)[0] == 'generating'
     assert c.run.nodes_json[0]['history'][0]['child_id'] == 'child'
     assert c.run.nodes_json[0]['status'] == 'pending'
+
+
+def test_targeted_retry_keeps_a_child_submitted_while_the_request_waits(context, settings):
+    c = context
+    project_id, run_id = c.project.id, c.run.id
+    failed = {'id': 'video:shot', 'kind': 'video', 'target_id': 'shot', 'status': 'failed',
+        'history': [], 'child_id': 'child', 'code': 'known_failure', 'dependencies': []}
+    other = {'id': 'video:other', 'kind': 'video', 'target_id': 'other', 'status': 'dispatching',
+        'history': [], 'child_id': None, 'dependencies': []}
+    c.run.nodes_json = [failed, other]
+    c.session.commit()
+    factory = build_session_factory(c.session.get_bind())
+
+    async def scenario():
+        app = SimpleNamespace(state=SimpleNamespace(settings=settings))
+        with factory() as request_session:
+            cached_run = request_session.get(m.StudioRun, run_id)
+            assert cached_run.nodes_json[1]['child_id'] is None
+            async with project_guard(app, project_id):
+                request = SimpleNamespace(app=app)
+                retry = asyncio.create_task(studio_api.retry_project(
+                    project_id, request, {'node_id': failed['id']}, request_session))
+                await asyncio.sleep(0)
+                assert not retry.done()
+                c.run.nodes_json = [failed, {**other, 'status': 'running', 'child_id': 'worker-submitted'}]
+                c.session.commit()
+            await asyncio.wait_for(retry, timeout=5)
+
+    asyncio.run(scenario())
+    c.session.refresh(c.run)
+    retried, preserved = c.run.nodes_json
+    assert retried['status'] == 'pending' and retried['history'][0]['child_id'] == 'child'
+    assert preserved['status'] == 'running' and preserved['child_id'] == 'worker-submitted'
 
 
 def test_unknown_retry_api_remains_forbidden_and_keeps_source_receipt(context):

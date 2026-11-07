@@ -11,8 +11,11 @@ docs/templates/          可公开的 Word 空模板与示例
 tests/                   自动化验证与明确的测试 fixtures
 scripts/                 启动、部署、备份与维护工具
 .github/workflows/       代码检查与镜像构建发布
-compose.yaml             用户生产部署：拉取已发布镜像
-compose.dev.yaml         开发部署：由当前源码构建
+compose.yaml             默认安装：构建当前下载的源码，video-factory / 8080
+compose.prebuilt.yaml    可选发行镜像：拉取已发布 GHCR 版本，可能早于当前源码
+compose.dev.yaml         独立开发部署：video-factory-dev / 18083
+scripts/local_inference/ 用户模型主机的部署工具和项目节点源码，不进入应用镜像
+runtime-manifests/       原生模型节点的来源、版本和哈希校验清单
 ```
 
 具体文件以当前提交为准；不把用户数据库、历史素材或本地模型目录当作源码。容器前端由 Node 构建，最终只运行 Nginx；后端镜像含 Python、应用依赖、FFmpeg 和必要字体。
@@ -78,6 +81,10 @@ flowchart TD
 | Mac mini / 其他远程节点 | 通过已有适配协议连接 | 独立安装、认证、网络、硬件和真实生成验证，不能仅凭主机在线判断可用 |
 
 镜像不附带模型权重、CUDA 或 Apple Metal/MPS 推理环境。没有未经验证的 GPU Compose 方案。宿主机 URL、容器 URL、宿主机文件路径与容器文件路径必须区分。`host.docker.internal` 是连接 Docker Desktop 宿主机的一种地址，不能保证只监听 loopback 的服务可达。
+
+本地 H3 三档通过独立节点的 8788 入口通信，节点协调 Qwen 素材理解、Context-IR 编译、内存交接及 ComfyUI 执行。部署步骤见 [本地推理节点](local-inference.md)。Fast 使用固定的 4step LoRA 配方，标准／高质量分别使用 Quality 20／30 步；应用冻结已派发任务的真实图、步数与素材快照。
+
+用户在设置页为自己管理的本地服务确认精确 origin。该权限保存在服务档案中，不需要重建容器；它不会赋予文档导入或任意媒体 URL 访问私网的权限。管理员仍可通过 `TRUSTED_LOCAL_SERVICE_ORIGINS` 给旧集成配置默认可信 origin。云端服务继续要求 HTTPS，未适配的语音、口型等远程协议不能仅靠填写 URL 使用。
 
 ## 可观测性与验收层次
 

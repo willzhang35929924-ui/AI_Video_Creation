@@ -1,7 +1,8 @@
 """Authoritative HTTP boundary for the unified studio; exported to JSON Schema/TS."""
-from typing import Any,Literal
+from typing import Annotated,Any,Literal
 from pydantic import BaseModel,ConfigDict,Field,model_validator
 from app.schemas_quality import QualitySettings
+from app.schemas_cinematic import MotionReferenceInput
 
 class StudioInput(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -21,7 +22,18 @@ class PipelineStart(StudioInput):
     width:int=Field(default=1024,ge=256,le=3840,multiple_of=8)
     height:int=Field(default=576,ge=256,le=3840,multiple_of=8)
     shot_ids:list[str]|None=None
+    prompt_overrides:dict[str,Annotated[str,Field(min_length=1)]]=Field(default_factory=dict)
+    reference_image_ids:dict[str,Annotated[list[Annotated[str,Field(min_length=1,max_length=64)]],Field(max_length=9)]]=Field(default_factory=dict)
+    motion_reference_overrides:dict[str,Annotated[list[MotionReferenceInput],Field(max_length=3)]]=Field(default_factory=dict)
     max_retries:int=Field(default=2,ge=0,le=3)
+
+    @model_validator(mode='after')
+    def explicit_inputs(self):
+        if any(not prompt.strip() for prompt in self.prompt_overrides.values()):
+            raise ValueError('镜头生成要求不能为空白')
+        if any(len(ids)!=len(set(ids)) for ids in self.reference_image_ids.values()):
+            raise ValueError('同一镜头不能重复选择参考图片')
+        return self
 
 class DraftAssemblyEdit(StudioInput):
     expected_run_id:str=Field(min_length=1,max_length=64)
@@ -49,6 +61,8 @@ class ComposeInput(StudioInput):
     expected_decisions:dict[str,int]|None=None
     transition:Literal['cut','crossfade']='cut'
     transition_duration:float=Field(default=.5,ge=0,le=3)
+    resolution_mode:Literal['source','custom']|None=None
+    allow_downscale:bool=False
     width:int=Field(default=1280,ge=128,le=3840,multiple_of=2)
     height:int=Field(default=720,ge=128,le=3840,multiple_of=2)
     fps:Literal[24,25,30]=24

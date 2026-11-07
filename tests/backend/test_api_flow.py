@@ -35,7 +35,7 @@ def create_approved_character(client: TestClient) -> tuple[str, str]:
             json={
                 "id": "hero_test",
                 "slug": "hero_test",
-                "display_name": "角色甲测试",
+                "display_name": "林岚测试",
                 "description": "虚构测试人物",
             },
         ),
@@ -242,7 +242,7 @@ def test_character_reassignment_invalidates_old_video_and_blocks_reapproval(clie
             f"/api/characters/{character_id}/versions",
             json={
                 "identity": {
-                    "fixed_identity": "角色甲身份档案第二版",
+                    "fixed_identity": "林岚身份档案第二版",
                     "default_clothing": "鼠尾草绿风衣",
                 }
             },

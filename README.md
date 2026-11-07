@@ -1,96 +1,119 @@
 # AI 视频自动化工厂
 
-将 Word 剧本、人物和产品参考素材组织成可审核的视频生产流程：解析剧本、准备角色与场景、生成关键画面和视频、处理声音与画质，再合成 MP4。网页与后台由 Docker 运行，生成模型由你在设置页配置。
+把 Word 剧本、人物与产品参考、分镜生成、人工审核和 MP4 合成放在同一条生产流程中。Windows 和 Mac 用 Docker Desktop 运行网页与后台；本地模型由用户在自己的推理主机单独安装，在**系统设置 → 服务档案**填写接口。
 
-> 源码、`latest` 与固定提交镜像已公开，两轮发布工作流、两架构匿名拉取和正式镜像的本机空卷首次启动均已验证。各环境与模型范围见 [发布验收记录](docs/RELEASE_VALIDATION.md)；正式版本请对照 [Tags](https://github.com/willzhang35929924-ui/AI_Video_Creation/tags)、[Releases](https://github.com/willzhang35929924-ui/AI_Video_Creation/releases) 及关联 Actions 的实际结果。
+本次源码包含 Context-IR 全链路和 Fast 4 / Quality 20 / Quality 30 三档工作流。默认命令会构建**当前下载的源码**，避免旧 GHCR 镜像缺少这些功能。模型、CUDA 环境、私人数据和 API Key 均不随项目提供。
 
-## 普通用户安装
+## 1. 下载后启动网页
 
-1. 安装并启动 [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) 或 [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)。Windows 选择 WSL 2 / Linux 容器；Mac 安装与你的芯片对应的版本。
-2. 从 [项目仓库](https://github.com/willzhang35929924-ui/AI_Video_Creation) 点击 **Code → Download ZIP**，解压后进入包含 `compose.yaml` 的文件夹。也可运行 `git clone https://github.com/willzhang35929924-ui/AI_Video_Creation video-factory`。
-3. 在这个文件夹打开 PowerShell 或终端，执行：
+安装并启动 [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) 或 [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/)。Windows 使用 WSL 2 后端及 Linux 容器；Mac 选择对应芯片版本。
 
-   ```bash
-   docker compose up -d
-   ```
+从本仓库 **Code → Download ZIP** 解压，进入包含 `compose.yaml` 的目录。也可用 Git：
 
-4. 打开 进入VideoFctory管理文件夹，双击管理程序，进入[http://127.0.0.1:8080](http://127.0.0.1:8080)，进入**系统设置 → 服务档案**，配置需要的模型服务并测试连接，然后在项目工作台导入 Word。
+```bash
+git clone https://github.com/willzhang35929924-ui/AI_Video_Creation.git video-factory
+cd video-factory
+docker compose up -d
+```
 
-生产部署会拉取已发布镜像；不需要在宿主机安装 Python、Node.js、数据库或 FFmpeg。默认值已经可以启动网页，**无需先创建 `.env` 或填写 API Key 才能启动**。模型推理需要你自己的服务、权限和额度，不随应用附送。初次下载镜像需要网络与磁盘空间。
+等待首次构建与健康检查完成，打开 **[http://127.0.0.1:8080](http://127.0.0.1:8080)**。无需先创建 `.env`，应用主机也无需安装 Python、Node.js、SQLite 或 FFmpeg。构建需要联网获取 Docker 基础镜像、锁定依赖和 Debian 软件包；后续构建会利用缓存。
 
-详细步骤：[Windows 安装](docs/INSTALL_WINDOWS.md)、[macOS 安装](docs/INSTALL_MACOS.md)、[完整使用教程](docs/USER_GUIDE_ZH.md)。
+`compose.yaml` 使用 [Compose 官方支持的 `pull_policy: build`](https://docs.docker.com/reference/compose-file/services/#pull_policy)，所以这条命令会构建本地源码，无需额外输入 `--build`。数据保存在命名卷中，不会因重建镜像而清空。
 
-## 能做什么
+详细安装：[Windows](docs/INSTALL_WINDOWS.md) · [macOS](docs/INSTALL_MACOS.md) · [故障排查](docs/TROUBLESHOOTING_ZH.md)。
 
-- 生成、审核、导出 Word 剧本，或导入完整 Word 模板并检查解析结果。
-- 管理人物素材、声音参考、固定产品与道具图；项目中的人物图和产品图均可按需添加。
-- 配置语言、图像、视频、语音、画质等用途的服务档案，并按已实现的协议连接本地或云端服务。
-- 自动编排镜头任务，记录任务与生成版本；生成失败时提供原因与重试入口。
-- 审核关键画面和视频、提交修改、编辑完整提示词；合成工作台选择已批准的视频版本输出 MP4。
-- 使用镜像内的 FFmpeg 做媒体探测与合成。ComfyUI、H3、CosyVoice、IndexTTS、SeedVR2 等保留对应功能与连接边界，**模型权重和 GPU 运行环境不在通用镜像里**。
+## 2. 单独安装模型与推理节点
 
-## 平台与模型边界
+网页容器与 GPU 推理节点分开部署：
 
-| 环境 | 应用部署路线 | 模型生成路线 |
+| 使用方式 | 应用运行位置 | 模型运行位置 |
 | --- | --- | --- |
-| Windows x86-64 | Docker Desktop，Linux AMD64 镜像 | 云端 API；或已独立部署且容器可访问的受控服务 |
-| Mac Apple Silicon | Docker Desktop，Linux ARM64 镜像 | 优先云端 API；可兼容的原生宿主机服务必须另行验证 |
-| Mac Intel | Docker Desktop，Linux AMD64 镜像 | 同上；不能把 Windows CUDA 运行环境搬入 Mac 容器 |
+| Windows NVIDIA 本机 | Docker Desktop | 同机独立的 ComfyUI、Qwen、H3 与节点运行环境 |
+| Mac 连接本地 H3 三档 | Docker Desktop | 用户自己的 Windows NVIDIA 推理主机，通过受控局域网连接；Linux 原生节点待验收 |
+| 云端 API | Windows 或 Mac 的 Docker Desktop | 所选供应商；必须使用本项目已经实现的接口协议 |
 
-多架构构建与 Mac 实机验收分别记录。**当前 Mac 实机测试为 BLOCKED，未取得 Mac 设备验证**；不能据此承诺所有 Mac 上的模型推理和视频生成已经验证通过。实际构建、发布和业务测试状态见发布验收记录：[发布验收记录](docs/RELEASE_VALIDATION.md)。
+**先按 [本地推理节点部署教程](docs/local-inference.md) 安装模型、依赖和项目节点，再做接口配置。** 仓库提供 `scripts/local_inference/` 的部署工具、`runtime-manifests/` 的来源校验清单，以及 `workflows/` 的工作流；不自动重新下载已有权重，不把模型打入普通应用容器。
 
-Windows 原生 H3 生视频，以及 SeedVR2 的 720p 横屏和 1080p 竖屏目标处理已有验证；容器业务、最终发布镜像和其余服务组合的验证范围以逐项验收记录为准。普通容器不自动下载或启动 NVIDIA/CUDA 模型，也不会为 Apple GPU 提供 CUDA。原生 Windows 的结果不能作为 Linux 容器或 Mac 推理验证。模型显存、许可证与硬件要求以所选模型的官方说明为准。
+Context-IR 节点入口默认端口为 **8788**，内部协调 ComfyUI 与本地视觉语言服务。只运行普通 ComfyUI 的 8188/8189 端口，或仅能访问 `/v1/models`，都不足以说明 Context-IR 已部署完成。需要对应节点、模型、受支持的运行版本和真实图像理解能力。
 
-## 服务依赖与数据
+Mac 的 Docker 网页与 NVIDIA 推理是两件事。此项目不把 Windows CUDA 环境转换为 Metal/MPS，也未完成 Mac 物理设备或 Linux GPU 节点的生成实测。实际范围以[验收记录](docs/RELEASE_VALIDATION.md)为准。
+
+## 3. 在设置页连接自己的服务
+
+在 **系统设置 → 添加服务** 中按用途保存服务档案。配置本地 H3 三档视频：
+
+1. 服务用途选 **视频生成**，提供商选 **本地 / 私有 ComfyUI**。
+2. 内置视频工作流选 **Context-IR 三档：Fast 4 / Quality 20 / Quality 30**。
+3. 同一台 Docker Desktop 宿主机填 `http://host.docker.internal:8788`；另一台自有 GPU 主机填实际受控地址，例如 `http://192.168.1.20:8788`。
+4. 勾选 **确认这是我管理的本地模型服务**，保存后点 **测试连接**，根据实际诊断补齐模型或节点。
+5. 在项目的视频服务选择处采用这个档案，保存项目配置。
+
+这条路径无需修改 `.env`。本地信任只用于该档案的精确服务地址，不会放开任意文件导入或媒体 URL。容器内的 `localhost` 指向容器自身；远程服务还需正确监听并允许受控网络访问。HTTP 只用于明确确认的本地/私有推理服务，云端地址仍需 HTTPS。
+
+其他用途也要按实际适配器配置和测试。图像、语言、视频接口不是同一种协议；本机语音/口型的 CLI 适配器不能凭一个任意 HTTP 地址变成远程服务。密钥只在设置页输入并加密保存。更多说明见[完整使用教程](docs/USER_GUIDE_ZH.md)。
+
+## 4. 选择三档与参考素材
+
+在**系统设置的制作画质**或**项目的制作画质**中选择并保存：
+
+| 网页选项 | 实际工作流 | 采样步骤 |
+| --- | --- | --- |
+| Fast | `H3_R2V_OpenH3IR_SMD4_Fast`，加载对应 4step LoRA 与固定采样配方 | 4 |
+| 标准 | `H3_R2V_OpenH3IR_Quality` | 20 |
+| 高质量 | `H3_R2V_OpenH3IR_Quality` | 30 |
+
+三档都启用 Context-IR：读取上传的图片、文字和参考视频，编译镜头要求后交给 H3。参考视频默认提供动作/摄影结构；人物和产品身份仍由明确绑定的图片与剧本要求确定。四步方案需要实际 LoRA 和节点支持，不能只把步数改成 4。
+
+新任务冻结工作流、采样步骤、素材哈希和模型服务快照；改档不会替换已经提交的任务。可在视频任务的**提示词、参考与复现快照**查看实际执行配置。后期超分、生成原始尺寸与最终合成尺寸分别设置；选择 4K 不代表模型原生生成 4K。
+
+## 5. 下载 Word 模板并完成第一条视频
+
+当前空白模板：**[剧本模板.docx](docs/templates/剧本模板.docx)**。也可以在**项目工作台 → Word 导入 → 下载 Word 模板**获取同一文件；[完整示例](docs/templates/剧本导入示例.docx)保留供字段对照。
+
+1. 保留模板标题、表格字段与列名，填写项目、人物、场景、道具、分镜、摄影、对白和声音策略。固定产品名称要与图库一致。
+2. 导入 Word，先核对人物、镜头、时长、画幅、说话人和解析歧义。
+3. 按需要添加人物参考、声音参考，以及人物参考下方的**固定产品／道具图**。人物和产品参考均可选；需要保持外观时再配置。
+4. 选择视频服务与三档画质并保存，从程序点击开始制作。等待真实服务返回；遇到问题先按错误修复，保留已接受的任务 ID。
+5. 实际播放并审核素材和分镜；在合成工作台选择已批准版本，渲染最终 MP4，下载检查画面、声音与时长。
+
+先用一条短镜头验收，再扩展整集。容器健康、连接成功和进度完成都不等于画面或成片已通过人工审核。操作细节见 [Word 到 MP4 教程](docs/USER_GUIDE_ZH.md)。
+
+## 6. 服务、数据与日常维护
 
 ```mermaid
 flowchart LR
-    B[浏览器] --> F[Nginx 前端 :8080]
-    F --> A[FastAPI 后端 :8765 / 单进程]
-    A --> D[(SQLite 与用户文件 / app_data)]
-    A --> W[进程内异步任务队列]
-    W --> X[FFmpeg]
-    W --> C[外部模型 API 或独立推理服务]
+    B[浏览器 :8080] --> F[Nginx 前端]
+    F --> A[FastAPI 单进程后端]
+    A --> D[(SQLite 与媒体 app_data)]
+    A --> Q[数据库任务记录与异步执行]
+    Q --> N[自有 NVIDIA 节点 :8788]
+    N --> V[本地 Qwen / Context-IR]
+    N --> H[ComfyUI / H3 / 4step LoRA]
+    Q --> C[已支持的云端 API]
+    Q --> M[容器内 FFmpeg]
     A --> L[app_logs / app_reports]
 ```
 
-实际只有 `frontend`、`backend` 两个 Compose 服务；没有 Redis、Celery 或 PostgreSQL。不要增加 Uvicorn worker 数量或启动多份后端共享同一数据卷。详细说明见 [架构文档](docs/ARCHITECTURE.md)。
+Compose 只有前端、后端两个服务；SQLite 与任务队列不依赖另装 PostgreSQL 或 Redis。后端保持单进程，不要同时启动多份后端共享同一套数据卷。首次启动自动迁移并建立空白业务库；不带维护者的历史记录、素材、密钥或模型。
 
-三个命名卷保存业务数据、日志与报告：`app_data`、`app_logs`、`app_reports`。实际卷名由 Compose 项目名加前缀。数据库、上传素材、剧本、工作流、角色参考、生成结果和加密主密钥位于 `app_data`。容器重建不清空数据卷；改用另一个项目名会创建另一套卷。
-
-首次启动自动迁移并建立空白业务库；不会导入维护者的历史项目、素材、密钥或模型档案。升级会执行版本化迁移，旧 SQLite 在迁移前会生成结构升级备份；这不代替你自己的完整离机备份。
-
-## 日常操作
+`app_data` 保存数据库、用户素材、生成结果和 `/app/data/.secrets/master.key`；`app_logs`、`app_reports` 保存日志和报告。实际卷名前缀为 Compose 项目名，默认 `video-factory`。换项目名会连接另一套数据；只复制源码文件夹不能备份这些卷。
 
 ```bash
-# 状态和最近日志
 docker compose ps
 docker compose logs --tail=100 backend frontend
-
-# 配置、数据目录等启动诊断；不会执行付费推理
 docker compose exec backend python -m app.container_entrypoint doctor
-
-# 更新：拉取远程镜像并按需重建，保留数据卷
-docker compose up -d
-
-# 暂停与再次启动
 docker compose stop
-docker compose up -d
-
-# 移除应用容器和项目网络，保留业务数据卷
-docker compose down
+docker compose start
 ```
 
-后台健康信息：[http://127.0.0.1:8080/api/health/runtime](http://127.0.0.1:8080/api/health/runtime)。`application_ready: true` 表示基础应用已就绪；外部模型缺失可能显示 `degraded`。健康检查不会替你做模型生成验收。
+升级前先备份：Windows `./scripts/backup-docker.ps1`，Mac `bash ./scripts/backup-docker.sh`。随后更新源码，再运行 `docker compose up -d` 重新构建。备份包含私人数据库、文件与解密主密钥，应离机保存。恢复必须使用匹配的完整归档；参见[备份与恢复](docs/DOCKER_RELEASE_GUIDE_ZH.md)。不要在普通更新中运行 `docker compose down -v`。
 
-**升级前先备份。** Windows 运行 `./scripts/backup-docker.ps1`，Mac 运行 `bash ./scripts/backup-docker.sh`。保管脚本输出的归档和校验信息；归档包含数据库、媒体和解密服务配置所需的主密钥，是私人数据。恢复到全新空数据卷，具体命令见 [备份、恢复与发布教程](docs/DOCKER_RELEASE_GUIDE_ZH.md)。
+基础健康接口：[运行状态](http://127.0.0.1:8080/api/health/runtime)。`application_ready: true` 表示网页基础应用就绪；外部模型未配置时可显示 `degraded`，仍需另外做真实生成测试。
 
-不要在更新、迁移或普通卸载时使用 `docker compose down -v`：它会删除命名数据卷。不要为了排错删除主密钥、数据库或执行全盘 Docker 清理。
+## 其他部署方式
 
-## 配置外部服务
+- **预构建发行镜像：** `docker compose -f compose.prebuilt.yaml up -d`。它使用 GHCR 已发布镜像，可能早于当前源码，**不能假定已经包含本次 Context-IR 更新**。先核对版本与[发布记录](docs/RELEASE_VALIDATION.md)，不要把旧镜像直接降级到新版数据库。
+- **独立开发环境：** `docker compose -f compose.dev.yaml up -d --build`，默认项目 `video-factory-dev`、端口 `18083`，避免与正式业务卷混用。
+- **可选部署参数：** `.env.example` 可调整端口、镜像源及管理员默认地址；普通设置页服务配置无需编辑它，不在文件中填写真实 API Key。
 
-在设置页按用途选择服务、协议、地址和模型，输入自己的凭据并测试；密钥通过后端加密保存。`.env.example` 只提供端口及受控本地服务等可选部署配置，不能写入真实密钥后提交。
-
-容器里的 `localhost` 指向容器自身。连接 Docker Desktop 宿主机服务时通常使用 `host.docker.internal`，例如 `http://host.docker.internal:8189`，并配置精确的本地服务 origin 白名单。只绑定宿主机 `127.0.0.1` 的服务未必能通过该地址访问，需按实际监听、防火墙和访问权限验证。远程 Mac mini 或 GPU 主机使用可达的受控地址。详见 [使用教程](docs/USER_GUIDE_ZH.md)。
-
-能列出模型不表示视频接口可用；语言模型也不因为配置在视频用途就能返回视频。更换中转供应商时，必须确认应用已支持它的提交、查询和结果协议。
+模型许可证、显存与运行框架限制由用户按模型官方说明核对。项目自有代码许可证见 [LICENSE](LICENSE)，第三方内容见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -1,4 +1,5 @@
 import json
+import os
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,9 +11,20 @@ from app.core.secrets import protect
 from app.models import AIService, Project, ProjectServiceBinding
 from app.models.entities import utcnow
 from app.schemas_product import BindingRequest, ServiceCreate, ServicePatch
-from app.services.ai_services import MODULES, probe_service, public_service, validate_configuration
+from app.services.ai_services import (MODULES, BUILTIN_VIDEO_WORKFLOWS, normalize_service_settings,
+    probe_service, public_service, validate_configuration)
 
 router = APIRouter(prefix='/api')
+
+
+@router.get('/settings/ai-service-options')
+def service_options():
+    container = os.getenv('VIDEO_FACTORY_CONTAINER', '').lower() in {'1', 'true', 'yes'}
+    host = 'host.docker.internal' if container else '127.0.0.1'
+    return {'container': container, 'defaults': {
+        'comfyui': f'http://{host}:8189', 'local_llm': f'http://{host}:1234/v1',
+        'context_ir': f'http://{host}:8788'}, 'video_workflows': BUILTIN_VIDEO_WORKFLOWS,
+        'notice': '模型独立安装并启动；连接测试不下载权重、不生成付费任务。语音和口型固定运行时尚不支持任意HTTP接口。'}
 
 
 @router.get('/settings/ai-services')
@@ -27,11 +39,12 @@ def list_services(module: str | None = None, session: Session = Depends(get_db))
 def create_service(payload: ServiceCreate, session: Session = Depends(get_db)):
     if payload.api_key and payload.api_key.get_secret_value() and set(payload.api_key.get_secret_value().strip()) <= {'*','•','●'}:
         raise AppError(422,'masked_key_forbidden','遮罩不是有效密钥')
-    validate_configuration(payload.module, payload.provider, payload.base_url, payload.settings)
+    options = normalize_service_settings(payload.module, payload.provider, payload.base_url, payload.settings)
+    validate_configuration(payload.module, payload.provider, payload.base_url, options)
     if payload.provider == 'ffmpeg' and (payload.default_model or payload.models or payload.api_key):
         raise AppError(422, 'ffmpeg_not_ai', 'FFmpeg 不需要模型或 API Key')
     key = payload.api_key.get_secret_value() if payload.api_key else ''
-    row = AIService(module=payload.module, provider=payload.provider, name=payload.name, base_url=payload.base_url.rstrip('/'), enabled=payload.enabled, default_model=payload.default_model, models_json=[{'id': value, 'source': 'manual', 'capability': 'unverified'} for value in payload.models], settings_json=payload.settings, encrypted_secret=protect(key) if key else None)
+    row = AIService(module=payload.module, provider=payload.provider, name=payload.name, base_url=payload.base_url.rstrip('/'), enabled=payload.enabled, default_model=payload.default_model, models_json=[{'id': value, 'source': 'manual', 'capability': 'unverified'} for value in payload.models], settings_json=options, encrypted_secret=protect(key) if key else None)
     session.add(row)
     session.flush()
     audit(session, 'ai_service', row.id, 'created', {'module': row.module, 'provider': row.provider, 'has_api_key': bool(row.encrypted_secret)})
@@ -48,6 +61,7 @@ def patch_service(service_id: str, payload: ServicePatch, session: Session = Dep
         raise AppError(409, 'clear_confirmation_required', '清除密钥需要明确二次确认')
     options = payload.settings if payload.settings is not None else row.settings_json
     base = payload.base_url if payload.base_url is not None else row.base_url
+    options = normalize_service_settings(row.module, row.provider, base, options)
     validate_configuration(row.module, row.provider, base, options)
     if row.provider == 'ffmpeg' and (payload.api_key or payload.default_model or payload.models):
         raise AppError(422, 'ffmpeg_not_ai', 'FFmpeg 不使用密钥或模型')

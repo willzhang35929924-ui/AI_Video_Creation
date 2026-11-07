@@ -204,6 +204,35 @@ def test_unfinished_video_does_not_change_generation_mapping(prepared, settings)
     assert run.snapshot_json == before
 
 
+@pytest.mark.parametrize('scope', ['project', 'shot'])
+@pytest.mark.parametrize('context_run', [True, False])
+def test_workflow_mode_edit_requires_new_run_even_before_quality_nodes(context, settings, scope, context_run):
+    session, _, project, shot, _ = context
+    frozen = QualitySettings(mode='high').model_dump()
+    next_run = QualitySettings(mode='fast').model_dump()
+    workflow = {'quality_mode': 'high', 'workflow_id': 'H3_R2V_OpenH3IR_Quality', 'actual_steps': 30}
+    snapshot = {
+        'shot_ids': [shot.id],
+        'options': {'quality': frozen, 'quality_by_shot': {shot.id: frozen}},
+    }
+    if context_run:
+        snapshot.update(context_production=True, h3_context_by_shot={shot.id: {'service': {'h3_workflow': workflow}}})
+    run = m.StudioRun(project_id=project.id, status='paused', snapshot_json=snapshot,
+        nodes_json=[{'id': 'video:' + shot.id, 'kind': 'video', 'target_id': shot.id, 'status': 'pending'}],
+        result_json={})
+    target_id = project.id if scope == 'project' else shot.id
+    profile = m.QualityProfile(scope=scope, target_id=target_id, revision=1, settings_json=next_run)
+    session.add_all([run, profile]); session.commit()
+
+    with pytest.raises(AppError) as blocked:
+        apply_saved_quality(session, settings, project.id, expected_profile_revision=1 if scope == 'project' else 0)
+    assert blocked.value.code == ('quality_apply_context_mode_frozen' if context_run else 'quality_apply_legacy_fast_requires_new_run')
+    assert blocked.value.details['run_id'] == run.id
+    session.expire_all()
+    assert run.snapshot_json == snapshot and run.nodes_json[0]['status'] == 'pending'
+    assert profile.settings_json == next_run
+
+
 def test_unsupported_cloud_upscale_is_not_replaced_or_authorized(prepared, settings):
     session, project, _, _, run, service, *_ = prepared
     service.provider = 'openai_compatible'; service.base_url = 'https://example.invalid/v1'

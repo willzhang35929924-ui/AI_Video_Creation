@@ -7,6 +7,10 @@ import { EmptyState, FormField, LoadingState, PageHeader } from '../components/u
 import { useStudio, StudioProjectPicker, StudioStatus, recordText, shotTime, studioVideoDuration } from '../lib/studio-ui';
 import '../studio.css';
 import { QualityDurationWarning, QualityMediaReport, QualityPostprocess, useQualityProfile } from '../components/QualitySettings';
+import { reducesResolution, sourceCanvas, videoResolution } from '../lib/assembly-resolution';
+
+const defaultOptions:ComposeInput={transition:'cut',transition_duration:.5,width:1280,height:720,
+  resolution_mode:'source',allow_downscale:false,fps:24,audio_policy:'preserve',subtitles:false};
 
 export function StudioReviewPage() {
   const studio = useStudio();
@@ -16,9 +20,9 @@ export function StudioReviewPage() {
   const [busy, setBusy] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [trimStart, setTrimStart] = useState('0'), [trimEnd, setTrimEnd] = useState(''), [position, setPosition] = useState(1), [instruction, setInstruction] = useState('');
   const [promptEnabled,setPromptEnabled]=useState(false),[promptText,setPromptText]=useState(''),[promptLoading,setPromptLoading]=useState(false),[promptReferences,setPromptReferences]=useState<string[]>([]);
-  const [options, setOptions] = useState<ComposeInput>({ transition: 'cut', transition_duration: .5, width: 1280, height: 720, fps: 24, audio_policy: 'preserve', subtitles: false });
+  const [options, setOptions] = useState<ComposeInput>(defaultOptions);
   const outputInitialized=useRef(''),outputTouched=useRef(false);
-  useEffect(()=>{outputInitialized.current='';outputTouched.current=false;setOptions({transition:'cut',transition_duration:.5,width:1280,height:720,fps:24,audio_policy:'preserve',subtitles:false});},[projectId]);
+  useEffect(()=>{outputInitialized.current='';outputTouched.current=false;setOptions(defaultOptions);},[projectId]);
   useEffect(()=>{if(!projectId||projectQuality.profile?.scope!=='project'||projectQuality.profile.target_id!==projectId||outputInitialized.current===projectId)return;
     const target=projectQuality.profile.plan.requested||{};
     if(!outputTouched.current)setOptions(old=>({...old,width:Number(target.width)||1280,height:Number(target.height)||720}));
@@ -42,6 +46,12 @@ export function StudioReviewPage() {
   const previewingVersion=Boolean(savedSelected&&selectedVersionId!==(savedSelected.video?.id||''));
   const selectedIndex = selected ? ordered.findIndex(shot => shot.id === selected.id) : -1;
   const kept = ordered.filter(shot => shot.decision.action === 'keep'), excluded = ordered.filter(shot => shot.decision.action === 'exclude');
+  const sources=kept.map(shot=>videoResolution(shot.video?.metadata_json));
+  const followsSource=options.resolution_mode==='source';
+  const canvas=followsSource?sourceCanvas(sources):{width:options.width??0,height:options.height??0};
+  const downscale=Boolean(!followsSource&&canvas&&reducesResolution(canvas,sources));
+  const exportBlocked=downscale&&!options.allow_downscale;
+  const finalRenders=(data?.renders||[]).filter(render=>render.kind!=='preview');
   const undecided = shots.filter(shot => !['keep','exclude'].includes(shot.decision.action || 'pending'));
   const decisionFingerprint = shots.map(shot => `${shot.id}:${shot.video?.id}:${shot.decision.revision}:${shot.decision.action}:${shot.decision.position}:${shot.decision.trim_start}:${shot.decision.trim_end}`).join('|');
   const draftKey = selected ? `${selected.id}:${selected.video?.id}:${selected.decision.revision}` : '';
@@ -65,6 +75,7 @@ export function StudioReviewPage() {
   }, [draftKey]);
   useEffect(()=>()=>{promptRequest.current?.abort.abort();promptRequest.current=null;},[]);
   useEffect(() => { setConfirmed(false); }, [projectId, decisionFingerprint, options, unsavedDecision]);
+  useEffect(()=>setOptions(old=>old.allow_downscale?{...old,allow_downscale:false}:old),[decisionFingerprint]);
   const selectShot = useCallback((shotId: string) => {
     if(shotId===selected?.id)return;
     if(unsavedDecision&&!window.confirm('当前镜头有未保存的版本选择、裁剪或修改说明，仍要丢弃草稿并切换镜头吗？'))return;
@@ -123,9 +134,9 @@ export function StudioReviewPage() {
     });
   }
   async function compose(e: React.FormEvent) {
-    e.preventDefault(); if (!confirmed || undecided.length || !kept.length || busy || unsavedDecision || projectQuality.loading || !projectQuality.profile) return;
+    e.preventDefault(); if (!confirmed || undecided.length || !kept.length || busy || unsavedDecision || exportBlocked || projectQuality.loading || !projectQuality.profile) return;
     await perform('compose', async () => {
-      const result = await request<ComposeResult>(`/api/studio/projects/${projectId}/compose`, { method: 'POST', body: JSON.stringify({...options,expected_decisions:confirmedDecisions}) });
+      const result = await request<ComposeResult>(`/api/studio/projects/${projectId}/compose`, { method: 'POST', body: JSON.stringify({...options,...canvas,expected_decisions:confirmedDecisions}) });
       setNotice(`已创建独立成片版本 ${result.render_id}，${result.status === 'generated' ? '输出已生成' : '等待实际合成'}。`); setConfirmed(false);
     });
   }
@@ -159,19 +170,25 @@ export function StudioReviewPage() {
         </article> : null}
       </section>
       <section className="card studio-panel"><div className="studio-section-heading"><div><h2>最终时间线</h2><p>移动顺序会保存到数据库。排除保留原文件，合成时跳过。</p></div><span>{kept.length} 镜纳入 · 预计 {shotTime(estimatedDuration)}</span></div><ol className="studio-timeline">{ordered.map((shot,index) => <li key={shot.id} className={shot.decision.action==='exclude' ? 'studio-timeline-excluded' : ''}><span className="studio-timeline-position">{index+1}</span><button type="button" className="studio-text-button" onClick={() => selectShot(shot.id)}>#{shot.order} · {shot.title || shot.scene_name}</button><StudioStatus status={shot.decision.action || 'pending'}/><span>{shot.decision.trim_start || 0} → {shot.decision.trim_end ?? studioVideoDuration(shot.video) ?? '结尾'} 秒</span><div className="studio-actions"><button className="button button-secondary button-small" aria-label={`上移镜头 ${shot.order}`} disabled={Boolean(busy)||unsavedDecision||index===0} onClick={() => void move(shot,index)}><ArrowLeft size={14}/></button><button className="button button-secondary button-small" aria-label={`下移镜头 ${shot.order}`} disabled={Boolean(busy)||unsavedDecision||index===ordered.length-1} onClick={() => void move(shot,index+2)}><ArrowRight size={14}/></button></div></li>)}</ol></section>
-      <form className="card studio-panel" onSubmit={compose}><h2>一次确认合成成片</h2><p className="studio-muted">初始输出尺寸继承项目制作默认。明确修改后按本次输入导出，后台刷新不会覆盖手动选择；逐镜覆盖仍保留各自实际文件。</p>{projectQuality.loading?<p role="status">读取项目成片默认尺寸…</p>:null}{projectQuality.error?<p role="alert">{projectQuality.error}<button type="button" onClick={()=>void projectQuality.load()}>重新读取成片默认</button></p>:null}<div className="studio-output-grid">
+      <form className="card studio-panel" onSubmit={compose}><h2>一次确认合成成片</h2><p className="studio-muted">默认跟随已保留版本的实际尺寸。混合尺寸时使用可容纳所有原片的画布，保持各镜头比例。</p>{projectQuality.loading?<p role="status">读取项目自定义尺寸…</p>:null}{projectQuality.error?<p role="alert">{projectQuality.error}<button type="button" onClick={()=>void projectQuality.load()}>重新读取项目尺寸</button></p>:null}<div className="studio-output-grid">
+        <FormField label="输出尺寸模式"><select value={options.resolution_mode??'source'} onChange={e=>{
+          const mode=e.target.value as 'source'|'custom';
+          setOptions(old=>({...old,...(mode==='custom'?canvas:undefined),resolution_mode:mode,allow_downscale:false}));
+        }}><option value="source">跟随源片</option><option value="custom">自定义分辨率</option></select></FormField>
         <FormField label="转场"><select value={options.transition} onChange={e => setOptions(value => ({...value,transition:e.target.value as 'cut'|'crossfade'}))}><option value="cut">硬切</option><option value="crossfade">交叉淡化</option></select></FormField>
         <FormField label="转场时长（秒）"><input type="number" min="0.1" max="2" step="0.1" disabled={options.transition !== 'crossfade'} value={options.transition_duration} onChange={e => setOptions(value => ({...value,transition_duration:Number(e.target.value)}))}/></FormField>
-        <FormField label="输出宽度"><input type="number" min="256" max="3840" step="2" value={options.width} disabled={projectQuality.loading||!projectQuality.profile} onChange={e => {outputTouched.current=true;setOptions(value => ({...value,width:Number(e.target.value)}));}}/></FormField>
-        <FormField label="输出高度"><input type="number" min="256" max="3840" step="2" value={options.height} disabled={projectQuality.loading||!projectQuality.profile} onChange={e => {outputTouched.current=true;setOptions(value => ({...value,height:Number(e.target.value)}));}}/></FormField>
+        <FormField label="输出宽度"><input type="number" min="128" max="3840" step="2" value={canvas?.width??''} disabled={followsSource||projectQuality.loading||!projectQuality.profile} onChange={e => {outputTouched.current=true;setOptions(value => ({...value,width:Number(e.target.value),allow_downscale:false}));}}/></FormField>
+        <FormField label="输出高度"><input type="number" min="128" max="3840" step="2" value={canvas?.height??''} disabled={followsSource||projectQuality.loading||!projectQuality.profile} onChange={e => {outputTouched.current=true;setOptions(value => ({...value,height:Number(e.target.value),allow_downscale:false}));}}/></FormField>
         <FormField label="输出帧率"><select value={options.fps} onChange={e => setOptions(value => ({...value,fps:Number(e.target.value) as 24|25|30}))}>{[24,25,30].map(fps => <option key={fps} value={fps}>{fps} fps</option>)}</select></FormField>
         <FormField label="声音处理"><select value={options.audio_policy} onChange={e => setOptions(value => ({...value,audio_policy:e.target.value as 'preserve'|'mute'}))}><option value="preserve">保留原镜头音轨</option><option value="mute">静音成片</option></select></FormField>
       </div><label className="studio-check"><input type="checkbox" checked={options.subtitles} onChange={e => setOptions(value => ({...value,subtitles:e.target.checked}))}/><span>嵌入可选中文字幕轨。按镜头区间使用剧本对白，未做逐句语音对齐。</span></label>
-      <div className="studio-compose-summary"><p>保留 {kept.length} 镜，排除 {excluded.length} 镜，待决定 {undecided.length} 镜。输出 {options.width} × {options.height} · {options.fps} fps · H.264 MP4；{options.audio_policy==='preserve' ? '保留原音轨' : '静音'}，{options.transition==='cut' ? '硬切' : `${options.transition_duration}秒交叉淡化`}。</p><p>成片生成独立版本，保留原始视频及历史成片。预计时长仅为剪辑计算，实际结果以合成后检查为准。</p></div>
+      {!followsSource?<label className="studio-check"><input type="checkbox" checked={options.allow_downscale} onChange={e=>setOptions(old=>({...old,allow_downscale:e.target.checked}))}/><span>允许降低源片分辨率</span></label>:null}
+      {downscale?<p role="status" className="inline-notice warning">这个尺寸会缩小已审核的源片。</p>:null}
+      <div className="studio-compose-summary"><p>保留 {kept.length} 镜，排除 {excluded.length} 镜，待决定 {undecided.length} 镜。输出 {canvas?`${canvas.width} × ${canvas.height}`:'按实际源片测量'} · {options.fps} fps · H.264 MP4；{options.audio_policy==='preserve' ? '保留原音轨' : '静音'}，{options.transition==='cut' ? '硬切' : `${options.transition_duration}秒交叉淡化`}。</p><p>成片生成独立版本，保留原始视频及历史成片。预计时长仅为剪辑计算，实际结果以合成后检查为准。</p></div>
       {unsavedDecision?<p role="status" className="inline-notice warning">当前镜头有未保存的版本选择、裁剪、顺序或修改说明。请先保存审片决定或提交修改，再确认成片。</p>:null}
-      <label className="studio-check"><input type="checkbox" checked={confirmed} disabled={Boolean(undecided.length)||!kept.length||unsavedDecision||projectQuality.loading||!projectQuality.profile} onChange={e => {setConfirmed(e.target.checked);if(e.target.checked)setConfirmedDecisions(Object.fromEntries(shots.map(shot=>[shot.id,shot.decision.revision??1])));}}/><span>我已审核所有镜头，并确认上述顺序、裁剪和输出设置。</span></label><button className="button button-primary" disabled={Boolean(busy)||!confirmed||Boolean(undecided.length)||!kept.length||unsavedDecision||projectQuality.loading||!projectQuality.profile}><CheckCheck size={18}/>{busy==='compose' ? '正在提交真实合成…' : '按审核结果合成成片'}</button>{undecided.length ? <p className="studio-muted">还有 {undecided.length} 个镜头未作决定，可保留或排除后合成。</p> : null}
+      <label className="studio-check"><input type="checkbox" checked={confirmed} disabled={Boolean(undecided.length)||!kept.length||unsavedDecision||exportBlocked||projectQuality.loading||!projectQuality.profile} onChange={e => {setConfirmed(e.target.checked);if(e.target.checked)setConfirmedDecisions(Object.fromEntries(shots.map(shot=>[shot.id,shot.decision.revision??1])));}}/><span>我已审核所有镜头，并确认上述顺序、裁剪和输出设置。</span></label><button className="button button-primary" disabled={Boolean(busy)||!confirmed||Boolean(undecided.length)||!kept.length||unsavedDecision||exportBlocked||projectQuality.loading||!projectQuality.profile}><CheckCheck size={18}/>{busy==='compose' ? '正在提交真实合成…' : '按审核结果合成成片'}</button>{undecided.length ? <p className="studio-muted">还有 {undecided.length} 个镜头未作决定，可保留或排除后合成。</p> : null}
       </form>
-      <section className="card studio-panel"><h2>成片版本与导出</h2>{data.renders?.length ? <div className="studio-render-grid">{data.renders.map(render => <article key={render.id}><div className="studio-section-heading"><strong>{render.snapshot_json?.automatic_draft ? '自动生成草稿（待人工审核） · ' : ''}{render.created_at ? recordText(render.created_at).replace('T',' ').slice(0,19) : '成片版本'}</strong><StudioStatus status={render.status}/></div>{render.relative_path && render.status === 'generated' ? <><video controls preload="metadata" src={api.mediaUrl(render.relative_path)} data-testid="studio-final-video"/><a className="button button-secondary" href={api.mediaUrl(render.relative_path)} download><Download size={16}/>下载真实 MP4</a></> : <p>{render.status === 'failed' ? recordText(render.error_message) || '合成失败，已保留错误记录。' : '等待真实合成输出，完成后可播放与下载。'}</p>}<details><summary>本次合成参数与检查</summary><pre className="source-blocks">{JSON.stringify({render_id:render.id,snapshot:render.snapshot_json,metadata:render.metadata_json},null,2)}</pre></details></article>)}</div> : <p className="studio-muted">还没有成片版本。按审核结果提交合成后，实际输出会显示在这里。</p>}</section>
+      <section className="card studio-panel"><h2>成片版本与导出</h2>{finalRenders.length ? <div className="studio-render-grid">{finalRenders.map(render => <article key={render.id}><div className="studio-section-heading"><strong>{render.snapshot_json?.automatic_draft ? '自动生成草稿（待人工审核） · ' : ''}{render.created_at ? recordText(render.created_at).replace('T',' ').slice(0,19) : '成片版本'}</strong><StudioStatus status={render.status}/></div>{render.relative_path && render.status === 'generated' ? <><video controls preload="metadata" src={api.mediaUrl(render.relative_path)} data-testid="studio-final-video"/><a className="button button-secondary" href={api.mediaUrl(render.relative_path)} download><Download size={16}/>下载真实 MP4</a></> : <p>{render.status === 'failed' ? recordText(render.error_message) || '合成失败，已保留错误记录。' : '等待真实合成输出，完成后可播放与下载。'}</p>}<details><summary>本次合成参数与检查</summary><pre className="source-blocks">{JSON.stringify({render_id:render.id,snapshot:render.snapshot_json,metadata:render.metadata_json},null,2)}</pre></details></article>)}</div> : <p className="studio-muted">还没有成片版本。按审核结果提交合成后，实际输出会显示在这里。</p>}</section>
     </> : null}
   </div>;
 }

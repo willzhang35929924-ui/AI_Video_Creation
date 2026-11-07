@@ -1,13 +1,14 @@
 # Docker 部署、升级、备份与发布
 
-普通用户只需要 Docker Desktop 和公开项目文件。开发者才需要源码构建与 GitHub 发布流程。本项目源码及两份 `latest` 镜像已公开，连续两轮 Actions 构建、发布与两架构匿名拉取成功，补充媒体测试及正式 GHCR 镜像的本机三空卷首次启动已通过。各项实测范围见 [发布验收记录](RELEASE_VALIDATION.md)。
+普通用户只需要 Docker Desktop 和公开项目文件。默认命令会构建当前下载的源码，使本次 Context-IR、三档工作流和模板更新实际生效。已有 GHCR 发行镜像是可选路线，不能用此前发行镜像的验收证明本次修改已经发布或通过；实际测试范围见 [发布验收记录](RELEASE_VALIDATION.md)。
 
 ## 1. 镜像与依赖来源
 
 | 内容 | 来源 |
 | --- | --- |
-| 后端应用镜像 | `ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest` |
-| 前端应用镜像 | `ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest` |
+| 默认后端应用镜像 | 当前源码 `backend/Dockerfile`，本地标签 `video-factory-backend:local` |
+| 默认前端应用镜像 | 当前源码 `frontend/Dockerfile`，本地标签 `video-factory-frontend:local` |
+| 可选 GHCR 发行镜像 | `compose.prebuilt.yaml` 指定的前后端镜像；须核对其实际发布版本 |
 | Python 构建基础 | Docker Hub `python:3.12-slim-bookworm`，以当前 Dockerfile 为准 |
 | 前端构建基础 | Docker Hub `node:24.22.1-alpine3.23`，以当前 Dockerfile 为准 |
 | 前端运行基础 | Docker Hub `nginx/nginx-unprivileged:1.30.6-alpine`，以当前 Dockerfile 为准 |
@@ -15,7 +16,7 @@
 | FFmpeg、中文字体 | 后端镜像使用的 Debian 软件包源；实际组件与许可单独记录 |
 | 模型、ComfyUI、GPU 服务 | 用户独立部署或购买的云端服务，不随应用镜像提供 |
 
-应用镜像应提供 `linux/amd64`、`linux/arm64` 多架构清单。默认由 Docker 选择本机架构，不把 ARM Mac 强制固定成 AMD64。基础镜像支持两种架构，不能代替应用自己的多架构构建与运行验收。
+默认源码构建采用 Docker 当前平台，不把 ARM Mac 强制固定成 AMD64。GHCR 发行镜像应另外验证 `linux/amd64`、`linux/arm64` 多架构清单。基础镜像支持两种架构，不能代替应用构建、运行和 Mac 实机验收。
 
 ## 2. 普通部署与开发部署
 
@@ -26,7 +27,9 @@ docker compose up -d
 docker compose ps
 ```
 
-`compose.yaml` 只有 `image`，使用 `pull_policy: always`，不要求用户在自己电脑编译。默认 `127.0.0.1:8080`、三个项目命名卷以及非 root 运行；可选 `.env` 配置参考 `.env.example`。API Key 在网页设置页由后端保存，不放在部署示例或前端环境变量中。
+`compose.yaml` 含 `build`，使用 [Compose 的 `pull_policy: build`](https://docs.docker.com/reference/compose-file/services/#pull_policy)，因此不额外加 `--build` 也会构建当前源码。依赖锁文件和 BuildKit 缓存保留，默认 `127.0.0.1:8080`、项目 `video-factory`、三个命名卷及非 root 运行。无需先创建 `.env`；密钥在设置页保存，不放进部署配置或前端环境变量。
+
+预构建版本使用独立文件：`docker compose -f compose.prebuilt.yaml up -d`。该文件只有发行镜像，采用 `pull_policy: always`；已发布的旧镜像可能缺少本次 Context-IR 更新。先确认版本和数据库兼容性，再选择这条路线，不混合新前端与旧后端。
 
 开发部署是独立 Compose 文件：
 
@@ -85,23 +88,24 @@ docker compose images
 docker compose logs --tail=100 backend
 ```
 
-`up -d` 按 `always` 策略查询并拉取镜像，内容变化时重建容器，卷保持不变。`restart` 只重启现有容器，不能用它代替拉取新版本。
+升级前先更新下载的源码：Git 用户在确认没有自己的未合并修改后运行 `git pull --ff-only`；ZIP 用户另存旧目录、取得新版本并保留自己的部署配置。默认 `up -d` 按 `build` 策略构建当前源码，依赖层命中缓存时会复用；内容变化时替换容器，卷保持不变。`restart` 和 `start` 都不负责构建新源码。
 
 镜像标签含义：
 
-- `latest`：发布流程更新的最新公开应用镜像，适合一般用户。
+- `source`：默认源码构建的版本标识；未传构建信息时提交标签为 `unknown`，不能冒充已发布提交。
+- `latest`：发布流程更新的公开发行镜像，只有 `compose.prebuilt.yaml` 使用它；不保证与当前下载源码相同。
 - `vX.Y.Z`：固定正式版本，用于可重复部署与升级规划；可用版本及关联验证以仓库 Tags、Releases 和相应 Actions 记录为准。
 - `sha-…`：某个源码提交的构建，便于定位问题。
 
 用 `docker compose images` 看正在使用的镜像引用和 ID；GitHub Releases/变更说明查看该版本更新内容。检查 OCI 标签可运行：
 
 ```bash
-docker image inspect ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest --format '{{json .Config.Labels}}'
+docker image inspect video-factory-backend:local --format '{{json .Config.Labels}}'
 ```
 
-`org.opencontainers.image.revision` 等标签对应构建提交；以实际发布镜像为准。前后端应使用同一发布版本，不混合任意提交。
+构建者显式传入 `VCS_REF`、`APP_VERSION` 后，`org.opencontainers.image.revision` 等标签才对应已知提交；默认 `unknown` 如实表示未提供。前后端应来自同一次源码下载或同一发行版本，不混合任意提交。
 
-如需固定版本，在自己的 `.env` 设置 `BACKEND_IMAGE`、`FRONTEND_IMAGE` 为实际 GHCR 的同一 `vX.Y.Z` 引用，或使用发布方提供的版本化 Compose。修改后仍运行 `docker compose up -d`。不要复制未经发布的镜像地址。
+固定源码版本时下载/检出真实存在的 tag 或提交，再构建。固定 GHCR 版本时，在自己的 `.env` 设置 `BACKEND_IMAGE`、`FRONTEND_IMAGE` 为同一已发布 `vX.Y.Z` 或 digest，并始终使用 `docker compose -f compose.prebuilt.yaml ...`；默认源码 Compose 不读取这两个变量。不要复制未经发布的镜像地址。
 
 ## 6. 完整私人备份
 
@@ -219,7 +223,7 @@ docker buildx imagetools inspect ghcr.io/willzhang35929924-ui/ai_video_creation-
 docker buildx imagetools inspect ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest
 ```
 
-两者应包含 AMD64 和 ARM64 对应 manifest。再从已发布地址拉取，在独立空卷中使用正式 `compose.yaml` 启动，检查新库、服务保存、真实核心业务、备份恢复、重建后持久化和匿名拉取。测试证据和日志进入维护者的发布记录；不把私人测试数据复制回源码或镜像。
+两者应包含 AMD64 和 ARM64 对应 manifest。再从已发布地址拉取，在独立空卷中使用 `compose.prebuilt.yaml` 启动，检查新库、服务保存、真实核心业务、备份恢复、重建后持久化和匿名拉取。默认 `compose.yaml` 验证的是本地源码构建，不能用它代替正式 GHCR 镜像验收。测试证据和日志进入维护者的发布记录；不把私人测试数据复制回源码或镜像。
 
 ## 11. 验收记录怎么读
 
@@ -234,7 +238,7 @@ docker buildx imagetools inspect ghcr.io/willzhang35929924-ui/ai_video_creation-
 
 ## 源码构建时的网络镜像（可选）
 
-普通用户拉取 GHCR 镜像不执行 APT 或 pip。维护者源码构建默认使用 Debian 官方 HTTPS 源和 PyPI；生产依赖使用官方 PyPI SHA256 锁文件，两个 Linux 架构都只安装匹配的二进制 wheel。镜像切换不会跳过 TLS、Debian 签名或 wheel 哈希校验，也不会更改包版本。
+默认源码构建会执行 APT 和 pip，使用 Debian 官方 HTTPS 源和 PyPI；Python 使用 SHA256 锁文件，只安装匹配平台的二进制 wheel，前端使用 `package-lock.json` 和 `npm ci`。可选 GHCR 发行镜像不在用户电脑执行这些构建步骤。镜像切换不会跳过 TLS、Debian 签名或 wheel 哈希校验，也不会更改包版本。
 
 如果当前网络无法稳定下载，可在本地 `.env` 设置公开镜像。中国大陆网络可按[清华 Debian 帮助](https://mirrors.tuna.tsinghua.edu.cn/help/debian/)及[PyPI 帮助](https://mirrors.tuna.tsinghua.edu.cn/help/pypi/)选择：
 
@@ -243,4 +247,4 @@ DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
 PYPI_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ```
 
-`DEBIAN_SECURITY_MIRROR` 默认仍使用官方安全更新源；如需单独指定，先核对镜像同步状态。镜像可能有地域限制或同步延迟，不应将某一地域镜像设为所有用户的默认值。地址不得包含密码或 Token。保存后运行 `docker compose -f compose.dev.yaml up -d --build`。
+`DEBIAN_SECURITY_MIRROR` 默认仍使用官方安全更新源；如需单独指定，先核对镜像同步状态。镜像可能有地域限制或同步延迟，不应将某一地域镜像设为所有用户的默认值。地址不得包含密码或 Token。保存后运行 `docker compose up -d`；隔离开发仍使用 `compose.dev.yaml`。

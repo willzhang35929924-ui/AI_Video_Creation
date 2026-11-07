@@ -25,6 +25,14 @@ from app.services.quality import inspect_media
 TRANSITIONS = {'cut': '直接切换', 'crossfade': '淡入淡出', 'fadeblack': '黑场过渡', 'fadewhite': '白场过渡', 'dissolve': '溶解', 'slide': '滑动', 'push': '推入', 'wipe': '擦除'}
 
 
+def display_dimensions(video_stream):
+    width, height = int(video_stream['width']), int(video_stream['height'])
+    rotation = next((side['rotation'] for side in video_stream.get('side_data_list', []) if 'rotation' in side), 0)
+    if abs(float(rotation)) % 180 == 90:
+        return height, width
+    return width, height
+
+
 def probe(path, settings):
     result = subprocess.run([settings.ffprobe_path, '-v', 'error', '-show_streams', '-show_format', '-of', 'json', str(path)], capture_output=True, encoding='utf-8', errors='replace', timeout=30, shell=False)
     if result.returncode:
@@ -40,7 +48,8 @@ def probe(path, settings):
         frames = int(video.get('nb_frames') or 0)
     except (TypeError, ValueError):
         frames = 0
-    return {'duration': duration, 'width': int(video['width']), 'height': int(video['height']), 'fps': float(Fraction(video.get('avg_frame_rate', '0/1'))), 'frames': frames, 'has_audio': any(stream.get('codec_type') == 'audio' for stream in payload['streams']), 'streams': payload['streams']}
+    width, height = display_dimensions(video)
+    return {'duration': duration, 'width': width, 'height': height, 'fps': float(Fraction(video.get('avg_frame_rate', '0/1'))), 'frames': frames, 'has_audio': any(stream.get('codec_type') == 'audio' for stream in payload['streams']), 'streams': payload['streams']}
 
 
 def full_clip_timing(metadata, fps):
@@ -73,17 +82,55 @@ def full_clip_timing(metadata, fps):
             'preserves_full_streams': True, 'frame_rate_conversion': metadata['fps'] != fps}
 
 
+def resolution_loses_detail(width, height, source):
+    # Aspect-preserving fit is limited by the smaller of the two scale factors.
+    return width < source['width'] or height < source['height']
+
+
+def resolve_output_resolution(output, sources):
+    dimensions = output.model_dump()
+    mode = output.resolution_mode or ('custom' if {'width', 'height'} & output.model_fields_set else 'source')
+    dimensions['resolution_mode'] = mode
+    if mode == 'source':
+        dimensions['allow_downscale'] = False
+        for axis in ('width', 'height'):
+            largest = max(source[axis] for source in sources)
+            dimensions[axis] = max(128, (largest + 1) // 2 * 2)
+        if max(dimensions['width'], dimensions['height']) > 3840:
+            raise AppError(422, 'assembly_source_resolution_unsupported', '源视频尺寸超过 3840 像素的输出上限，请选择自定义尺寸并确认缩小')
+    width, height = dimensions['width'], dimensions['height']
+    if width % 2 or height % 2:
+        raise AppError(422, 'invalid_output_dimensions', 'H.264/H.265 输出宽高必须为偶数')
+    reduced = [source for source in sources if resolution_loses_detail(width, height, source)]
+    if reduced and not dimensions['allow_downscale']:
+        raise AppError(422, 'assembly_downscale_confirmation_required',
+                       '输出尺寸会缩小已选视频，请选择「跟随源片」或明确确认允许降低分辨率',
+                       {'width': width, 'height': height, 'affected_clips': len(reduced)})
+    return dimensions
+
+
+def recover_legacy_output(timeline):
+    """Treat a previously saved, unconfirmed smaller canvas as a source default."""
+    output = dict(timeline['output'])
+    if output.get('resolution_mode') is None:
+        for clip in timeline['clips']:
+            source = clip.get('source') or {}
+            stream = next((stream for stream in source.get('streams', []) if stream.get('codec_type') == 'video'), None)
+            width, height = display_dimensions(stream) if stream else (source.get('width'), source.get('height'))
+            if width and height and resolution_loses_detail(output['width'], output['height'], {'width': width, 'height': height}):
+                output.update(resolution_mode='source', allow_downscale=False)
+                break
+    return output
+
+
 def validate_timeline(session, settings, project_id, payload: TimelineRequest, *, allow_unreviewed_draft=False):
     service, snapshot = resolve_service(session, 'final_assembly', payload.service_id, project_id)
     if service.provider != 'ffmpeg':
         raise AppError(409, 'assembly_adapter_unavailable', '当前合成器只启用已实现的本地 FFmpeg 适配器')
     tools = replace(settings, ffmpeg_path=snapshot['settings'].get('ffmpeg_path') or settings.ffmpeg_path, ffprobe_path=snapshot['settings'].get('ffprobe_path') or settings.ffprobe_path)
-    output = payload.output.model_dump()
-    if output['width'] % 2 or output['height'] % 2:
-        raise AppError(422, 'invalid_output_dimensions', 'H.264/H.265 输出宽高必须为偶数')
     if len(payload.transitions) != len(payload.clips) - 1:
         raise AppError(422, 'transition_count_mismatch', '每两个相邻片段必须恰好有一个转场配置')
-    clips = []
+    sources = []
     for item in payload.clips:
         video = session.get(VideoRevision, item.video_id)
         if not video or video.project_id != project_id or (video.review_status != 'approved' and not (allow_unreviewed_draft and video.review_status == 'pending')):
@@ -93,6 +140,10 @@ def validate_timeline(session, settings, project_id, payload: TimelineRequest, *
         if video.metadata_json.get('sha256') and video.metadata_json['sha256']!=source_hash:
             raise AppError(409,'input_file_changed','已审核视频文件的哈希已改变，请恢复原文件或生成并审核新版本')
         metadata = probe(path, tools)
+        sources.append((item, video, path, source_hash, metadata))
+    output = resolve_output_resolution(payload.output, [metadata for _, _, _, _, metadata in sources])
+    clips = []
+    for item, video, path, source_hash, metadata in sources:
         decoded = subprocess.run([tools.ffmpeg_path, '-v', 'error', '-xerror', '-i', str(path), '-f', 'null', '-'], capture_output=True, timeout=120, shell=False)
         if decoded.returncode:
             raise AppError(422, 'input_decode_failed', '输入视频完整解码失败，不能提交合成')
@@ -150,7 +201,7 @@ def preview_snapshot(snapshot, index):
         clip['trim_start'] = clip.get('trim_start',0)+(clip['duration'] - length if offset == 0 else 0)
         clip['duration'] = length
     result['transitions'] = [edge]
-    result['output'].update(width=384, height=216, codec='libx264')
+    result['output'].update(width=384, height=216, codec='libx264', resolution_mode='custom', allow_downscale=True)
     result['duration'] = sum(clip['duration'] for clip in result['clips']) - edge['duration']
     result['subtitle_cues']=[{**cue,'start':max(0,cue['start']-preview_start),'end':min(result['duration'],cue['end']-preview_start)} for cue in snapshot.get('subtitle_cues',[]) if cue['end']>preview_start and cue['start']<preview_start+result['duration']]
     if result['output'].get('subtitles') and not result['subtitle_cues']:result['output']['subtitles']=False

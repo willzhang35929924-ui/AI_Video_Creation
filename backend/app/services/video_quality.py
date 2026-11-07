@@ -23,7 +23,14 @@ from app.schemas_quality import QualitySettings
 from app.services.quality import inspect_media
 
 SIZES = {'720p': (1280,720), '1080p': (1920,1080), '2k': (2560,1440), '4k': (3840,2160)}
-MODES = {'preview': {'steps':12,'crf':23,'preset':'fast'}, 'standard': {'steps':20,'crf':18,'preset':'medium'}, 'high': {'steps':30,'crf':16,'preset':'slow'}}
+MODES = {
+    'high': {'steps': 30, 'crf': 16, 'preset': 'slow'},
+    'standard': {'steps': 20, 'crf': 18, 'preset': 'medium'},
+    'fast': {'steps': 4, 'crf': 23, 'preset': 'fast'},
+    # Retained for settings and historical runs written before Context-IR routing.
+    'preview': {'steps': 12, 'crf': 23, 'preset': 'fast'},
+}
+SEEDVR_RUNTIME_WAIT = 'seedvr_runtime_unavailable'
 
 def plan(settings,sr_status=None,seed_status=None):
     q = QualitySettings.model_validate(settings)
@@ -335,7 +342,7 @@ def _run_seedvr_native(settings,factory,identifier,snapshot,source,destination,o
 
 def run_render(settings, factory, identifier,gpu_release_evidence=None):
     with factory() as session:
-        claimed=session.execute(update(QualityRender).where(QualityRender.id==identifier,QualityRender.status=='queued').values(status='running'));session.commit()
+        claimed=session.execute(update(QualityRender).where(QualityRender.id==identifier,QualityRender.status=='queued').values(status='running',error_message=None));session.commit()
         if not claimed.rowcount:return
         item=session.get(QualityRender,identifier); snapshot=dict(item.snapshot_json)
     started=time.monotonic()
@@ -465,9 +472,9 @@ def publish_sr_verification(settings,factory,identifier,snapshot,sr_receipt,rela
 from app.services.gpu_gate import gpu_submission
 @gpu_submission
 async def run_ai_locked(settings,factory,identifier):
-    import httpx
     with factory() as session:
         render=session.get(QualityRender,identifier)
+        if render is None or render.status!='queued':return False
         seed_fixed=getattr(render,'snapshot_json',{}).get('settings',{}).get('processing')=='seedvr2'
         active=['queued','submitting','submitted','running','cancelling']
         # Cloud jobs do not occupy this machine's GPU. Use the frozen provider,
@@ -479,25 +486,35 @@ async def run_ai_locked(settings,factory,identifier):
     try:
         # Seed's verified native controller is fixed independently of the H3
         # global setting. Never mutate that setting or free the other endpoint.
-        release_settings=replace(settings,comfyui_base_url='http://127.0.0.1:8189') if seed_fixed else settings
-        release=await confirm_gpu_release(release_settings)
+        if seed_fixed:
+            release=await confirm_gpu_release(replace(settings,comfyui_base_url='http://127.0.0.1:8189'),require_seed_runtime=True)
+        else:
+            release=await confirm_gpu_release(settings)
         if release is None:return False
     except Exception as exc:
         with factory() as session:
-            item=session.get(QualityRender,identifier);item.status='failed';item.error_message='GPU派发前检查失败：'+str(exc)[:1600];item.result_json={'gpu_release_check':getattr(exc,'gpu_release_check',{}),'inference_submitted':False,'source_not_modified_by_worker':True};session.commit()
+            item=session.get(QualityRender,identifier)
+            if item is None or item.status!='queued':return False
+            if isinstance(exc,AppError) and exc.code==SEEDVR_RUNTIME_WAIT:
+                if item.error_message!=exc.message:
+                    item.error_message=exc.message
+                    session.commit()
+                return False
+            item.status='failed';item.error_message='GPU派发前检查失败：'+str(exc)[:1600];item.result_json={'gpu_release_check':getattr(exc,'gpu_release_check',{}),'inference_submitted':False,'source_not_modified_by_worker':True};session.commit()
         return True
     await asyncio.to_thread(run_render,settings,factory,identifier,release)
     return True
 
 
-async def confirm_gpu_release(settings):
+async def confirm_gpu_release(settings,*,require_seed_runtime=False):
     """Called only while holding gpu_submission; HTTP200 is not unload completion."""
     import httpx
     release={'ack_is_not_unload_completion':True,'observations':[],'policy':'Comfy allocator <=1% (minimum 64MiB) and at least half device VRAM free, twice consecutively; conservative local scheduling, not universal model VRAM minimum'}
     try:
         async with httpx.AsyncClient(timeout=10,trust_env=False) as client:
             parsed=urlsplit(settings.comfyui_base_url)
-            if parsed.hostname in {'127.0.0.1','localhost','::1'} and parsed.port in {8188,8189}:
+            known_local=parsed.hostname in {'127.0.0.1','localhost','::1'} and parsed.port in {8188,8189}
+            if known_local:
                 # The two known local servers use the same card. A refused peer
                 # is not running; timeout/unknown/HTTP errors are not idle proof.
                 release['known_local_queues']={}
@@ -508,12 +525,15 @@ async def confirm_gpu_release(settings):
                     except Exception as error:
                         if port!=parsed.port and _connection_refused(error):
                             release['known_local_queues'][str(port)]={'state':'not_started_connection_refused'};continue
+                        if port==parsed.port and require_seed_runtime:
+                            raise AppError(503,SEEDVR_RUNTIME_WAIT,'等待本机 SeedVR2（8189）：请启动项目原生 ComfyUI 或检查 logs/comfyui_startup.log；服务就绪后自动接续。') from error
                         return None
                     busy=bool(value['queue_running'] or value['queue_pending'])
                     release['known_local_queues'][str(port)]={'state':'busy' if busy else 'idle','running':len(value['queue_running']),'pending':len(value['queue_pending'])}
                     if busy:return None
-            queue=await client.get(settings.comfyui_base_url+'/queue');queue.raise_for_status();payload=queue.json()
-            if payload.get('queue_running') or payload.get('queue_pending'):return None
+            if not (known_local and require_seed_runtime):
+                queue=await client.get(settings.comfyui_base_url+'/queue');queue.raise_for_status();payload=queue.json()
+                if payload.get('queue_running') or payload.get('queue_pending'):return None
             free=await client.post(settings.comfyui_base_url+'/free',json={'unload_models':True,'free_memory':True});free.raise_for_status()
             stable=0;deadline=time.monotonic()+30
             while time.monotonic()<deadline:

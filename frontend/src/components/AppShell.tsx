@@ -14,7 +14,7 @@ import {
   Images,
   Mic,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import type { ProviderHealth, ProviderMode } from "../lib/types";
@@ -42,8 +42,8 @@ const advancedNavigation = [
 
 function resolveMode(health?: ProviderHealth | null): ProviderMode {
   if (!health) return "unknown";
-  if (health.connected === false) return "unknown";
   if (health.mode === "demo" || health.provider?.toLowerCase().includes("demo")) return "demo";
+  if (health.connected === false || (health.ready === false && health.busy !== true)) return "unknown";
   if (health.mode === "real") return "real";
   if (health.connected && health.configured !== false) return "real";
   return "unknown";
@@ -53,25 +53,34 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [health, setHealth] = useState<ProviderHealth | null>(null);
-  const [healthError, setHealthError] = useState(false);
+  const [backend, setBackend] = useState<"checking" | "reachable" | "unreachable">("checking");
+  const probeSequence = useRef(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const location = useLocation();
 
   const refreshHealth = useCallback(async () => {
+    const probe = ++probeSequence.current;
+    let result: ProviderHealth | null = null;
+    let backendState: "reachable" | "unreachable" = "reachable";
     try {
-      const result = await api.getProviderHealth();
-      setHealth(result);
-      setHealthError(false);
+      result = await api.getContextProviderHealth(AbortSignal.timeout(14_000));
     } catch {
-      setHealth(null);
-      setHealthError(true);
+      if (probe !== probeSequence.current) return;
+      try {
+        await api.getHealth(AbortSignal.timeout(5_000));
+      } catch {
+        backendState = "unreachable";
+      }
     }
+    if (probe !== probeSequence.current) return;
+    setHealth(result);
+    setBackend(backendState);
   }, []);
 
   useEffect(() => {
     void refreshHealth();
     const timer = window.setInterval(refreshHealth, 30_000);
-    return () => window.clearInterval(timer);
+    return () => { ++probeSequence.current; window.clearInterval(timer); };
   }, [refreshHealth]);
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
@@ -79,8 +88,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (advancedNavigation.some(item => location.pathname.startsWith(item.to))) setAdvancedOpen(true);
   }, [location.pathname]);
 
-  const mode = useMemo(() => resolveMode(health), [health]);
-  const modeLabel = !health && !healthError ? "正在检测 ComfyUI" : mode === "demo" ? "DEMO 模式" : mode === "real" ? "ComfyUI 已连接" : "H3 disconnected";
+  const mode = resolveMode(health);
+  let modeLabel = "正在检测本地 H3";
+  if (backend === "unreachable") modeLabel = "后端未连接";
+  else if (mode === "demo") modeLabel = "DEMO 模式";
+  else if (health?.connected === true && health.busy === true) modeLabel = "本地 H3 队列处理中";
+  else if (mode === "real") modeLabel = "ComfyUI 已连接";
+  else if (health?.connected === false) modeLabel = "本地 H3 未连接";
+  else if (health?.ready === false) modeLabel = "本地模型未就绪";
+  else if (backend === "reachable") modeLabel = "本地模型状态待确认";
 
   return (
     <div className={`app-shell${collapsed ? " sidebar-collapsed" : ""}`}>
@@ -155,8 +171,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-content">
         <header className="topbar">
           <div className="topbar-spacer" />
-          <button className="provider-control" type="button" onClick={refreshHealth} aria-label="刷新本地模型连接状态" title="本地 ComfyUI 状态；云端服务连接在系统设置中检测">
-            <span className={`live-dot ${mode}${healthError ? " error" : ""}`} aria-hidden="true" />
+          <button className="provider-control" type="button" onClick={refreshHealth} aria-label="刷新本地模型连接状态" title={health?.error || "本地 Context-IR 制作状态"}>
+            <span className={`live-dot ${mode}${backend === "unreachable" ? " error" : ""}`} aria-hidden="true" />
             <Badge tone={mode === "real" ? "success" : mode === "demo" ? "demo" : "neutral"}>{modeLabel}</Badge>
           </button>
           <div className="local-avatar" aria-label="当前操作人 local-user">
@@ -169,7 +185,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span>生成产物会带 DEMO 标记；当前结果不代表真实 MiniMax H3 输出。</span>
           </div>
         ) : null}
-        {mode === "unknown" && healthError ? (
+        {backend === "unreachable" ? (
           <div className="mode-banner mode-banner-offline" role="alert">
             <strong>本地后端不可达</strong>
             <span>页面不会伪造数据。启动后端后点击右上角状态重新检测。</span>

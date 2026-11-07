@@ -2,7 +2,7 @@
 
 export interface QualitySettings {
   resolution?: "720p" | "1080p" | "2k" | "4k";
-  mode?: "preview" | "standard" | "high";
+  mode?: "high" | "standard" | "fast" | "preview";
   aspect_ratio?: "16:9" | "9:16" | "1:1";
   processing?: "lanczos" | "native" | "ai_super_resolution" | "seedvr2" | "reconstruction";
 }

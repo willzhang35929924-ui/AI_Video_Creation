@@ -19,7 +19,8 @@ from app.core.secrets import redact, reveal, storage_label
 from app.models import AIService, ProjectServiceBinding
 from app.models.entities import utcnow
 from app.services.imports import pin_public_url
-from app.core.trusted_service_origins import is_trusted_local_service, is_local_provider
+from app.core.trusted_service_origins import (confirmed_local_origin, is_trusted_local_service,
+    is_local_provider, is_loopback_service, pin_local_service_url, service_origin)
 
 MODULES = {'character_generation': {'comfyui','openai_compatible','cloud_draft'},
     'video_generation': {'comfyui','video_api','cloud_draft'}, 'final_assembly': {'ffmpeg'},
@@ -28,15 +29,46 @@ MODULES = {'character_generation': {'comfyui','openai_compatible','cloud_draft'}
     'lip_sync':{'local_runtime','cloud_draft'},'video_upscale':{'comfyui','local_runtime','cloud_draft'},
     'quality_check':{'ffmpeg','openai_compatible','cloud_draft'}}
 
+BUILTIN_VIDEO_WORKFLOWS = (
+    {'id': 'context_ir', 'label': 'Context-IR 三档：Fast 4 / Quality 20 / Quality 30', 'h3_context_ir': True},
+    {'id': 'native_h3_r2v', 'label': '原生 H3 参考图工作流（20步）', 'h3_context_ir': False},
+)
+
+
+def normalize_service_settings(module, provider, base_url, options):
+    options = dict(options)
+    confirmed = confirmed_local_origin(base_url, options)
+    if confirmed:
+        options['local_service_origin'] = confirmed
+    profile = options.get('workflow_profile')
+    if profile == 'context_ir':
+        options['h3_context_ir'] = True
+        options.pop('workflow_path', None)
+    elif profile == 'native_h3_r2v':
+        options['h3_context_ir'] = False
+        options['workflow_path'] = str(PROJECT_ROOT / 'workflows/h3_r2v_character_v1.json')
+    return options
+
 
 def validate_configuration(module, provider, base_url, options):
     if provider not in MODULES.get(module, set()):
         raise AppError(422, 'adapter_not_supported', '此业务模块尚未实现该服务适配器')
     if any(key.lower() in {'api_key', 'token', 'authorization', 'secret', 'password', 'headers'} for key in options):
         raise AppError(422, 'secret_in_settings', '密钥只能通过专用密码字段保存')
-    allowed = {'timeout', 'concurrency', 'width', 'height', 'duration', 'candidate_model', 'text_encoder', 'vae', 'workflow_path', 'ffmpeg_path', 'ffprobe_path', 'fps', 'codec', 'audio_policy', 'image_api_format', 'video_contract','max_tokens','runtime_family','voice','response_format','max_prompt_characters'}
+    allowed = {'timeout', 'concurrency', 'width', 'height', 'duration', 'candidate_model', 'text_encoder', 'vae', 'workflow_path', 'workflow_profile', 'h3_context_ir', 'local_service_origin', 'ffmpeg_path', 'ffprobe_path', 'fps', 'codec', 'audio_policy', 'image_api_format', 'video_contract','max_tokens','runtime_family','voice','response_format','max_prompt_characters'}
     if set(options) - allowed or any(isinstance(value, (dict, list)) for value in options.values()):
         raise AppError(422, 'invalid_service_settings', '仅接受当前适配器定义的简单参数，禁止在普通配置中保存认证信息')
+    if options.get('local_service_origin'):
+        if provider not in {'comfyui', 'local_llm'}:
+            raise AppError(422, 'local_confirmation_not_supported', '仅本地 ComfyUI 和本地语言服务可确认本地地址')
+        confirmed_local_origin(base_url, options)
+    if options.get('workflow_profile') or 'h3_context_ir' in options:
+        if provider != 'comfyui' or module != 'video_generation':
+            raise AppError(422, 'workflow_profile_not_supported', '内置视频工作流仅用于 ComfyUI 视频服务')
+        if options.get('workflow_profile') not in (None, '', 'context_ir', 'native_h3_r2v'):
+            raise AppError(422, 'workflow_profile_invalid', '请选择已审核的内置 H3 工作流')
+        if 'h3_context_ir' in options and type(options['h3_context_ir']) is not bool:
+            raise AppError(422, 'workflow_profile_invalid', 'Context-IR 标志必须为布尔值')
     if provider == 'video_api' and options.get('video_contract') not in (None, '', 'video-jobs-v1', 'wan26-i2v', 'lk888-h3-v2'):
         raise AppError(422, 'video_contract_invalid', '请选择已实现的视频接口契约')
     prompt_limit = options.get('max_prompt_characters')
@@ -63,10 +95,10 @@ def validate_configuration(module, provider, base_url, options):
             raise AppError(422, 'invalid_service_url', '服务地址必须是 HTTP(S)，禁止嵌入凭据、查询参数或片段')
         if provider not in ('comfyui','local_llm') and url.scheme != 'https':
             raise AppError(422, 'cloud_https_required', '云端兼容服务必须使用 HTTPS')
-        trusted_local = is_trusted_local_service(base_url) if provider in {'comfyui', 'local_llm'} else False
+        trusted_local = is_trusted_local_service(base_url, options) if provider in {'comfyui', 'local_llm'} else False
         if provider == 'comfyui' and url.scheme == 'http' and url.hostname not in ('127.0.0.1', 'localhost', '::1') and not trusted_local:
-            raise AppError(422, 'local_comfy_only', 'HTTP ComfyUI 仅允许明确配置的本机环回地址；远程请使用 HTTPS')
-        if provider=='local_llm' and url.hostname not in ('127.0.0.1','localhost','::1') and not trusted_local:raise AppError(422,'local_llm_loopback','本地语言服务仅允许环回地址或管理员明确配置的受信本地服务origin')
+            raise AppError(422, 'local_comfy_only', '请在服务设置中确认此宿主机或局域网本地地址，再保存 ComfyUI 配置')
+        if provider=='local_llm' and url.hostname not in ('127.0.0.1','localhost','::1') and not trusted_local:raise AppError(422,'local_llm_loopback','请确认此本地语言服务地址；只允许环回或明确确认的宿主网关、私网及本机服务名称')
         if provider=='openai_tts' and (url.hostname!='api.openai.com' or url.path.rstrip('/')!='/v1'):raise AppError(422,'official_tts_endpoint','OpenAI语音适配器只使用官方https://api.openai.com/v1')
     elif base_url:
         raise AppError(422, 'ffmpeg_has_no_url', '本地 FFmpeg 不使用 base_url 或模型列表')
@@ -95,6 +127,7 @@ def public_service(service):
             'last_success_at': service.last_success_at.isoformat() if service.last_success_at else None,
             'has_api_key': bool(service.encrypted_secret), 'api_key_mask': '***' if service.encrypted_secret else '',
             'key_storage': storage_label(service.encrypted_secret),
+            'trusted_local_endpoint': service.provider in {'comfyui', 'local_llm'} and (is_loopback_service(service.base_url) or is_trusted_local_service(service.base_url, service.settings_json)),
             'revision': service.revision, 'created_at': service.created_at.isoformat()}
 
 
@@ -102,7 +135,7 @@ def service_snapshot(service, model_id=None):
     return {'service_id': service.id, 'service_revision': service.revision, 'provider': service.provider,
             'name': service.name, 'module': service.module, 'base_url': service.base_url,
             'model_id': model_id or service.default_model, 'settings': dict(service.settings_json),
-            'is_cloud': not is_local_provider(service.provider, service.base_url),
+            'is_cloud': not is_local_provider(service.provider, service.base_url, service.settings_json),
             'captured_at': utcnow().isoformat()}
 
 
@@ -143,8 +176,14 @@ async def service_request(settings, snapshot, method, endpoint, secret='', *, cl
             raise AppError(422, 'unsupported_service_headers', '不支持此服务请求头')
         headers.update(extra_headers)
     extensions = {}
-    trusted_local = snapshot.get('provider') in {'comfyui', 'local_llm'} and is_trusted_local_service(base)
-    if parsed.hostname not in ('127.0.0.1', 'localhost', '::1') and not trusted_local:
+    trusted_local = snapshot.get('provider') in {'comfyui', 'local_llm'} and (is_loopback_service(base) or is_trusted_local_service(base, snapshot.get('settings')))
+    if trusted_local:
+        if service_origin(url) != service_origin(base):
+            raise AppError(422, 'service_origin_changed', '本地服务请求不能跳转到其他地址')
+        url, sni, host = await asyncio.to_thread(pin_local_service_url, url)
+        headers['Host'] = host
+        extensions['sni_hostname'] = sni
+    else:
         restricted = replace(settings, allow_external_doc_import=True, doc_import_allowed_hosts=(parsed.hostname,))
         target, sni, host = await asyncio.to_thread(pin_public_url, url, restricted)
         headers['Host'] = host
@@ -155,7 +194,10 @@ async def service_request(settings, snapshot, method, endpoint, secret='', *, cl
     if client_timeout is not None:
         timeout = client_timeout
     async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
-        return await client.request(method, url, headers=headers, extensions=extensions, **kwargs)
+        response = await client.request(method, url, headers=headers, extensions=extensions, **kwargs)
+        if 300 <= getattr(response, 'status_code', 200) < 400:
+            raise AppError(422, 'service_redirect_refused', '模型服务返回了重定向；请直接配置最终服务地址，系统不会转发密钥到其他地址')
+        return response
 
 
 async def download_public_video(settings, url, *, max_bytes=500*1024*1024):
@@ -280,6 +322,9 @@ async def probe_service(service, settings):
             result['http_status'] = response.status_code
             response.raise_for_status()
             nodes = response.json()
+            if not isinstance(nodes, dict):
+                raise ValueError('ComfyUI object_info must be an object')
+            result.update(status='reachable', reachable=True)
             def choices(node, field):
                 value = nodes.get(node, {}).get('input', {}).get('required', {}).get(field, [[]])[0]
                 return value if isinstance(value, list) else []
@@ -297,6 +342,22 @@ async def probe_service(service, settings):
                     capabilities['text_to_image'] = {'state': 'detected', 'source': 'object_info SDXL loader/sampler'}
                 if all(name in nodes for name in required_edit) and service.default_model in diffusion and service.settings_json.get('text_encoder') in choices('CLIPLoader', 'clip_name') and service.settings_json.get('vae') in choices('VAELoader', 'vae_name'):
                     capabilities['reference_image'] = {'state': 'detected', 'source': 'native ReferenceLatent + installed selected models'}
+            elif service.module == 'video_generation' and service.settings_json.get('h3_context_ir') is True:
+                from app.services.h3_context_provider import require_context_qwen
+                class RuntimeProbeClient:
+                    async def get(self, url, **_kwargs):
+                        if service_origin(url) != service_origin(snapshot['base_url']):
+                            raise AppError(422, 'service_origin_changed', '运行时探测不能连接其他地址')
+                        reply = await service_request(settings, snapshot, 'GET', urlsplit(url).path, secret, client_timeout=10.0)
+                        if reply.status_code == 200:
+                            receipt = reply.json()
+                            if isinstance(receipt, dict):
+                                result['runtime'] = receipt
+                        return reply
+                await require_context_qwen(RuntimeProbeClient(), snapshot['base_url'].rstrip('/'), runtime_required=True)
+                capabilities['reference_to_video'] = {'state': 'detected', 'source': 'Context-IR native runtime identity, node/model checks and local Qwen vision/32K readiness; inference remains unverified'}
+                capabilities['reference_video'] = {'state': 'detected', 'source': 'Context-IR native runtime readiness; inference remains unverified'}
+                result['notice'] = '本地 Context-IR 运行时与 Qwen 就绪；尚未执行本次真实视频生成。'
             elif service.module == 'video_generation':
                 try:
                     graph = json.loads(Path(service.settings_json.get('workflow_path') or settings.h3_workflow_api_json).read_text(encoding='utf-8'))
@@ -317,6 +378,11 @@ async def probe_service(service, settings):
                 except (OSError,ValueError,KeyError,TypeError):
                     result['workflow_error'] = '无法验证实际 R2V 工作流文件'
             result.update(status='connected', models=[{'id': model, 'source': 'ComfyUI object_info loader choices'} for model in dict.fromkeys(models)], capabilities=capabilities, source='GET /object_info; node/file detection is distinct from actual inference')
+            result['reachable'] = True
+            if result.get('workflow_error'):
+                result.update(status='reachable', error=result['workflow_error'] + '；请核对所选内置工作流、安装对应节点与权重后重试', diagnostic_code='comfy_workflow_not_ready', generation_ready=False)
+            elif service.module == 'character_generation' and not capabilities:
+                result.update(status='reachable', error='ComfyUI 可以连接，但所选图像模型、编码器、VAE或必要节点不齐；请按已安装权重填写模型后重试', diagnostic_code='comfy_image_not_ready', generation_ready=False)
         else:
             probe_snapshot = snapshot
             if service.provider == 'video_api' and service.settings_json.get('video_contract') == 'wan26-i2v':
@@ -346,5 +412,8 @@ async def probe_service(service, settings):
                         result['notice'] = '认证和模型列表请求成功，但列表未列出所选万相模型；请在供应商控制台确认模型权限，生成能力仍未验证。'
     except (httpx.HTTPError, ValueError, OSError, subprocess.TimeoutExpired, AppError) as exc:
         result['diagnostic_code'], result['error'] = _probe_failure(exc)
+        if service.provider == 'comfyui' and isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 403:
+            result.update(diagnostic_code='local_client_rejected',
+                          error='本地节点拒绝了当前客户端（HTTP 403）。请在原生节点日志核对来源 IP，配置 allowed_clients 和防火墙；不要填写云端 API 密钥。')
     result['elapsed_ms'] = round((time.perf_counter() - started) * 1000, 1)
     return redact(result, secret)

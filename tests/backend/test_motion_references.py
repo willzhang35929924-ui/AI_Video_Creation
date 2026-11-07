@@ -88,7 +88,10 @@ def test_shot_binding_saves_explicit_scope_and_changed_source_blocks_preflight(c
     legacy['expected_input_hash']=updated['preflight']['generation_inputs_hash']
     response=client.put('/api/shots/'+item['shot']['id']+'/production',json=legacy)
     assert response.status_code==200,response.text
-    assert response.json()['source_json']['production']['motion_references']==[ref]
+    # New role/target bindings are optional. A legacy edit must retain every
+    # supplied motion field and leave the two new bindings explicitly unset.
+    assert response.json()['source_json']['production']['motion_references']==[
+        {**ref, 'reference_role': None, 'target_character_id': None}]
     assert client.delete('/api/reference-videos/motion-video?revision=1').status_code==409
     with client.app.state.session_factory() as session:
         video=session.get(m.ReferenceVideo,'motion-video');video.revision=2;session.commit()
@@ -202,7 +205,12 @@ def test_motion_native_graph_uploads_reference_and_never_uploads_audio(client, s
             return httpx.Response(prompt_status,json={'prompt_id':'actual-provider-id'} if prompt_status==200 else {'error':'timeout'})
         return httpx.Response(404)
     original=httpx.AsyncClient;transport=httpx.MockTransport(handler)
-    monkeypatch.setattr(providers.httpx,'AsyncClient',lambda *a,**kw:original(*a,transport=transport,**kw))
+    client_origins=[]
+    def transport_client(origins, **kwargs):
+        client_origins.append(origins)
+        return original(transport=transport, trust_env=False, follow_redirects=False, **kwargs)
+    # Adapter-only fixture. The real pinned transport has its own safety tests.
+    monkeypatch.setattr(providers,'local_service_client',transport_client)
     request=VideoGenerationRequest(job_id='test-job',project_id='test-project',shot_id='test-shot',prompt='use <Video 1>',
         negative_prompt='',duration_seconds=5,aspect_ratio='16:9',seed=42,parameters={},
         reference_assets=[{'absolute_path':str(image),'sha256':hashlib.sha256(image.read_bytes()).hexdigest(),'asset_id':'image'}],
@@ -219,5 +227,6 @@ def test_motion_native_graph_uploads_reference_and_never_uploads_audio(client, s
     assert graph['factory_motion_load_0']['class_type']=='LoadVideo'
     assert not any(key.startswith('ref_video_audios.') for key in target)
     manifest=json.loads((tmp_path/'logs/jobs/test-job/reference_manifest.json').read_text('utf-8'))
+    assert client_origins and all(origins == [config.comfyui_base_url] for origins in client_origins)
     assert manifest['motion_reference_uploads'][0]['processed']['sha256']==video_sha
     assert manifest['motion_reference_uploads'][0]['audio_included'] is False

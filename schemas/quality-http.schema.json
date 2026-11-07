@@ -14,11 +14,12 @@
         "type": "string"
       },
       "mode": {
-        "default": "standard",
+        "default": "high",
         "enum": [
-          "preview",
+          "high",
           "standard",
-          "high"
+          "fast",
+          "preview"
         ],
         "title": "Mode",
         "type": "string"
@@ -66,11 +67,12 @@
             "type": "string"
           },
           "mode": {
-            "default": "standard",
+            "default": "high",
             "enum": [
-              "preview",
+              "high",
               "standard",
-              "high"
+              "fast",
+              "preview"
             ],
             "title": "Mode",
             "type": "string"
@@ -144,11 +146,12 @@
             "type": "string"
           },
           "mode": {
-            "default": "standard",
+            "default": "high",
             "enum": [
-              "preview",
+              "high",
               "standard",
-              "high"
+              "fast",
+              "preview"
             ],
             "title": "Mode",
             "type": "string"
@@ -246,11 +249,12 @@
             "type": "string"
           },
           "mode": {
-            "default": "standard",
+            "default": "high",
             "enum": [
-              "preview",
+              "high",
               "standard",
-              "high"
+              "fast",
+              "preview"
             ],
             "title": "Mode",
             "type": "string"

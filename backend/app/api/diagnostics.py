@@ -86,6 +86,19 @@ def create_composition(project_id: str, payload: CompositionRequest, session: Se
 def revision_preview(video_id: str, payload: RevisionRequest, request: Request, session: Session = Depends(get_db)):
     video = required(session, VideoRevision, video_id, "视频版本")
     shot = required(session, StoryboardShot, video.shot_id, "分镜")
+    settings = request.app.state.settings
+    if not settings.h3_demo_mode:
+        from app.services.h3_context_provider import context_compiler_intent, reference_layout
+        from app.services.video_revisions import prepare_context_revision
+        _, service, _, context = prepare_context_revision(session, settings, shot, video, payload)
+        people = context['screenplay_snapshot']['participants']
+        person = people[0] if people else {}
+        _, _, directions = reference_layout(context['references'], context['motion_references'])
+        intent = context_compiler_intent(context['prompt'], context['negative_prompt'], directions, silent=context['silent'])
+        return {'prompt': intent, 'negative_prompt': context['negative_prompt'], 'preview_stage': 'context_ir_input',
+                'character_id': person.get('character_id'), 'character_version_id': person.get('character_version_id'),
+                'asset_ids': [ref['asset_id'] for ref in context['references']],
+                'instruction': payload.instruction, 'based_on': video.id, 'h3_workflow': service['h3_workflow']}
     from app.services.screenplay import uses_structured_screenplay, generation_inputs
     from app.services.video_revisions import editable_generation_prompt
     structured = uses_structured_screenplay(session, shot)

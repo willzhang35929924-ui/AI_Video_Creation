@@ -148,6 +148,10 @@ def test_uploaded_visual_is_real_copied_file_reviewed_separately_and_never_a_mod
 def test_dag_persists_both_scene_ids_and_all_keyframes_without_premature_video(client,settings):
     approved_cast(client,settings);result=import_case(client);settings.h3_demo_mode=False
     with client.app.state.session_factory() as s:
+        # This test exercises the ordinary keyframe DAG, not the separate
+        # Windows legacy Context-IR mapping.
+        video_service=s.scalar(select(m.AIService).where(m.AIService.module=='video_generation'))
+        video_service.settings_json={**video_service.settings_json,'workflow_profile':'native_h3_r2v','h3_context_ir':False}
         for e in s.scalars(select(m.ProductionEntity).where(m.ProductionEntity.project_id==result['project_id'])):e.status='approved'
         s.commit()
     response=client.post('/api/projects/'+result['project_id']+'/productions',json={'shot_ids':result['shot_ids'],'confirmed':True});assert response.status_code==201,response.text

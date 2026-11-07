@@ -106,30 +106,84 @@ def resume(project_id: str, session: Session = Depends(get_db)):
     session.commit(); return overview(session, project_id)
 
 
-@router.post('/projects/{project_id}/retry', response_model=StudioOverview)
-def retry(project_id: str, payload: dict | None = None, session: Session = Depends(get_db)):
+@router.post('/projects/{project_id}/retry', response_model=StudioOverview, name='retry')
+async def retry_project(project_id: str, request: Request, payload: dict | None = None, session: Session = Depends(get_db)):
+    from app.services.studio_project_guard import project_guard
+    async with project_guard(request.app, project_id) as nested:
+        if not nested and not session.dirty and not session.new:
+            session.expire_all()
+        return retry(project_id, payload, session, settings=request.app.state.settings)
+
+
+def retry(project_id: str, payload: dict | None = None, session: Session = Depends(get_db), *, settings=None):
     run = _run(session, project_id); nodes = copy.deepcopy(run.nodes_json)
     if run.snapshot_json.get('product_references_changed'):
         raise AppError(409,'studio_product_inputs_changed','产品参考已变化，请点击「开始／增量续作」创建使用新输入的制作')
-    target = (payload or {}).get('node_id')
-    selected = [n for n in nodes if (not target or n['id'] == target) and n['status'] in {'exception', 'failed', 'unknown'}]
-    if target and not selected: raise AppError(409, 'studio_retry_scope', '此任务没有可重试的失败节点')
+    options = payload or {}
+    if options.get('expected_run_id', run.id) != run.id:
+        raise AppError(409, 'studio_retry_scope', '当前制作批次已变化，请刷新后重试')
+    target = options.get('node_id')
+    targets = options.get('node_ids')
+    if target is not None and (not isinstance(target, str) or not target):
+        raise AppError(422, 'studio_retry_scope', '请选择本轮的一个失败节点')
+    if targets is not None and (target or not isinstance(targets, list) or not targets or len(targets) > len(nodes)
+                                or not all(isinstance(value, str) for value in targets) or len(set(targets)) != len(targets)):
+        raise AppError(422, 'studio_retry_scope', '请提供一组互不重复的本轮失败节点')
+    targets = set(targets) if targets is not None else {target} if isinstance(target, str) and target else None
+    selected = [n for n in nodes if (targets is None or n['id'] in targets) and n['status'] in {'exception', 'failed', 'unknown'}]
+    if targets is not None and {n['id'] for n in selected} != targets:
+        raise AppError(409, 'studio_retry_scope', '指定节点中有节点已经恢复或不在本轮失败列表')
     if any(n['status'] == 'unknown' for n in selected):
         raise AppError(409, 'studio_unknown_not_retryable', '含结果未知的请求；请先核对原服务任务，系统未重复提交以避免重复费用')
-    snapshots, errors = _capture_services(session, project_id)
-    changed_cloud = any(v['is_cloud'] for k, v in snapshots.items() if run.snapshot_json.get('services', {}).get(k, {}).get('service_id') != v['service_id'] or run.snapshot_json.get('services', {}).get(k, {}).get('service_revision') != v['service_revision'])
-    if changed_cloud:
-        raise AppError(409, 'studio_cloud_scope_changed', '云端服务或密钥设置已改变，请通过重新启动确认新服务的本轮费用范围')
-    run.snapshot_json = {**run.snapshot_json, 'services': snapshots, 'service_errors': errors}
+    refresh = options.get('refresh_context_for', [])
+    if (not isinstance(refresh, list) or not all(isinstance(value, str) for value in refresh)
+            or set(refresh) - {n['id'] for n in selected if n['kind'] == 'video' and n.get('code') != 'output_quality_failed'}):
+        raise AppError(422, 'studio_retry_context_scope', '只可重新核对本次所选的失败视频输入')
+    refreshed = {}
+    if refresh:
+        from app.services.context_production_inputs import collect_context_inputs
+
+        if not settings or not run.snapshot_json.get('context_production'):
+            raise AppError(409, 'studio_retry_context_unavailable', '仅本地 Context-IR 制作可以重新核对失败镜头的素材')
+        by_shot = copy.deepcopy(run.snapshot_json.get('h3_context_by_shot', {}))
+        for node in selected:
+            if node['id'] not in refresh:
+                continue
+            shot = session.get(m.StoryboardShot, node['target_id'])
+            frozen = by_shot.get(node['target_id'], {})
+            before = frozen.get('inputs')
+            if not shot or shot.project_id != project_id or not before or not frozen.get('service', {}).get('h3_workflow'):
+                raise AppError(409, 'studio_retry_context_unavailable', '失败镜头缺少本项目的原始输入快照')
+            if shot.revision != before.get('shot_revision'):
+                raise AppError(409, 'studio_retry_context_changed', '分镜已经修改，请新建增量制作以应用新的内容')
+            current = collect_context_inputs(session, settings, shot, prompt_override=before.get('prompt_override'),
+                instruction=before.get('instruction'), image_ids=before.get('explicit_visual_ids'),
+                motion_values=before.get('explicit_motion'), audio_policy=before.get('audio_policy'))
+            if current.get('generation_inputs_hash') != before.get('generation_inputs_hash'):
+                raise AppError(409, 'studio_retry_context_changed', '原分镜素材或制作内容已经修改，请使用增量制作')
+            if current['fingerprint'] != before['fingerprint']:
+                refreshed[node['id']] = {'previous': before['fingerprint'], 'current': current['fingerprint']}
+                frozen['inputs'] = current
+        run.snapshot_json = {**run.snapshot_json, 'h3_context_by_shot': by_shot}
+    context_ids = set(run.snapshot_json.get('h3_context_by_shot', {}))
+    if not run.snapshot_json.get('context_production') or any(
+            shot_id not in context_ids for shot_id in run.snapshot_json.get('shot_ids', [])):
+        snapshots, errors = _capture_services(session, project_id)
+        changed_cloud = any(v['is_cloud'] for k, v in snapshots.items() if run.snapshot_json.get('services', {}).get(k, {}).get('service_id') != v['service_id'] or run.snapshot_json.get('services', {}).get(k, {}).get('service_revision') != v['service_revision'])
+        if changed_cloud:
+            raise AppError(409, 'studio_cloud_scope_changed', '云端服务或密钥设置已改变，请通过重新启动确认新服务的本轮费用范围')
+        run.snapshot_json = {**run.snapshot_json, 'services': snapshots, 'service_errors': errors}
     for n in selected:
         # A known definitive failure may be retried; preserve its real child ID
         # in history, leaving other successful nodes and shot decisions intact.
         n['history'] = [*n['history'], {'child_id': n.get('child_id'), 'code': n.get('code'), 'error': n.get('error'), 'actor': 'local-user'}]
         # A paid cloud output failed locally: keep its ID for safe recheck.
         retained_child = n.get('child_id') if n.get('code') == 'output_quality_failed' else None
+        n.pop('context_dispatch_wait', None)
         n.update(status='pending', child_id=retained_child, error=None, code=None)
     run.nodes_json = nodes; run.status = 'queued'; run.error_message = None
-    session.add(m.AuditEvent(object_type='studio_run', object_id=run.id, action='failed_nodes_retry_requested', details_json={'node_ids': [n['id'] for n in selected]}))
+    session.add(m.AuditEvent(object_type='studio_run', object_id=run.id, action='failed_nodes_retry_requested',
+                             details_json={'node_ids': [n['id'] for n in selected], 'refreshed_context': refreshed}))
     sync_production_status(session, run)
     session.commit(); return overview(session, project_id)
 

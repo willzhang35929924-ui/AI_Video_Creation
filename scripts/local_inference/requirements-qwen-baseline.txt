@@ -1,0 +1,15 @@
+# Observed Windows Python 3.10 CUDA baseline; not a cross-platform lock.
+# Install torch/vision/audio separately from the official cu128 wheel index.
+transformers==4.57.6
+accelerate==1.12.0
+safetensors==0.6.2
+fastapi==0.116.2
+uvicorn==0.35.0
+psutil==7.2.2
+numpy==2.2.6
+pillow==11.3.0
+jsonschema==4.26.0
+lm-format-enforcer==0.11.3
+pydantic==2.14.1
+tokenizers==0.22.2
+huggingface-hub==0.36.2

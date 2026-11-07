@@ -106,7 +106,7 @@ def test_service_request_builds_an_httpx_client_without_timeout_when_profile_is_
             return 'response'
 
     monkeypatch.setattr(ai_services.httpx, 'AsyncClient', FakeClient)
-    snapshot = {'base_url': 'http://127.0.0.1:8189', 'settings': {'timeout': None}}
+    snapshot = {'provider': 'comfyui', 'base_url': 'http://127.0.0.1:8189', 'settings': {'timeout': None}}
     assert asyncio.run(ai_services.service_request(settings, snapshot, 'POST', '/prompt')) == 'response'
     assert observed['timeout'] is None
 

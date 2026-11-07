@@ -1,0 +1,1453 @@
+{
+  "id": "f25270f9-a2d8-5d14-b213-95ba88040098",
+  "revision": 0,
+  "last_node_id": 17,
+  "last_link_id": 22,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "OpenH3IRSetup",
+      "pos": [
+        -920,
+        -400
+      ],
+      "size": [
+        560,
+        500
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "server",
+          "name": "server",
+          "type": "STRING",
+          "widget": {
+            "name": "server"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "reference_model",
+          "name": "reference_model",
+          "type": "COMBO",
+          "widget": {
+            "name": "reference_model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "frames_model",
+          "name": "frames_model",
+          "type": "COMBO",
+          "widget": {
+            "name": "frames_model"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "text_encoder",
+          "name": "text_encoder",
+          "type": "COMBO",
+          "widget": {
+            "name": "text_encoder"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "video_vae",
+          "name": "video_vae",
+          "type": "COMBO",
+          "widget": {
+            "name": "video_vae"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "audio_vae",
+          "name": "audio_vae",
+          "type": "COMBO",
+          "widget": {
+            "name": "audio_vae"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "weight_dtype",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "timeout_s",
+          "name": "timeout_s",
+          "type": "INT",
+          "widget": {
+            "name": "timeout_s"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "llm_url",
+          "name": "llm_url",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "llm_url"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "llm_model",
+          "name": "llm_model",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "llm_model"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "setup",
+          "type": "H3IR_SETUP",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3IRSetup"
+      },
+      "widgets_values": [
+        "",
+        "minimax_h3_ref2va_pruned_w6a8.safetensors",
+        "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax_h3_video_vae_int8_convrot.safetensors",
+        "minimax_h3_audio_vae_fp32.safetensors",
+        "default",
+        900,
+        "http://127.0.0.1:8772/v1",
+        "Qwen/Qwen3-VL-4B-Instruct",
+        ""
+      ],
+      "color": "#0a0a0d",
+      "bgcolor": "#101016",
+      "boxcolor": "#eb8219",
+      "title": "本地模型与视觉服务"
+    },
+    {
+      "id": 2,
+      "type": "OpenH3IRMedia",
+      "pos": [
+        -920,
+        220
+      ],
+      "size": [
+        560,
+        500
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "tray",
+          "name": "tray",
+          "type": "STRING",
+          "widget": {
+            "name": "tray"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "media",
+          "type": "H3IR_MEDIA",
+          "links": [
+            3,
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3IRMedia"
+      },
+      "widgets_values": [
+        "[]",
+        ""
+      ],
+      "color": "#0a0a0d",
+      "bgcolor": "#101016",
+      "boxcolor": "#eb8219",
+      "title": "人物／产品／动作素材"
+    },
+    {
+      "id": 3,
+      "type": "OpenH3IRDirector",
+      "pos": [
+        -920,
+        820
+      ],
+      "size": [
+        560,
+        500
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "profile",
+          "name": "profile",
+          "type": "STRING",
+          "widget": {
+            "name": "profile"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "director",
+          "type": "H3IR_DIRECTOR",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3IRDirector"
+      },
+      "widgets_values": [
+        "{}",
+        ""
+      ],
+      "color": "#0a0a0d",
+      "bgcolor": "#101016",
+      "boxcolor": "#eb8219",
+      "title": "可选导演风格（未连接时不使用）"
+    },
+    {
+      "id": 16,
+      "type": "VideoFactoryLocalVLMGuard",
+      "pos": [
+        -250,
+        -700
+      ],
+      "order": 15,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "VideoFactoryLocalVLMGuard"
+      },
+      "title": "本地4B前置检查 · 清理Comfy自身模型缓存",
+      "inputs": [
+        {
+          "name": "setup",
+          "type": "H3IR_SETUP",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "setup",
+          "type": "H3IR_SETUP",
+          "links": [
+            2,
+            21
+          ]
+        }
+      ],
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "VideoFactoryLocalH3IRCompile",
+      "pos": [
+        -200,
+        -280
+      ],
+      "size": [
+        560,
+        700
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "setup",
+          "localized_name": "setup",
+          "name": "setup",
+          "type": "H3IR_SETUP",
+          "link": 2
+        },
+        {
+          "label": "director",
+          "localized_name": "director",
+          "name": "director",
+          "shape": 7,
+          "type": "H3IR_DIRECTOR",
+          "link": null
+        },
+        {
+          "label": "media",
+          "localized_name": "media",
+          "name": "media",
+          "shape": 7,
+          "type": "H3IR_MEDIA",
+          "link": 3
+        },
+        {
+          "localized_name": "intent",
+          "name": "intent",
+          "type": "STRING",
+          "widget": {
+            "name": "intent"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seconds",
+          "name": "seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "aspect",
+          "name": "aspect",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "creativity",
+          "name": "creativity",
+          "type": "COMBO",
+          "widget": {
+            "name": "creativity"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "silent",
+          "name": "silent",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "silent"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "shots",
+          "name": "shots",
+          "type": "COMBO",
+          "widget": {
+            "name": "shots"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "megapixels",
+          "name": "megapixels",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "megapixels"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "spoken_language",
+          "name": "spoken_language",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "spoken_language"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "sizing",
+          "name": "sizing",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "sizing"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "effort",
+          "name": "effort",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "effort"
+          },
+          "link": null
+        },
+        {
+          "name": "reference_groups",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "reference_groups"
+          },
+          "link": null
+        },
+        {
+          "name": "required_references",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "required_references"
+          },
+          "link": null
+        },
+        {
+          "name": "motion_targets",
+          "type": "STRING",
+          "shape": 7,
+          "widget": {
+            "name": "motion_targets"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            4,
+            5
+          ]
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "links": [
+            13
+          ]
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": [
+            20
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VideoFactoryLocalH3IRCompile"
+      },
+      "widgets_values": [
+        "",
+        5.0,
+        "16:9",
+        "restrained",
+        true,
+        "1",
+        0.25,
+        "English",
+        "max",
+        20261104,
+        "fixed",
+        "standard",
+        "",
+        "",
+        ""
+      ],
+      "color": "#0a0a0d",
+      "bgcolor": "#101016",
+      "boxcolor": "#eb8219",
+      "title": "Quality · 本地4B兼容层调用官方Main"
+    },
+    {
+      "id": 5,
+      "type": "RandomNoise",
+      "pos": [
+        470,
+        -400
+      ],
+      "order": 4,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "title": "RandomNoise",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "widgets_values": [
+        20261104,
+        "fixed"
+      ]
+    },
+    {
+      "id": 6,
+      "type": "KSamplerSelect",
+      "pos": [
+        470,
+        -180
+      ],
+      "order": 5,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "title": "KSamplerSelect",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            9
+          ]
+        }
+      ],
+      "widgets_values": [
+        "res_multistep"
+      ]
+    },
+    {
+      "id": 7,
+      "type": "BasicScheduler",
+      "pos": [
+        470,
+        20
+      ],
+      "order": 6,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      },
+      "title": "BasicScheduler",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            10
+          ]
+        }
+      ],
+      "widgets_values": [
+        "simple",
+        20,
+        1.0
+      ]
+    },
+    {
+      "id": 8,
+      "type": "BasicGuider",
+      "pos": [
+        470,
+        240
+      ],
+      "order": 7,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      },
+      "title": "BasicGuider",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 5
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        850,
+        -120
+      ],
+      "order": 8,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "title": "SamplerCustomAdvanced",
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 7
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 8
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 9
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 10
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            12,
+            14
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": []
+        }
+      ],
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "VAEDecode",
+      "pos": [
+        1200,
+        -220
+      ],
+      "order": 9,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "title": "VAEDecode",
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 12
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "widgets_values": []
+    },
+    {
+      "id": 11,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1200,
+        20
+      ],
+      "order": 10,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "title": "VAEDecodeAudio",
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 14
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            17
+          ]
+        }
+      ],
+      "widgets_values": []
+    },
+    {
+      "id": 12,
+      "type": "CreateVideo",
+      "pos": [
+        1500,
+        -160
+      ],
+      "order": 11,
+      "mode": 0,
+      "flags": {},
+      "size": [
+        280,
+        180
+      ],
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      },
+      "title": "CreateVideo",
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 16
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            18
+          ]
+        }
+      ],
+      "widgets_values": [
+        24.0,
+        "auto",
+        "sRGB",
+        "none"
+      ]
+    },
+    {
+      "id": 13,
+      "type": "SaveVideo",
+      "pos": [
+        1800,
+        -160
+      ],
+      "size": [
+        280,
+        180
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "VIDEO",
+          "link": 18
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "format",
+          "name": "format",
+          "type": "COMBO",
+          "widget": {
+            "name": "format"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "codec",
+          "name": "codec",
+          "type": "COMFY_DYNAMICCOMBO_V3",
+          "widget": {
+            "name": "codec"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "OpenH3IR/Quality",
+        "mp4",
+        "h264",
+        "auto"
+      ],
+      "title": "SaveVideo"
+    },
+    {
+      "id": 14,
+      "type": "PreviewAny",
+      "pos": [
+        450,
+        540
+      ],
+      "size": [
+        540,
+        360
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 19
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "title": "实际编译的 H3 提示词"
+    },
+    {
+      "id": 15,
+      "type": "PreviewAny",
+      "pos": [
+        1050,
+        540
+      ],
+      "size": [
+        540,
+        360
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "source",
+          "name": "source",
+          "type": "*",
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "title": "实际媒体映射与模型报告"
+    },
+    {
+      "id": 17,
+      "type": "OpenH3IRCompile",
+      "pos": [
+        -200,
+        1200
+      ],
+      "size": [
+        560,
+        700
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 2,
+      "inputs": [
+        {
+          "label": "setup",
+          "localized_name": "setup",
+          "name": "setup",
+          "type": "H3IR_SETUP",
+          "link": 21
+        },
+        {
+          "label": "director",
+          "localized_name": "director",
+          "name": "director",
+          "shape": 7,
+          "type": "H3IR_DIRECTOR",
+          "link": null
+        },
+        {
+          "label": "media",
+          "localized_name": "media",
+          "name": "media",
+          "shape": 7,
+          "type": "H3IR_MEDIA",
+          "link": 22
+        },
+        {
+          "localized_name": "intent",
+          "name": "intent",
+          "type": "STRING",
+          "widget": {
+            "name": "intent"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seconds",
+          "name": "seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "seconds"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "aspect",
+          "name": "aspect",
+          "type": "COMBO",
+          "widget": {
+            "name": "aspect"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "creativity",
+          "name": "creativity",
+          "type": "COMBO",
+          "widget": {
+            "name": "creativity"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "silent",
+          "name": "silent",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "silent"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "shots",
+          "name": "shots",
+          "type": "COMBO",
+          "widget": {
+            "name": "shots"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "megapixels",
+          "name": "megapixels",
+          "shape": 7,
+          "type": "FLOAT",
+          "widget": {
+            "name": "megapixels"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "spoken_language",
+          "name": "spoken_language",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "spoken_language"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "sizing",
+          "name": "sizing",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "sizing"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "effort",
+          "name": "effort",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "effort"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": []
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": []
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": []
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "links": []
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "links": []
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "OpenH3IRCompile"
+      },
+      "widgets_values": [
+        "",
+        5.0,
+        "16:9",
+        "restrained",
+        true,
+        "1",
+        0.25,
+        "English",
+        "max",
+        20261104,
+        "fixed",
+        "standard",
+        ""
+      ],
+      "color": "#0a0a0d",
+      "bgcolor": "#101016",
+      "boxcolor": "#eb8219",
+      "title": "官方Main参考（未接输出，不参与本图执行）"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      16,
+      0,
+      "H3IR_SETUP"
+    ],
+    [
+      2,
+      16,
+      0,
+      4,
+      0,
+      "H3IR_SETUP"
+    ],
+    [
+      3,
+      2,
+      0,
+      4,
+      2,
+      "H3IR_MEDIA"
+    ],
+    [
+      4,
+      4,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      4,
+      0,
+      8,
+      0,
+      "MODEL"
+    ],
+    [
+      6,
+      4,
+      1,
+      8,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      7,
+      5,
+      0,
+      9,
+      0,
+      "NOISE"
+    ],
+    [
+      8,
+      8,
+      0,
+      9,
+      1,
+      "GUIDER"
+    ],
+    [
+      9,
+      6,
+      0,
+      9,
+      2,
+      "SAMPLER"
+    ],
+    [
+      10,
+      7,
+      0,
+      9,
+      3,
+      "SIGMAS"
+    ],
+    [
+      11,
+      4,
+      2,
+      9,
+      4,
+      "LATENT"
+    ],
+    [
+      12,
+      9,
+      0,
+      10,
+      0,
+      "LATENT"
+    ],
+    [
+      13,
+      4,
+      3,
+      10,
+      1,
+      "VAE"
+    ],
+    [
+      14,
+      9,
+      0,
+      11,
+      0,
+      "LATENT"
+    ],
+    [
+      15,
+      4,
+      4,
+      11,
+      1,
+      "VAE"
+    ],
+    [
+      16,
+      10,
+      0,
+      12,
+      0,
+      "IMAGE"
+    ],
+    [
+      17,
+      11,
+      0,
+      12,
+      1,
+      "AUDIO"
+    ],
+    [
+      18,
+      12,
+      0,
+      13,
+      0,
+      "VIDEO"
+    ],
+    [
+      19,
+      4,
+      5,
+      14,
+      0,
+      "STRING"
+    ],
+    [
+      20,
+      4,
+      6,
+      15,
+      0,
+      "STRING"
+    ],
+    [
+      21,
+      16,
+      0,
+      17,
+      0,
+      "H3IR_SETUP"
+    ],
+    [
+      22,
+      2,
+      0,
+      17,
+      2,
+      "H3IR_MEDIA"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "version": 0.4,
+  "extra": {
+    "ds": {
+      "scale": 0.6,
+      "offset": [
+        1000,
+        500
+      ]
+    },
+    "video_factory": {
+      "name": "H3_R2V_OpenH3IR_Quality",
+      "version": 4,
+      "mode": "reference_to_video",
+      "template_requires_user_media": true,
+      "generation_status": "NOT_GENERATED",
+      "local_only": true,
+      "pack_commit": "8660988b033d427f346e72fdbcf2d45ede48edbe",
+      "upstream": "https://github.com/ruashots/ComfyUI-OpenH3-IR",
+      "upstream_example": "https://github.com/ruashots/ComfyUI-OpenH3-IR/blob/8660988b033d427f346e72fdbcf2d45ede48edbe/example/openh3ir_base_workflow.json",
+      "license": "Apache-2.0; retain upstream LICENSE and NOTICE when redistributing derived workflow",
+      "sampling": {
+        "steps": 20,
+        "sampler": "res_multistep",
+        "scheduler": "simple",
+        "loras": []
+      },
+      "required_comfy_startup_environment": {
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "H3IR_GUIDED_DECODING": "1",
+        "H3IR_LLM_THINKING": "0",
+        "H3IR_LLM_MAX_TOKENS": "4096"
+      },
+      "vlm_profile": {
+        "base_url": "http://127.0.0.1:8772/v1",
+        "model_id": "Qwen/Qwen3-VL-4B-Instruct",
+        "semantic_acceptance": "NOT_VERIFIED",
+        "context_32k_acceptance": "NOT_VERIFIED"
+      },
+      "local_vlm_guard": {
+        "node_id": "16",
+        "scope": "Comfy process cache cleanup before VLM compilation",
+        "job_wide_gpu_mutex": false,
+        "runtime_verification": "NOT_VERIFIED"
+      },
+      "local_backend_profile": {
+        "node_id": "4",
+        "profile": "local-h3ir-qwen4b-v3",
+        "scope": "explicit wrapper calls real upstream Main; seven outputs preserved",
+        "card_output_tokens": 3072,
+        "compose_output_tokens": 4096,
+        "retries": 0,
+        "required_compiler_source": "written",
+        "source_gate": "actual IRDocument before H3 model/clip/VAE loading",
+        "reference_binding": "explicit declared groups compiled over unique existing written subjects; no additional LLM rewrite; ambiguity blocks",
+        "creative_text_source": "model_written",
+        "binding_source": "declared_contract_projection",
+        "visual_facts_added": false,
+        "image_sizing": "image wiring and caller sizing; video match does not downgrade image max",
+        "upstream_reference_node": "17",
+        "upstream_reference_status": "REFERENCE_ONLY_NOT_EXECUTED",
+        "runtime_verification": "NOT_VERIFIED"
+      },
+      "prompt_output": [
+        "4",
+        5
+      ],
+      "report_output": [
+        "4",
+        6
+      ],
+      "note": "Megapixel budget does not guarantee an exact canvas; use actual compiled report. No SMD/RefMod validation claim.",
+      "assets": [],
+      "warnings": []
+    }
+  }
+}

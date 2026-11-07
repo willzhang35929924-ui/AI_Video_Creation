@@ -48,8 +48,19 @@ async def decide(project_id:str,shot_id:str,payload:DecisionInput,request:Reques
         from app.services.studio_pipeline import create_pipeline
         previous=session.scalar(select(m.StudioRun).where(m.StudioRun.project_id==project_id).order_by(m.StudioRun.created_at.desc()))
         options=dict(previous.snapshot_json.get('options',{})) if previous else {}
-        options.update(shot_ids=[shot_id],force_shot_ids=[shot_id],instructions={shot_id:payload.instruction},prompt_overrides={shot_id:payload.prompt_override} if payload.prompt_override is not None else {})
-        create_pipeline(session,request.app.state.settings,project_id,options)
+        prior_job=session.get(m.GenerationJob,video.generation_job_id) if video else None
+        original=prior_job.parameters_json if prior_job else {}
+        context=original.get('context_inputs') or {}
+        prior_quality=options.get('quality_by_shot',{}).get(shot_id) or original.get('quality_request')
+        prompt=payload.prompt_override if payload.prompt_override is not None else context.get('prompt_override', options.get('prompt_overrides',{}).get(shot_id))
+        images=context.get('explicit_visual_ids',options.get('reference_image_ids',{}).get(shot_id))
+        motion=context.get('explicit_motion',options.get('motion_reference_overrides',{}).get(shot_id))
+        options.update(shot_ids=[shot_id],force_shot_ids=[shot_id],instructions={shot_id:payload.instruction},
+            prompt_overrides={shot_id:prompt} if prompt is not None else {},
+            reference_image_ids={shot_id:images} if images is not None else {},
+            motion_reference_overrides={shot_id:motion} if motion is not None else {})
+        create_pipeline(session,request.app.state.settings,project_id,options,
+                        prior_quality={shot_id:prior_quality} if prior_quality else None)
     if payload.position is not None:
         ordered=sorted((all_rows[s.id] for s in shots),key=lambda d:(d.position,ids.index(d.shot_id)))
         ordered.remove(decision);ordered.insert(payload.position-1,decision)
@@ -77,12 +88,6 @@ def compose(project_id:str,payload:ComposeInput,request:Request,session:Session=
         selected,frozen=assert_frozen(session,route);service_id=selected.id
         if frozen.get('provider')!='ffmpeg':raise AppError(409,'assembly_route_adapter','此合成路由尚无已实现的适配器')
         if route.get('profile',{}).get('settings',{}).get('parameters'):raise AppError(422,'assembly_route_parameters_unsupported','合成输出参数使用已确认的时间线，不静默覆盖')
-    if 'width' not in payload.model_fields_set and 'height' not in payload.model_fields_set:
-        from app.services.video_quality import inherited_settings,plan
-        quality=inherited_settings(session,project_id)
-        if quality:
-            requested=plan(quality)['requested']
-            payload=payload.model_copy(update={'width':requested['width'],'height':requested['height']})
     shots=current_shots(session,project_id);rows=decisions(session,project_id,shots)
     if payload.expected_decisions is not None and payload.expected_decisions!={s.id:rows[s.id].revision for s in shots}:raise AppError(409,'studio_review_changed','审片决定或镜头范围已变化，请刷新最终合成摘要后重新确认')
     if not shots or any(rows[s.id].action=='pending' for s in shots):raise AppError(409,'studio_review_pending','请先对当前每个镜头选择保留或排除')
@@ -93,7 +98,8 @@ def compose(project_id:str,payload:ComposeInput,request:Request,session:Session=
         video=get(session,m.VideoRevision,d.video_id)
         if video.shot_id!=d.shot_id or video.project_id!=project_id or video.review_status!='approved':raise AppError(409,'studio_review_stale','已保留的视频版本与审片决定不一致，请刷新')
         clips.append({'video_id':d.video_id,'trim_start':d.trim_start,'trim_end':d.trim_end})
-    timeline=TimelineRequest.model_validate({'clips':clips,'transitions':[{'type':payload.transition,'duration':payload.transition_duration,'audio':'crossfade' if payload.transition=='crossfade' else 'cut'} for _ in kept[1:]],'output':{'width':payload.width,'height':payload.height,'fps':payload.fps,'codec':'libx264','audio_policy':payload.audio_policy,'subtitles':payload.subtitles},'service_id':service_id})
+    mode = payload.resolution_mode or ('custom' if {'width', 'height'} & payload.model_fields_set else 'source')
+    timeline=TimelineRequest.model_validate({'clips':clips,'transitions':[{'type':payload.transition,'duration':payload.transition_duration,'audio':'crossfade' if payload.transition=='crossfade' else 'cut'} for _ in kept[1:]],'output':{'width':payload.width,'height':payload.height,'resolution_mode':mode,'allow_downscale':payload.allow_downscale,'fps':payload.fps,'codec':'libx264','audio_policy':payload.audio_policy,'subtitles':payload.subtitles},'service_id':service_id})
     from app.api.assemblies import create,submit
     assembly=create(AssemblyCreate(project_id=project_id,name='统一审片成片',timeline=timeline),request,session)
     snapshot_decisions=jsonable_encoder([row(rows[s.id]) for s in shots])

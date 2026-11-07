@@ -1,0 +1,289 @@
+{
+  "_video_factory": {
+    "name": "H3_R2V_OpenH3IR_Quality",
+    "version": 4,
+    "mode": "reference_to_video",
+    "template_requires_user_media": true,
+    "generation_status": "NOT_GENERATED",
+    "local_only": true,
+    "pack_commit": "8660988b033d427f346e72fdbcf2d45ede48edbe",
+    "upstream": "https://github.com/ruashots/ComfyUI-OpenH3-IR",
+    "upstream_example": "https://github.com/ruashots/ComfyUI-OpenH3-IR/blob/8660988b033d427f346e72fdbcf2d45ede48edbe/example/openh3ir_base_workflow.json",
+    "license": "Apache-2.0; retain upstream LICENSE and NOTICE when redistributing derived workflow",
+    "sampling": {
+      "steps": 20,
+      "sampler": "res_multistep",
+      "scheduler": "simple",
+      "loras": []
+    },
+    "required_comfy_startup_environment": {
+      "HF_HUB_OFFLINE": "1",
+      "TRANSFORMERS_OFFLINE": "1",
+      "H3IR_GUIDED_DECODING": "1",
+      "H3IR_LLM_THINKING": "0",
+      "H3IR_LLM_MAX_TOKENS": "4096"
+    },
+    "vlm_profile": {
+      "base_url": "http://127.0.0.1:8772/v1",
+      "model_id": "Qwen/Qwen3-VL-4B-Instruct",
+      "semantic_acceptance": "NOT_VERIFIED",
+      "context_32k_acceptance": "NOT_VERIFIED"
+    },
+    "local_vlm_guard": {
+      "node_id": "16",
+      "scope": "Comfy process cache cleanup before VLM compilation",
+      "job_wide_gpu_mutex": false,
+      "runtime_verification": "NOT_VERIFIED"
+    },
+    "local_backend_profile": {
+      "node_id": "4",
+      "profile": "local-h3ir-qwen4b-v3",
+      "scope": "explicit wrapper calls real upstream Main; seven outputs preserved",
+      "card_output_tokens": 3072,
+      "compose_output_tokens": 4096,
+      "retries": 0,
+      "required_compiler_source": "written",
+      "source_gate": "actual IRDocument before H3 model/clip/VAE loading",
+      "reference_binding": "explicit declared groups compiled over unique existing written subjects; no additional LLM rewrite; ambiguity blocks",
+      "creative_text_source": "model_written",
+      "binding_source": "declared_contract_projection",
+      "visual_facts_added": false,
+      "image_sizing": "image wiring and caller sizing; video match does not downgrade image max",
+      "upstream_reference_node": "17",
+      "upstream_reference_status": "REFERENCE_ONLY_NOT_EXECUTED",
+      "runtime_verification": "NOT_VERIFIED"
+    },
+    "prompt_output": [
+      "4",
+      5
+    ],
+    "report_output": [
+      "4",
+      6
+    ],
+    "note": "Megapixel budget does not guarantee an exact canvas; use actual compiled report. No SMD/RefMod validation claim.",
+    "assets": [],
+    "warnings": []
+  },
+  "prompt": {
+    "1": {
+      "class_type": "OpenH3IRSetup",
+      "inputs": {
+        "server": "",
+        "reference_model": "minimax_h3_ref2va_pruned_w6a8.safetensors",
+        "frames_model": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "text_encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "video_vae": "minimax_h3_video_vae_int8_convrot.safetensors",
+        "audio_vae": "minimax_h3_audio_vae_fp32.safetensors",
+        "weight_dtype": "default",
+        "timeout_s": 900,
+        "llm_url": "http://127.0.0.1:8772/v1",
+        "llm_model": "Qwen/Qwen3-VL-4B-Instruct"
+      }
+    },
+    "2": {
+      "class_type": "OpenH3IRMedia",
+      "inputs": {
+        "tray": "[]"
+      }
+    },
+    "3": {
+      "class_type": "OpenH3IRDirector",
+      "inputs": {
+        "profile": "{}"
+      }
+    },
+    "16": {
+      "class_type": "VideoFactoryLocalVLMGuard",
+      "inputs": {
+        "setup": [
+          "1",
+          0
+        ]
+      }
+    },
+    "4": {
+      "class_type": "VideoFactoryLocalH3IRCompile",
+      "inputs": {
+        "intent": "",
+        "seconds": 5.0,
+        "aspect": "16:9",
+        "creativity": "restrained",
+        "silent": true,
+        "shots": "1",
+        "setup": [
+          "16",
+          0
+        ],
+        "media": [
+          "2",
+          0
+        ],
+        "megapixels": 0.25,
+        "spoken_language": "English",
+        "sizing": "max",
+        "seed": 20261104,
+        "effort": "standard",
+        "reference_groups": "",
+        "required_references": "",
+        "motion_targets": ""
+      }
+    },
+    "5": {
+      "class_type": "RandomNoise",
+      "inputs": {
+        "noise_seed": 20261104
+      }
+    },
+    "6": {
+      "class_type": "KSamplerSelect",
+      "inputs": {
+        "sampler_name": "res_multistep"
+      }
+    },
+    "7": {
+      "class_type": "BasicScheduler",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "scheduler": "simple",
+        "steps": 20,
+        "denoise": 1.0
+      }
+    },
+    "8": {
+      "class_type": "BasicGuider",
+      "inputs": {
+        "model": [
+          "4",
+          0
+        ],
+        "conditioning": [
+          "4",
+          1
+        ]
+      }
+    },
+    "9": {
+      "class_type": "SamplerCustomAdvanced",
+      "inputs": {
+        "noise": [
+          "5",
+          0
+        ],
+        "guider": [
+          "8",
+          0
+        ],
+        "sampler": [
+          "6",
+          0
+        ],
+        "sigmas": [
+          "7",
+          0
+        ],
+        "latent_image": [
+          "4",
+          2
+        ]
+      }
+    },
+    "10": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": [
+          "9",
+          0
+        ],
+        "vae": [
+          "4",
+          3
+        ]
+      }
+    },
+    "11": {
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": [
+          "9",
+          0
+        ],
+        "vae": [
+          "4",
+          4
+        ]
+      }
+    },
+    "12": {
+      "class_type": "CreateVideo",
+      "inputs": {
+        "images": [
+          "10",
+          0
+        ],
+        "audio": [
+          "11",
+          0
+        ],
+        "fps": 24.0
+      }
+    },
+    "13": {
+      "class_type": "SaveVideo",
+      "inputs": {
+        "video": [
+          "12",
+          0
+        ],
+        "filename_prefix": "OpenH3IR/Quality",
+        "format": "mp4",
+        "format.codec": "h264"
+      }
+    },
+    "14": {
+      "class_type": "PreviewAny",
+      "inputs": {
+        "source": [
+          "4",
+          5
+        ]
+      }
+    },
+    "15": {
+      "class_type": "PreviewAny",
+      "inputs": {
+        "source": [
+          "4",
+          6
+        ]
+      }
+    },
+    "17": {
+      "class_type": "OpenH3IRCompile",
+      "inputs": {
+        "intent": "",
+        "seconds": 5.0,
+        "aspect": "16:9",
+        "creativity": "restrained",
+        "silent": true,
+        "shots": "1",
+        "setup": [
+          "16",
+          0
+        ],
+        "media": [
+          "2",
+          0
+        ],
+        "megapixels": 0.25,
+        "spoken_language": "English",
+        "sizing": "max",
+        "seed": 20261104,
+        "effort": "standard"
+      }
+    }
+  }
+}

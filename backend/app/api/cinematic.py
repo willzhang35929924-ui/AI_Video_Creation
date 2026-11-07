@@ -193,8 +193,9 @@ def approve_inputs(run_id:str,payload:ApprovalRequest,request:Request,session:Se
     run=get(session,m.ProductionRun,run_id);script=get(session,m.ScriptRevision,run.script_revision_id)
     if run.status in ['completed','cancelled']:raise AppError(409,'production_closed','此编排已结束')
     for step in run.steps_json:
-        shot=get(session,m.StoryboardShot,step['shot_id']);pre=shot_preflight(session,request.app.state.settings,shot)
-        if not pre['ready']:raise AppError(409,'production_inputs_not_ready','请先确认设定并审核关键画面',pre)
+        context_run=step['shot_id'] in run.snapshot_json.get('h3_context_by_shot',{})
+        shot=get(session,m.StoryboardShot,step['shot_id']);pre=shot_preflight(session,request.app.state.settings,shot,require_visual=not context_run,context_inputs=context_run)
+        if not pre['ready']:raise AppError(409,'production_inputs_not_ready','请先确认本镜绑定的制作设定及参考素材' if context_run else '请先确认设定并审核关键画面',pre)
     script.status='approved';script.approved_at=datetime.now(timezone.utc);script.approved_by=payload.operator
     approve_record(session,'script',script.id,script.revision,'approved',payload);session.commit()
     for step in run.steps_json:approve_shot(step['shot_id'],payload,session)
@@ -224,6 +225,9 @@ def repair_run(run_id:str,payload:dict,session:Session=Depends(get_db)):
     if category not in rules['repair_categories'] or not isinstance(reason,str) or not reason.strip() or len(reason)>4000:raise AppError(422,'repair_reason_required','请选择实际问题分类并说明修复方向')
     steps=copy.deepcopy(run.steps_json);step=next((s for s in steps if s['shot_id']==shot_id),None)
     if not step:raise AppError(422,'repair_shot_mismatch','镜头不属于此编排')
+    child=session.get(m.GenerationJob,step['video_job_id']) if step.get('video_job_id') else None
+    if child and child.status in {'unknown','closed_unknown','submitting','queued','submitted','running','cancelling','reconciling'}:
+        raise AppError(409,'production_repair_submission_unresolved','原任务仍执行或提交结果未知，请先核对原任务，系统未重复提交')
     history=list(run.result_json.get('attempt_history',[]))
     def phase(value):return value.get('repair_phase') or ('video' if value.get('video_job_id') else 'keyframe' if value.get('keyframe_id') else 'scene')
     current_phase=phase(step)

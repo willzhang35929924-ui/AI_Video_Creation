@@ -7,7 +7,7 @@ from app.core.db import get_db
 from app.core.errors import AppError
 from app.models import Assembly, AssemblyRender, Project
 from app.schemas_product import AssemblyCreate, AssemblyPatch, AssemblySubmit, TimelineRequest
-from app.services.assembly import TRANSITIONS, preview_snapshot, validate_timeline
+from app.services.assembly import TRANSITIONS, preview_snapshot, recover_legacy_output, validate_timeline
 
 router = APIRouter(prefix='/api')
 
@@ -112,7 +112,7 @@ def submit(assembly_id, payload, request, session, kind,route_snapshot=None):
         if clip.get('full_stream_timing',{}):
             spec['trim_end'] = None
         clips.append(spec)
-    config = TimelineRequest.model_validate({'clips':clips, 'transitions':original['transitions'], 'output':original['output'], 'service_id':selected_service.id})
+    config = TimelineRequest.model_validate({'clips':clips, 'transitions':original['transitions'], 'output':recover_legacy_output(original), 'service_id':selected_service.id})
     snapshot = draft_timeline(session, request.app.state.settings, row, config)
     if kind == 'preview':
         snapshot = preview_snapshot(snapshot, payload.transition_index)

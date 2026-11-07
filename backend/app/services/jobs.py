@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import httpx
 from sqlalchemy import func, select
@@ -22,6 +23,88 @@ from app.services.composition import process_composition
 
 logger = logging.getLogger(__name__)
 _wan_poll_after: dict[str, float] = {}
+
+_SOURCE_GATE_ERROR = re.compile(
+    r"Compiler source gate BLOCKED (?:'[a-z_]+'|None); "
+    r"requires actual source=written without fallback; evidence: ([^\r\n]+)"
+)
+_REFERENCE_GATE_ERROR = 'Declared reference projection BLOCKED before H3 loading: '
+_REFERENCE_GATE_MESSAGE = ('本镜 Context-IR 参考素材绑定未通过，视频尚未开始生成。'
+                           '请核对已选商品或人物素材，在镜头动作中明确引用对应的主体标签，再重试此镜。')
+_COMPILER_SCOPE = re.compile(r'([0-9]{8}-[0-9]{6}-[0-9]{6}Z)-[0-9a-f]{8}')
+_VALIDATION_RULE = r'[A-Z][0-9]{1,2}[a-z]?-[a-z0-9]+(?:-[a-z0-9]+)*'
+_VALIDATION_REASON = re.compile(
+    rf'the written brief still failed after [0-9]{{1,2}} correction pass\(es\): '
+    rf'({_VALIDATION_RULE}(?:(?:; |, ){_VALIDATION_RULE}){{0,19}})'
+)
+
+
+def _h3_source_gate_message(result, job_id, prompt_id, graph_sha, profile, *, read_local_receipt):
+    """Explain a bound native error without displaying provider paths or arbitrary prose."""
+    from app.services.h3_context_provider import WINDOWS_SCOPE_ROOT, graph_digest
+
+    generic = '本镜 Context-IR 编译未通过，视频尚未开始生成。请检查本镜的运镜说明与参考素材，再重试此镜。'
+    summary = result.get('error')
+    fallback = None
+    if isinstance(summary, str) and summary.startswith('Node 4 (VideoFactoryLocalH3IRCompile): '):
+        if _SOURCE_GATE_ERROR.search(summary):
+            fallback = generic
+        elif _REFERENCE_GATE_ERROR in summary:
+            fallback = _REFERENCE_GATE_MESSAGE
+    if result.get('provider_job_id') != prompt_id or not graph_sha:
+        return fallback
+    try:
+        history = result['raw']
+        _, recorded_id, graph, extra, *_ = history['prompt']
+        if (recorded_id != prompt_id or extra.get('client_id') != job_id or graph_digest(graph) != graph_sha
+                or graph['4']['class_type'] != 'VideoFactoryLocalH3IRCompile'):
+            return fallback
+        events = {event: data for event, data in history['status']['messages'] if data.get('prompt_id') == prompt_id}
+        failure = events['execution_error']
+        if failure.get('node_id') != '4' or failure.get('node_type') != 'VideoFactoryLocalH3IRCompile':
+            return fallback
+        native_error = failure['exception_message'].strip()
+        if native_error.startswith(_REFERENCE_GATE_ERROR):
+            return _REFERENCE_GATE_MESSAGE
+        error = _SOURCE_GATE_ERROR.fullmatch(native_error)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return fallback
+    if not error:
+        return fallback
+
+    if not read_local_receipt:
+        return generic
+    try:
+        evidence = PureWindowsPath(error[1])
+        scope = _COMPILER_SCOPE.fullmatch(evidence.parent.name)
+        if not scope or evidence.name != 'compiler-001' or evidence.parent.parent != PureWindowsPath(WINDOWS_SCOPE_ROOT):
+            return generic
+        scope_ms = datetime.strptime(scope[1], '%Y%m%d-%H%M%S-%fZ').replace(tzinfo=timezone.utc).timestamp() * 1000
+        if not events['execution_start']['timestamp'] <= scope_ms <= failure['timestamp']:
+            return generic
+        receipt_path = WINDOWS_SCOPE_ROOT / evidence.parent.name / 'compiler-001' / 'source-gate.json'
+        if receipt_path.resolve(strict=True) != receipt_path:
+            return generic
+        with receipt_path.open('rb') as file:
+            receipt = json.loads(file.read(8192))
+        if (receipt.get('profile') != profile or receipt.get('source') != 'draft'
+                or receipt.get('required_source') != 'written' or receipt.get('status') != 'BLOCKED'):
+            return generic
+        reason = _VALIDATION_REASON.fullmatch(receipt.get('fallback_reason') or '')
+    except (AttributeError, KeyError, OSError, TypeError, ValueError):
+        return generic
+    if not reason:
+        return generic
+    rules = re.split(r'[;,] ', reason[1])
+    if 'P5-camera-no-motion-type' in rules:
+        return ('本镜 Context-IR 编译缺少可识别的运镜类型，视频尚未开始生成。'
+                '请在本镜说明中明确运镜，例如轻推（Push In）、手持微晃（Shake Slightly）或固定机位（Static Shot），再重试此镜。'
+                f'校验项为 {reason[1]}。')
+    if 'P1-no-style-opening' in rules:
+        return ('本地模型未按 Context-IR 要求把风格说明写在编号镜头之前，视频尚未开始生成。'
+                '镜头的原始输入和参考图已保留，可定向重试此镜。'
+                f'校验项为 {reason[1]}。')
+    return f'{generic}校验项为 {reason[1]}。'
 
 
 def video_outputs(history):
@@ -38,6 +121,8 @@ async def poll_job(settings, session_factory, job_id):
         job = session.get(GenerationJob, job_id)
         provider_id = job.provider_job_id
         snapshot = job.parameters_json.get('service_snapshot')
+        workflow = job.parameters_json.get('h3_workflow')
+        submitted_graph_sha = job.parameters_json.get('actual_workflow_sha256')
         from app.services.video_services import existing_provider
         provider = existing_provider(session,settings,snapshot) if snapshot else ComfyUIH3Provider(settings)
     result = await provider.get_job(provider_id)
@@ -56,16 +141,25 @@ async def poll_job(settings, session_factory, job_id):
         result.update(status='failed',error='连续 30 秒未在 ComfyUI 队列或历史中找到任务；原任务 ID 保留，可核对服务端记录')
     elif missing_file.exists():
         missing_file.unlink()
-    data = None
+    data = context_evidence = None
     if result["status"] == "generated":
         if snapshot and snapshot['provider'] == 'video_api':
             data = await provider.download(result.get('output_url'))
         else:
+            if workflow:
+                from app.services.h3_context_provider import context_history
+                context_evidence = context_history(result['raw'], workflow, submitted_graph_sha)
+                profile = snapshot.get('settings') or {}
+                if settings.container_mode or profile.get('h3_context_ir') is True or profile.get('workflow_profile') == 'context_ir':
+                    from app.services.h3_context_provider import preserve_context_receipts
+                    context_evidence['native_receipts'] = await preserve_context_receipts(snapshot['base_url'], context_evidence, logdir)
+                (logdir / 'context-ir-result.json').write_text(json.dumps(context_evidence, ensure_ascii=False, indent=2), encoding='utf-8')
             outputs = video_outputs(result["raw"])
             if len(outputs) != 1:
                 raise AppError(502, "comfyui_mp4_missing", "ComfyUI 成功记录没有唯一真实 MP4", {"outputs": outputs})
             base_url=snapshot['base_url'] if snapshot else settings.comfyui_base_url
-            async with httpx.AsyncClient(timeout=None, trust_env=False) as client:
+            from app.core.trusted_service_origins import local_service_client
+            async with local_service_client([base_url], timeout=None) as client:
                 response = await client.get(f"{base_url}/view", params=outputs[0])
                 response.raise_for_status()
                 data = response.content
@@ -184,7 +278,11 @@ async def poll_job(settings, session_factory, job_id):
                                  'reference_manifest':job.parameters_json.get('reference_manifest'),
                                  'actual_reference_uploads':job.parameters_json.get('actual_reference_uploads',[]),
                                  'actual_workflow_sha256':job.parameters_json.get('actual_workflow_sha256')}
-            if snapshot:
+            if context_evidence:
+                receipt = {key: value for key, value in context_evidence.items() if key not in {'compiled_prompt', 'media_report'}}
+                job.parameters_json = {**job.parameters_json, 'context_ir_execution': receipt}
+                video.metadata_json = {**video.metadata_json, 'h3_workflow': workflow, 'context_ir_execution': receipt}
+            if snapshot and not context_evidence:
                 service=session.get(AIService,snapshot['service_id'])
                 if service and service.revision==snapshot['service_revision']:
                     capability='first_frame_to_video' if snapshot.get('settings',{}).get('video_contract')=='wan26-i2v' else 'reference_to_video'
@@ -200,6 +298,22 @@ async def poll_job(settings, session_factory, job_id):
         elif job.status == "failed":
             job.error_code = "comfyui_execution_failed" if job.provider=='comfyui_h3' else 'cloud_video_execution_failed'
             job.error_message = result.get("error") or ('ComfyUI 任务失败' if job.provider=='comfyui_h3' else '云端视频任务失败')
+            if workflow and job.provider == 'comfyui_h3':
+                message = _h3_source_gate_message(
+                    result, job.id, provider_id, submitted_graph_sha, workflow.get('context_ir_version'),
+                    read_local_receipt=bool(snapshot and snapshot.get('base_url') == 'http://127.0.0.1:8188'),
+                )
+                if message:
+                    job.error_code = 'h3_context_ir_validation_failed'
+                    job.error_message = message
+            if workflow and any(message[0] == 'execution_interrupted' for message in result.get('raw', {}).get('status', {}).get('messages', []) if message):
+                try:
+                    guard = json.loads((logdir / 'memory-interrupt-intent.json').read_text(encoding='utf-8'))
+                except (OSError, ValueError):
+                    guard = {}
+                if guard.get('prompt_id') == provider_id and guard.get('status') == 'ALARM_LOW_COMMIT':
+                    job.error_code = 'h3_windows_commit_low'
+                    job.error_message = '本机 Windows 提交内存余量低于 2 GiB，已保护性中止 H3。请释放内存或检查分页文件容量后重试。'
             job.finished_at = datetime.now(timezone.utc)
         elif job.status == 'unknown':
             job.error_code='provider_status_unknown'

@@ -34,6 +34,82 @@
   },
   "PipelineStart": {
     "$defs": {
+      "MotionReferenceInput": {
+        "additionalProperties": false,
+        "description": "An explicit, per-shot permission to use a bounded source segment.",
+        "properties": {
+          "video_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Video Id",
+            "type": "string"
+          },
+          "expected_revision": {
+            "minimum": 1,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "source_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Sha256",
+            "type": "string"
+          },
+          "trim_start_seconds": {
+            "minimum": 0,
+            "title": "Trim Start Seconds",
+            "type": "number"
+          },
+          "trim_end_seconds": {
+            "exclusiveMinimum": 0,
+            "title": "Trim End Seconds",
+            "type": "number"
+          },
+          "authorized_for_motion": {
+            "title": "Authorized For Motion",
+            "type": "boolean"
+          },
+          "reference_role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "structure",
+                  "action"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Role"
+          },
+          "target_character_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Character Id"
+          }
+        },
+        "required": [
+          "video_id",
+          "expected_revision",
+          "source_sha256",
+          "trim_start_seconds",
+          "trim_end_seconds",
+          "authorized_for_motion"
+        ],
+        "title": "MotionReferenceInput",
+        "type": "object"
+      },
       "QualitySettings": {
         "additionalProperties": false,
         "properties": {
@@ -49,11 +125,12 @@
             "type": "string"
           },
           "mode": {
-            "default": "standard",
+            "default": "high",
             "enum": [
-              "preview",
+              "high",
               "standard",
-              "high"
+              "fast",
+              "preview"
             ],
             "title": "Mode",
             "type": "string"
@@ -206,6 +283,38 @@
         "default": null,
         "title": "Shot Ids"
       },
+      "prompt_overrides": {
+        "additionalProperties": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": "Prompt Overrides",
+        "type": "object"
+      },
+      "reference_image_ids": {
+        "additionalProperties": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 9,
+          "type": "array"
+        },
+        "title": "Reference Image Ids",
+        "type": "object"
+      },
+      "motion_reference_overrides": {
+        "additionalProperties": {
+          "items": {
+            "$ref": "#/$defs/MotionReferenceInput"
+          },
+          "maxItems": 3,
+          "type": "array"
+        },
+        "title": "Motion Reference Overrides",
+        "type": "object"
+      },
       "max_retries": {
         "default": 2,
         "maximum": 3,
@@ -353,6 +462,27 @@
         "minimum": 0,
         "title": "Transition Duration",
         "type": "number"
+      },
+      "resolution_mode": {
+        "anyOf": [
+          {
+            "enum": [
+              "source",
+              "custom"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Resolution Mode"
+      },
+      "allow_downscale": {
+        "default": false,
+        "title": "Allow Downscale",
+        "type": "boolean"
       },
       "width": {
         "default": 1280,

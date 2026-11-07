@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class QualitySettings(BaseModel):
     model_config = ConfigDict(extra='forbid')
     resolution: Literal['720p', '1080p', '2k', '4k'] = '720p'
-    mode: Literal['preview', 'standard', 'high'] = 'standard'
+    mode: Literal['high', 'standard', 'fast', 'preview'] = 'high'
     aspect_ratio: Literal['16:9', '9:16', '1:1'] = '16:9'
     processing: Literal['lanczos', 'native', 'ai_super_resolution', 'seedvr2', 'reconstruction'] = 'lanczos'
 

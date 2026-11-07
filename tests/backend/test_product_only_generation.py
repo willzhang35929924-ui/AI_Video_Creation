@@ -1,5 +1,4 @@
 """Product-only compiler/API regressions; provider is an explicit contract stub."""
-import asyncio
 import copy
 import hashlib
 from types import SimpleNamespace
@@ -19,6 +18,28 @@ from app.services.cinematic_quality import generation_inputs_hash, inspect_ir, s
 from app.services.cinematic_rules import fingerprint, rules_bundle
 from app.services.providers import JobAccepted
 from app.services.screenplay import generation_inputs, uses_structured_screenplay
+
+
+def run_contract(coroutine):
+    """Drive the in-process contract without creating a socket/event loop."""
+    try:
+        coroutine.send(None)
+    except StopIteration as completed:
+        return completed.value
+    finally:
+        coroutine.close()
+    raise AssertionError('This contract must finish before any external/asynchronous I/O')
+
+
+class ContractProvider:
+    name = 'explicit_contract_stub'
+
+    def __init__(self):
+        self.requests = []
+
+    async def submit(self, request):
+        self.requests.append(request)
+        return JobAccepted('contract-only-no-inference', 'queued')
 
 
 @pytest.fixture()
@@ -223,22 +244,14 @@ def test_product_reference_budget_is_the_actual_h3_budget(product_shot):
 def test_generation_entry_persists_null_character_version_and_product_manifest(product_shot, monkeypatch, override):
     from app.services import video_services
     p = product_shot
-    requests = []
-
-    class ContractProvider:
-        name = 'explicit_contract_stub'
-
-        async def submit(self, request):
-            requests.append(request)
-            return JobAccepted('contract-only-no-inference', 'queued')
-
     provider = ContractProvider()
+    requests = provider.requests
     monkeypatch.setattr(routes, 'provider_for', lambda settings: provider)
     monkeypatch.setattr(video_services, 'select_video_service', lambda *args: (None,
         {'settings': {}, 'provider': 'comfyui', 'is_cloud': False}, provider))
     request = Request({'type': 'http', 'app': SimpleNamespace(state=SimpleNamespace(settings=p.settings))})
-    job, result = asyncio.run(routes.generate_for_shot(request, p.session, p.shot,
-        GenerationRequest(parameters={'width': 1024, 'height': 576}, prompt_override=override)))
+    job, result = run_contract(routes.generate_for_shot(request, p.session, p.shot,
+        GenerationRequest(parameters={'width': 1024, 'height': 576}, prompt_override=override), legacy_production=True))
     assert result is None and job.status == 'queued'
     if override is not None:
         assert requests[0].prompt == override == job.prompt
@@ -251,3 +264,66 @@ def test_generation_entry_persists_null_character_version_and_product_manifest(p
     assert not p.session.scalar(select(func.count()).select_from(m.Character))
     shots = routes.list_shots(p.project.id, request, session=p.session)
     assert shots[0]['generation_ready'] is True and shots[0]['participants'] == []
+
+
+@pytest.mark.parametrize('kind', ['cloud', 'native'])
+def test_direct_generation_respects_selected_legacy_profile_without_context_quality(product_shot, monkeypatch, kind):
+    from app.services import ai_services, context_production_inputs, video_services
+    p = product_shot
+    provider = ContractProvider()
+    service = m.AIService(module='video_generation', name='Isolated direct ' + kind,
+        provider='video_api' if kind == 'cloud' else 'comfyui',
+        base_url='https://example.invalid/v1' if kind == 'cloud' else 'http://127.0.0.1:8189',
+        default_model='contract-cloud-video' if kind == 'cloud' else 'minimax_h3_ref2va_pruned_w6a8.safetensors',
+        settings_json=({'video_contract': 'video-jobs-v1'} if kind == 'cloud' else
+                       {'workflow_profile': 'native_h3_r2v', 'h3_context_ir': False}))
+    p.session.add(service); p.session.commit()
+    selected = []
+    resolved = []
+    real_resolve = ai_services.resolve_service
+
+    def resolve_profile(session, module, service_id=None, project_id=None, model_id=None):
+        resolved.append((module, service_id, project_id, model_id))
+        return real_resolve(session, module, service_id, project_id, model_id)
+
+    def select_contract(session, settings, project_id, service_id=None, model_id=None, **kwargs):
+        assert session is p.session and settings is p.settings and project_id == p.project.id
+        assert service_id == service.id and model_id == service.default_model
+        selected.append(kwargs)
+        return service, ai_services.service_snapshot(service, model_id), provider
+
+    def forbidden_context(*_args, **_kwargs):
+        pytest.fail('A cloud or explicit ordinary native profile must not enter Context-IR quality/input compilation')
+
+    monkeypatch.setattr(ai_services, 'resolve_service', resolve_profile)
+    monkeypatch.setattr(video_services, 'select_video_service', select_contract)
+    monkeypatch.setattr(routes, 'provider_for', lambda _settings: provider)
+    monkeypatch.setattr(context_production_inputs, 'quality_for_shot', forbidden_context)
+    monkeypatch.setattr(context_production_inputs, 'collect_context_inputs', forbidden_context)
+    monkeypatch.setattr(context_production_inputs, 'restore_context_inputs', forbidden_context)
+    complete_prompt = ('Preserve the supplied product and its packaging. ' * 450).strip()
+    original_bytes = p.path.read_bytes()
+    request = Request({'type': 'http', 'app': SimpleNamespace(state=SimpleNamespace(settings=p.settings))})
+    # Deliberately omit legacy_production: direct API selection must dispatch
+    # by the saved profile, not depend on an internal orchestration override.
+    job, result = run_contract(routes.generate_for_shot(request, p.session, p.shot,
+        GenerationRequest(service_id=service.id, model_id=service.default_model, prompt_override=complete_prompt,
+                          parameters={'width': 1024, 'height': 576})))
+    assert result is None and job.status == 'queued'
+    assert resolved == [('video_generation', service.id, p.project.id, service.default_model)]
+    assert selected == [{}] and len(provider.requests) == 1
+    submitted = provider.requests[0]
+    assert len(complete_prompt) > 7000
+    assert submitted.prompt == job.prompt == complete_prompt
+    assert job.parameters_json['prompt_override'] == complete_prompt
+    assert job.parameters_json['compiled_prompt'] != complete_prompt
+    assert not {'h3_workflow', 'context_inputs', 'quality_request'} & job.parameters_json.keys()
+    assert job.parameters_json['service_snapshot']['service_id'] == service.id
+    assert job.parameters_json['service_snapshot']['settings'] == service.settings_json
+    assert submitted.parameters['width'] == 1024 and submitted.parameters['height'] == 576
+    assert submitted.parameters['reference_manifest']['actors'] == []
+    assert job.parameters_json['character_version_id'] is None
+    assert submitted.reference_assets[0]['asset_id'] == p.picture.id
+    assert job.reference_assets_json[0]['role'] == 'product'
+    assert p.path.read_bytes() == original_bytes
+    assert not p.session.scalar(select(func.count()).select_from(m.Character))

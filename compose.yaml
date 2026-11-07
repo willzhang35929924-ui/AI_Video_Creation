@@ -1,12 +1,27 @@
-# Production: pull published images. Do not add build or private bind mounts here.
+# Default install: build the checked-out source with docker compose up -d.
+# pull_policy: build makes source changes effective without an extra --build flag.
+# Optional published releases use the standalone compose.prebuilt.yaml file.
 # SQLite and all 11 task workers share one backend process; do not scale backend.
 # GPU / Metal inference stays in a separately configured host, remote or cloud service.
 name: ${COMPOSE_PROJECT_NAME:-video-factory}
 
 services:
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/willzhang35929924-ui/ai_video_creation-backend:latest}
-    pull_policy: always
+    image: ${BACKEND_SOURCE_IMAGE:-video-factory-backend:local}
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim-bookworm}
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://deb.debian.org/debian}
+        DEBIAN_SECURITY_MIRROR: ${DEBIAN_SECURITY_MIRROR:-https://deb.debian.org/debian-security}
+        PYPI_INDEX_URL: ${PYPI_INDEX_URL:-https://pypi.org/simple}
+        APP_VERSION: ${APP_VERSION:-source}
+        VCS_REF: ${VCS_REF:-unknown}
+        VCS_SOURCE: ${VCS_SOURCE:-}
+        BUILD_DATE: ${BUILD_DATE:-}
+        APP_LICENSE: ${APP_LICENSE:-Apache-2.0}
+    pull_policy: build
     restart: unless-stopped
     init: true
     environment:
@@ -26,6 +41,7 @@ services:
       HOME: /app/data/home
       IMPORT_MAX_MB: ${IMPORT_MAX_MB:-50}
       COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:-http://host.docker.internal:8189}
+      H3_CONTEXT_COMFYUI_URL: ${H3_CONTEXT_COMFYUI_URL:-http://host.docker.internal:8788}
       H3_WORKFLOW_API_JSON: /app/workflows/h3_r2v_character_v1.json
       TRUSTED_LOCAL_SERVICE_ORIGINS: ${TRUSTED_LOCAL_SERVICE_ORIGINS:-}
       LOCAL_SCREENPLAY_BASE_URL: ${LOCAL_SCREENPLAY_BASE_URL:-}
@@ -65,8 +81,19 @@ services:
         max-file: "3"
 
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/willzhang35929924-ui/ai_video_creation-frontend:latest}
-    pull_policy: always
+    image: ${FRONTEND_SOURCE_IMAGE:-video-factory-frontend:local}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24.22.1-alpine3.23}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx/nginx-unprivileged:1.30.6-alpine}
+        APP_VERSION: ${APP_VERSION:-source}
+        VCS_REF: ${VCS_REF:-unknown}
+        VCS_SOURCE: ${VCS_SOURCE:-}
+        BUILD_DATE: ${BUILD_DATE:-}
+        APP_LICENSE: ${APP_LICENSE:-Apache-2.0}
+    pull_policy: build
     restart: unless-stopped
     init: true
     depends_on:

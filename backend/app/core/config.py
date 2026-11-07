@@ -63,6 +63,7 @@ class Settings:
     media_root: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "media")
     import_max_mb: int = 50
     comfyui_base_url: str = "http://127.0.0.1:8188"
+    h3_context_comfyui_url: str = "http://127.0.0.1:8188"
     comfyui_client_timeout_seconds: float | None = None
     h3_workflow_api_json: Path | None = None
     h3_demo_mode: bool = False
@@ -100,6 +101,7 @@ class Settings:
             media_root=media_root,
             import_max_mb=int(os.getenv("IMPORT_MAX_MB", "50")),
             comfyui_base_url=os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188").rstrip("/"),
+            h3_context_comfyui_url=os.getenv("H3_CONTEXT_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/"),
             comfyui_client_timeout_seconds=(
                 float(os.getenv("COMFYUI_CLIENT_TIMEOUT_SECONDS", "none"))
                 if os.getenv("COMFYUI_CLIENT_TIMEOUT_SECONDS", "none").strip().lower() not in {"", "none", "null"}

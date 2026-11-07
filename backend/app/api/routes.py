@@ -227,6 +227,26 @@ async def h3_health(request: Request) -> dict[str, Any]:
     return (await provider_for(settings_from(request)).health()).to_dict()
 
 
+@router.get('/providers/h3/context-health')
+async def h3_context_health(request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
+    settings = settings_from(request)
+    if settings.h3_demo_mode:
+        return (await provider_for(settings).health()).to_dict()
+    from app.services.h3_context_provider import probe_context_health
+    from app.services.ai_services import resolve_service
+    from app.services.video_services import context_service_origins
+    try:
+        service, snapshot = resolve_service(session, 'video_generation')
+        if service.provider != 'comfyui':
+            raise AppError(409, 'context_ir_service_required', '当前默认视频服务不使用本地 Context-IR')
+        origin, _ = context_service_origins(settings, snapshot)
+        snapshot['base_url'] = origin
+    except AppError as exc:
+        return {'provider': 'comfyui_h3_context_ir', 'connected': False, 'ready': False,
+                'reference_to_video_available': False, 'mode': 'real', 'busy': False, 'error': exc.message}
+    return await probe_context_health(settings, snapshot)
+
+
 @router.get("/providers/h3/capabilities")
 async def h3_capabilities(request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     settings = settings_from(request)
@@ -857,28 +877,7 @@ def build_prompt(shot: StoryboardShot, version: CharacterVersion, instruction: s
     return "\n".join(pieces), negative
 
 
-async def generate_for_shot(
-    request: Request,
-    session: Session,
-    shot: StoryboardShot,
-    payload: GenerationRequest,
-    *,
-    instruction: str | None = None,
-    retry_count: int = 0,
-) -> tuple[GenerationJob, VideoRevision | None]:
-    settings = settings_from(request)
-    requested_mode = payload.parameters.get("requested_mode")
-    if requested_mode and requested_mode != ("demo" if settings.h3_demo_mode else "real"):
-        raise AppError(409, "provider_mode_mismatch", "请求模式与后端配置不一致；拒绝自动切换 Provider")
-    script = script_for_shot(session, shot)
-    if not script or script.status != "approved":
-        raise AppError(409, "script_not_approved", "脚本尚未审核通过")
-    if shot.status != "approved":
-        raise AppError(409, "shot_not_approved", "分镜尚未审核通过")
-    from app.services.model_lab import frozen_generation_inputs
-    frozen_inputs=frozen_generation_inputs(session,settings,shot,payload)
-    from app.models import ShotCharacter
-    participants = list(session.scalars(select(ShotCharacter).where(ShotCharacter.shot_id == shot.id)))
+def _legacy_generation_inputs(session, settings, shot, payload, instruction, frozen_inputs):
     from app.services.screenplay import uses_structured_screenplay
     structured = bool(frozen_inputs) or uses_structured_screenplay(session, shot)
     structured_inputs = frozen_inputs
@@ -895,9 +894,6 @@ async def generate_for_shot(
         raise AppError(409, "character_version_not_approved", "绑定的角色版本尚未批准")
     if version is None and (not structured_inputs or not any(ref.get('role')=='product' for ref in structured_inputs[1])):
         raise AppError(409,'product_reference_required','无人物镜头必须绑定真实可读的产品参考图')
-    duplicate = session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id == shot.id, GenerationJob.status.in_(["queued", "submitting", "submitted", "running", "cancelling", "unknown"])).limit(1))
-    if duplicate:
-        raise AppError(409, "generation_already_active", "该分镜已有运行中的生成任务", {"job_id": duplicate})
     assets = session.scalars(select(CharacterAsset).where(CharacterAsset.character_version_id == version.id, CharacterAsset.status == "approved").order_by(CharacterAsset.is_primary_reference.desc(), CharacterAsset.created_at)).all() if version else []
     if not settings.h3_demo_mode and not structured:
         assets = [asset for asset in assets if asset.id in shot.reference_asset_ids_json]
@@ -911,18 +907,98 @@ async def generate_for_shot(
         raise AppError(409, "approved_reference_required", "真实 H3 任务至少需要一个已批准且可读的人物或已绑定产品参考素材")
     prompt, negative = (structured_inputs[2], structured_inputs[3].get('model_lab_negative_prompt','')) if structured_inputs else build_prompt(shot, version, instruction)
     from app.services.video_revisions import editable_generation_prompt
-    compiled_prompt = prompt
-    prompt = editable_generation_prompt(prompt, instruction, structured=structured, prompt_override=payload.prompt_override)
-    resolved_seed = payload.seed if payload.seed is not None else 20261020
-    service_snapshot = None
+    return version, references, prompt, editable_generation_prompt(prompt, instruction, structured=structured, prompt_override=payload.prompt_override), negative, structured_inputs[3] if structured_inputs else None
+
+
+async def generate_for_shot(
+    request: Request,
+    session: Session,
+    shot: StoryboardShot,
+    payload: GenerationRequest,
+    *,
+    instruction: str | None = None,
+    retry_count: int = 0,
+    frozen_job: GenerationJob | None = None,
+    frozen_service: dict | None = None,
+    frozen_quality: dict | None = None,
+    frozen_context: dict | None = None,
+    legacy_production: bool = False,
+    production_scope: dict | None = None,
+) -> tuple[GenerationJob, VideoRevision | None]:
+    settings = settings_from(request)
+    requested_mode = payload.parameters.get('requested_mode')
+    if requested_mode and requested_mode != ('demo' if settings.h3_demo_mode else 'real'):
+        raise AppError(409, 'provider_mode_mismatch', '请求模式与后端配置不一致；拒绝自动切换 Provider')
+    script = script_for_shot(session, shot)
+    if not script or script.project_id != shot.project_id or script.status != 'approved':
+        raise AppError(409, 'script_not_approved', '脚本尚未审核通过')
+    if shot.status != 'approved':
+        raise AppError(409, 'shot_not_approved', '分镜尚未审核通过')
+    duplicate = session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id == shot.id,
+        GenerationJob.status.in_(['queued', 'submitting', 'submitted', 'running', 'cancelling', 'reconciling', 'unknown'])).limit(1))
+    if duplicate:
+        raise AppError(409, 'generation_already_active', '该分镜已有运行中的生成任务', {'job_id': duplicate})
+
+    from app.services.model_lab import frozen_generation_inputs
+    from app.services.context_production_inputs import collect_context_inputs, quality_for_shot, restore_context_inputs
+    from app.services.motion_references import resolve_motion_references, verify_motion_sources
+    from app.services.video_services import existing_provider, select_video_service
+
+    lab_inputs = frozen_generation_inputs(session, settings, shot, payload)
+    original = frozen_job.parameters_json if frozen_job else {}
+    if frozen_job:
+        if frozen_job.project_id != shot.project_id or frozen_job.shot_id != shot.id or not original.get('h3_workflow'):
+            raise AppError(409, 'context_retry_scope_mismatch', '原任务与本镜的 Context-IR 快照不匹配')
+        frozen_service = original.get('service_snapshot')
+        frozen_quality = original.get('quality_request')
+        frozen_context = original.get('context_inputs')
+        if (not frozen_service or not frozen_quality or not frozen_context
+                or frozen_service.get('h3_workflow') != original['h3_workflow']):
+            raise AppError(409, 'context_retry_snapshot_missing', '原任务缺少完整 Context-IR 工作流和输入快照')
+    quality = None
+    service_snapshot = frozen_service
     provider = provider_for(settings)
     if not settings.h3_demo_mode:
-        from app.services.video_services import select_video_service
-        service, service_snapshot, provider = select_video_service(session, settings, shot.project_id, payload.service_id or payload.parameters.get('service_id'), payload.model_id or payload.parameters.get('model_id'))
-    from app.services.motion_references import resolve_motion_references,verify_motion_sources
-    motion_references=resolve_motion_references(session,settings,shot)
-    motion_inputs_hash=None
-    if motion_references:
+        if frozen_service is not None:
+            provider = existing_provider(session, settings, frozen_service)
+        else:
+            if not legacy_production and lab_inputs is None:
+                from app.services.ai_services import resolve_service
+                from app.services.studio_pipeline import wants_context_profile
+                _, selected_profile = resolve_service(session, 'video_generation',
+                    payload.service_id or payload.parameters.get('service_id'), shot.project_id,
+                    payload.model_id or payload.parameters.get('model_id'))
+                if wants_context_profile(settings, selected_profile):
+                    quality = quality_for_shot(session, shot, frozen=frozen_quality)
+            _, service_snapshot, provider = select_video_service(session, settings, shot.project_id,
+                payload.service_id or payload.parameters.get('service_id'), payload.model_id or payload.parameters.get('model_id'),
+                **({'quality_mode': quality['mode']} if quality else {}))
+    h3_workflow = service_snapshot.get('h3_workflow') if service_snapshot else None
+    context_snapshot = None
+    motion_inputs_hash = None
+    if h3_workflow:
+        quality = quality or quality_for_shot(session, shot, frozen=frozen_quality)
+        context_snapshot = frozen_context or collect_context_inputs(session, settings, shot,
+            prompt_override=payload.prompt_override, instruction=instruction)
+        references, motion_references = restore_context_inputs(session, settings, shot, context_snapshot)
+        screenplay_snapshot = context_snapshot['screenplay_snapshot']
+        prompt = compiled_prompt = context_snapshot['prompt']
+        negative = context_snapshot['negative_prompt']
+        instruction = context_snapshot['instruction']
+        prompt_override = context_snapshot['prompt_override']
+        motion_inputs_hash = context_snapshot['generation_inputs_hash'] if motion_references else None
+        people = screenplay_snapshot.get('participants', [])
+        version_id = people[0].get('character_version_id') if people else None
+    else:
+        if quality:
+            raise AppError(409, 'context_workflow_required', '当前制作档位需要真实本地 Context-IR 工作流')
+        version, references, compiled_prompt, prompt, negative, screenplay_snapshot = _legacy_generation_inputs(
+            session, settings, shot, payload, instruction, lab_inputs)
+        version_id = version.id if version else None
+        prompt_override = payload.prompt_override
+        motion_references = resolve_motion_references(session, settings, shot)
+    resolved_seed = frozen_job.seed if frozen_job else payload.seed if payload.seed is not None else 20261020
+    if motion_references and not h3_workflow:
         if settings.h3_demo_mode or provider.name!='comfyui_h3':
             raise AppError(409,'motion_reference_provider_unsupported','所选服务未实现视频动作参考；未提交或退回纯文本生成')
         await asyncio.to_thread(verify_motion_sources,motion_references)
@@ -931,29 +1007,52 @@ async def generate_for_shot(
         prompt+='\nMotion reference guidance: '+ ' '.join(f'<Video {index}> supplies the approved motion and camera reference for this shot; identity follows its separate picture references.' for index in range(1,len(motion_references)+1))
     if service_snapshot and service_snapshot.get('settings', {}).get('video_contract') == 'wan26-i2v' and len(references) != 1:
         raise AppError(409, 'wan_single_frame_required', '万相图生视频需要恰好一张已审核合成首帧；请先准备首帧，不能自动丢弃其他参考图')
-    overrides = {key:value for key,value in payload.parameters.items() if key not in ('service_snapshot','screenplay_snapshot','script_revision_id','output_relative_dir','character_version_id','duration_seconds','negative_prompt','reference_manifest','motion_references','motion_inputs_hash','actual_motion_reference_uploads')}
+    overrides = {key:value for key,value in payload.parameters.items() if key not in (
+        'service_snapshot','screenplay_snapshot','script_revision_id','output_relative_dir','character_version_id',
+        'duration_seconds','negative_prompt','reference_manifest','motion_references','motion_inputs_hash',
+        'actual_motion_reference_uploads','actual_reference_uploads','h3_workflow','context_inputs','context_silent','context_spoken_language',
+        'context_ir_enabled','context_ir_version','quality_request','production_scope')}
     configured = service_snapshot['settings'] if service_snapshot else {}
     from app.services.model_lab import default_generation_parameters
     saved_defaults=default_generation_parameters(session,service_snapshot) if service_snapshot else {}
     effective_parameters = {"width": configured.get('width',640), "height": configured.get('height',384), "steps":20, **saved_defaults, **overrides}
-    if structured_inputs and structured_inputs[3].get('reference_manifest'):
-        effective_parameters['reference_manifest']=structured_inputs[3]['reference_manifest']
-    if structured_inputs and structured_inputs[3].get('cinematic'):
+    if h3_workflow:
+        from app.services.video_quality import plan
+        native = plan(quality)['generation']
+        source = original if frozen_job else overrides
+        effective_parameters.update(width=source.get('width', native['width']), height=source.get('height', native['height']),
+            steps=h3_workflow['actual_steps'], quality_request=quality, h3_workflow=h3_workflow,
+            context_silent=context_snapshot['silent'], context_spoken_language=context_snapshot.get('spoken_language', 'English'))
+    elif 'quality_request' in payload.parameters:
+        # Historical explicit controls continue to describe their saved jobs.
+        effective_parameters['quality_request']=payload.parameters['quality_request']
+    if screenplay_snapshot and screenplay_snapshot.get('reference_manifest'):
+        effective_parameters['reference_manifest']=screenplay_snapshot['reference_manifest']
+    if screenplay_snapshot and screenplay_snapshot.get('cinematic'):
         expected_ratio={'16:9':16/9,'9:16':9/16,'1:1':1}[shot.aspect_ratio]
-        if abs(effective_parameters['width']/effective_parameters['height']-expected_ratio)>.025:
+        if not h3_workflow and abs(effective_parameters['width']/effective_parameters['height']-expected_ratio)>.025:
             raise AppError(422,'cinematic_aspect_mismatch','实际生成宽高必须匹配本镜画幅，不能只修改文字画幅')
-        effective_parameters['production_versions']=structured_inputs[3]['cinematic']['versions']
+        effective_parameters['production_versions']=screenplay_snapshot['cinematic']['versions']
     if service_snapshot:
         effective_parameters['service_snapshot'] = service_snapshot
+    if production_scope:
+        effective_parameters['production_scope'] = production_scope
     job = GenerationJob(
         project_id=shot.project_id,
         shot_id=shot.id,
         provider="demo" if settings.h3_demo_mode else provider.name,
         status="running" if settings.h3_demo_mode else "queued",
         prompt=prompt,
-        parameters_json={**effective_parameters, "script_revision_id":script.id, "duration_seconds": shot.duration_seconds, "aspect_ratio": shot.aspect_ratio, "negative_prompt": negative, "instruction": instruction, "compiled_prompt": compiled_prompt, "prompt_override_used": payload.prompt_override is not None, "prompt_override": payload.prompt_override, "character_version_id": version.id if version else None, **({'screenplay_snapshot': structured_inputs[3]} if structured_inputs else {}), **({'motion_references':[{k:v for k,v in ref.items() if k!='absolute_path'} for ref in motion_references], 'motion_inputs_hash':motion_inputs_hash} if motion_references else {})},
+        parameters_json={**effective_parameters, 'script_revision_id': script.id, 'duration_seconds': shot.duration_seconds,
+            'aspect_ratio': shot.aspect_ratio, 'negative_prompt': negative, 'instruction': instruction,
+            'compiled_prompt': compiled_prompt, 'prompt_override_used': prompt_override is not None, 'prompt_override': prompt_override,
+            'character_version_id': version_id, **({'screenplay_snapshot': screenplay_snapshot} if screenplay_snapshot else {}),
+            **({'context_inputs': context_snapshot} if context_snapshot else {}),
+            **({'motion_references': [{k:v for k,v in ref.items() if k!='absolute_path'} for ref in motion_references],
+                'motion_inputs_hash': motion_inputs_hash} if motion_references else {})},
         reference_assets_json=[{key: value for key, value in ref.items() if key != "absolute_path"} for ref in references],
-        workflow_version="demo-watermarked-video-v1" if settings.h3_demo_mode else None,
+        workflow_version=('demo-watermarked-video-v1' if settings.h3_demo_mode else service_snapshot.get('workflow_version')
+                          if h3_workflow else None),
         seed=resolved_seed,
         progress=0.0,
         retry_count=retry_count,
@@ -972,7 +1071,7 @@ async def generate_for_shot(
     try:
         if motion_references:
             session.expire_all()
-            refreshed=resolve_motion_references(session,settings,shot)
+            refreshed=resolve_motion_references(session,settings,shot,context_snapshot['explicit_motion'] if context_snapshot else None)
             if refreshed!=motion_references:
                 raise AppError(409,'motion_reference_stale','动作参考在提交前发生变化，未发送生成请求')
             await asyncio.to_thread(verify_motion_sources,refreshed)
@@ -996,7 +1095,7 @@ async def generate_for_shot(
         if accepted is None:
             raise AppError(409,'local_gpu_busy','本地 GPU 被模型占用或状态不明；未提交本次生成')
     except AppError as exc:
-        job.status = "unknown" if exc.code in {'cloud_submission_unknown','motion_submission_unknown'} else "failed"
+        job.status = 'unknown' if exc.code in {'cloud_submission_unknown','motion_submission_unknown','context_ir_submission_unknown'} else 'failed'
         job.error_code = exc.code
         job.error_message = exc.message + ("\n" + json.dumps(exc.details, ensure_ascii=False) if exc.details else "")
         job.finished_at = datetime.now(timezone.utc)
@@ -1004,13 +1103,13 @@ async def generate_for_shot(
         session.commit()
         raise
     except Exception as exc:
-        if not motion_references:raise
-        job.status='unknown';job.error_code='motion_submission_unknown'
-        job.error_message='动作参考任务出现未预期异常，受理状态未知；请人工核对原任务，未自动重发'
+        if not motion_references and not h3_workflow:raise
+        job.status='unknown';job.error_code='context_ir_submission_unknown' if h3_workflow else 'motion_submission_unknown'
+        job.error_message='任务出现未预期异常，受理状态未知；请人工核对原任务，未自动重发'
         job.finished_at=datetime.now(timezone.utc)
-        audit(session,'generation_job',job.id,'unknown',{'code':'motion_submission_unknown'})
+        audit(session,'generation_job',job.id,'unknown',{'code':job.error_code})
         session.commit()
-        raise AppError(502,'motion_submission_unknown',job.error_message) from exc
+        raise AppError(502,job.error_code,job.error_message) from exc
     job.provider_job_id = accepted.provider_job_id
     job.status = accepted.status
     job.progress = 1.0 if accepted.status == "succeeded" else 0.0
@@ -1021,6 +1120,8 @@ async def generate_for_shot(
         job.parameters_json = {**job.parameters_json, 'provider_submission': {key: accepted.metadata[key] for key in safe_keys if key in accepted.metadata}}
     if accepted.metadata.get('workflow_sha256'):
         job.parameters_json={**job.parameters_json,'actual_workflow_sha256':accepted.metadata['workflow_sha256'],'actual_reference_uploads':accepted.metadata.get('reference_uploads',[]),**({'actual_motion_reference_uploads':accepted.metadata.get('motion_reference_uploads',[])} if motion_references else {})}
+    if h3_workflow and accepted.metadata.get('sampling_receipt'):
+        job.parameters_json = {**job.parameters_json, 'sampling_receipt': accepted.metadata['sampling_receipt']}
     if accepted.metadata.get("log_dir"):
         job.log_path = str(accepted.metadata["log_dir"])
     video: VideoRevision | None = None
@@ -1054,15 +1155,11 @@ async def generate_approved_shots(request: Request, project_id: str, payload: Ge
     shots = session.scalars(project_shot_statement(session,project_id).where(StoryboardShot.status == "approved").order_by(StoryboardShot.order)).all()
     if not shots:
         raise AppError(409, "no_approved_shots", "项目没有已批准分镜")
-    if len(shots)>1:
-        from app.services.cinematic_quality import production_context
-        if any(production_context(session,shot)[3].get('motion_references') for shot in shots):
-            raise AppError(409,'motion_batch_unsupported','包含动作参考的镜头请逐镜提交，避免预处理超时后重复提交')
     if not settings_from(request).h3_demo_mode:
+        from app.services.context_production_inputs import quality_for_shot
         from app.services.video_services import select_video_service
-        service, _, _ = select_video_service(session, settings_from(request), project_id, payload.service_id, payload.model_id)
-        if service.provider == 'video_api' and len(shots)>1 and service.capabilities_json.get('reference_to_video',{}).get('state')!='verified':
-            raise AppError(409,'single_video_validation_required','云端视频能力尚未由真实输出验证；请先明确提交一个镜头，不能直接批量付费生成')
+        select_video_service(session, settings_from(request), project_id, payload.service_id, payload.model_id,
+                             quality_mode=quality_for_shot(session, shots[0])['mode'])
     results = []
     for shot in shots:
         job, video = await generate_for_shot(request, session, shot, payload)
@@ -1125,7 +1222,12 @@ async def retry_job(request: Request, job_id: str, session: Session = Depends(ge
     params.pop("duration_seconds", None)
     params.pop("aspect_ratio", None)
     params.pop("negative_prompt", None)
-    job, video = await generate_for_shot(request, session, shot, GenerationRequest(seed=previous.seed, parameters=params,service_id=selected_snapshot.get('service_id'),model_id=selected_snapshot.get('model_id'),prompt_override=prompt_override), instruction=instruction, retry_count=previous.retry_count + 1)
+    context_job = previous if previous.parameters_json.get('h3_workflow') else None
+    job, video = await generate_for_shot(request, session, shot,
+        GenerationRequest(seed=previous.seed, parameters=params, service_id=selected_snapshot.get('service_id'),
+                          model_id=selected_snapshot.get('model_id'), prompt_override=prompt_override),
+        instruction=instruction, retry_count=previous.retry_count + 1, frozen_job=context_job,
+        frozen_service=(selected_snapshot or None) if not context_job else None, legacy_production=not context_job)
     return {"job": row_dict(job), "video_revision": row_dict(video) if video else None, "retried_from": previous.id}
 
 
@@ -1175,9 +1277,15 @@ def recheck_video_duration(video_id: str, request: Request, session: Session = D
 async def revise_video(request: Request, video_id: str, payload: RevisionRequest, session: Session = Depends(get_db)) -> dict[str, Any]:
     current = required(session, VideoRevision, video_id, "视频版本")
     shot = required(session, StoryboardShot, current.shot_id, "分镜")
-    from app.services.video_revisions import revision_generation_request
-    generation = revision_generation_request(session, shot, current, payload)
-    job, video = await generate_for_shot(request, session, shot, generation, instruction=payload.instruction)
+    from app.services.video_revisions import prepare_context_revision, revision_generation_request
+    settings = settings_from(request)
+    if settings.h3_demo_mode:
+        generation = revision_generation_request(session, shot, current, payload)
+        job, video = await generate_for_shot(request, session, shot, generation, instruction=payload.instruction)
+    else:
+        generation, service, quality, context = prepare_context_revision(session, settings, shot, current, payload)
+        job, video = await generate_for_shot(request, session, shot, generation, instruction=payload.instruction,
+            frozen_service=service, frozen_quality=quality, frozen_context=context)
     previous_job = session.get(GenerationJob, current.generation_job_id)
     if previous_job.provider == "comfyui_h3":
         previous_job.status = "revised"
@@ -1222,7 +1330,13 @@ def approve_video(video_id: str, payload: ReviewRequest, request: Request, sessi
     elif decode_check.status == "not_available":
         warnings.append("媒体解码工具不可用；本次仅依据文件可读性与人工检查批准")
     job = session.get(GenerationJob, video.generation_job_id)
-    if job and (job.parameters_json or {}).get('motion_references'):
+    if job and (job.parameters_json or {}).get('context_inputs'):
+        from app.services.context_production_inputs import restore_context_inputs
+        from app.services.motion_references import verify_motion_sources
+        shot=required(session,StoryboardShot,video.shot_id,'分镜')
+        _, motion=restore_context_inputs(session,settings_from(request),shot,job.parameters_json['context_inputs'])
+        verify_motion_sources(motion)
+    elif job and (job.parameters_json or {}).get('motion_references'):
         from app.services.cinematic_quality import generation_inputs_hash
         from app.services.motion_references import resolve_motion_references,verify_motion_sources
         shot=required(session,StoryboardShot,video.shot_id,'分镜')

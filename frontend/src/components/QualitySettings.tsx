@@ -6,7 +6,13 @@ import { api } from '../lib/api';
 import { FormField } from './ui';
 
 type Row = Record<string, any>;
-export const qualityDefaults: Required<QualitySettings> = {resolution:'720p',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'};
+type ModeUse = 'generation' | 'cloud' | 'provider' | 'encoding';
+const qualityModes = [
+  {value:'high', label:'高质量', steps:30, workflow:'H3 Quality'},
+  {value:'standard', label:'标准', steps:20, workflow:'H3 Quality'},
+  {value:'fast', label:'Fast', steps:4, workflow:'H3 SMD4 Fast'},
+] as const;
+export const qualityDefaults: Required<QualitySettings> = {resolution:'720p',mode:'high',aspect_ratio:'16:9',processing:'lanczos'};
 export const normalizedQuality = (value?: QualitySettings): Required<QualitySettings> => ({...qualityDefaults,...value});
 export function qualitySubmissionSupported(settings:QualitySettings,capabilities:Row|null){
   const q=normalizedQuality(settings),sr=capabilities?.ai_super_resolution,seed=capabilities?.seedvr2;
@@ -61,8 +67,9 @@ export function useQualityProfile(scope: 'system'|'project'|'shot', targetId: st
   return {profile:selectedProfile,settings,setSettings,loading,error,saving,dirty,load,save,inherit,...capability,supported:qualitySubmissionSupported(settings,capability.capabilities)};
 }
 
-export function QualitySettingsFields({value,onChange,disabled=false,prefix='制作',capabilities,capabilityError,onRefreshCapabilities,showTechnicalDetails=true}:{value:QualitySettings;onChange:(value:Required<QualitySettings>)=>void;disabled?:boolean;prefix?:string;capabilities?:Row|null;capabilityError?:string;onRefreshCapabilities?:()=>Promise<void>;showTechnicalDetails?:boolean}) {
+export function QualitySettingsFields({value,onChange,disabled=false,prefix='制作',capabilities,capabilityError,onRefreshCapabilities,showTechnicalDetails=true,modeUse='generation'}:{value:QualitySettings;onChange:(value:Required<QualitySettings>)=>void;disabled?:boolean;prefix?:string;capabilities?:Row|null;capabilityError?:string;onRefreshCapabilities?:()=>Promise<void>;showTechnicalDetails?:boolean;modeUse?:ModeUse}) {
   const q=normalizedQuality(value);
+  const workflow=qualityModes.find(mode=>mode.value===(q.mode==='preview'?'fast':q.mode));
   const sr=capabilities?.ai_super_resolution;
   const processingLimits=q.processing==='seedvr2'?capabilities?.seedvr2?.limits:q.processing==='ai_super_resolution'?sr?.limits:[];
   const aiAvailable=qualitySubmissionSupported({...q,processing:'ai_super_resolution'},capabilities||null);
@@ -73,31 +80,38 @@ export function QualitySettingsFields({value,onChange,disabled=false,prefix='制
     <FormField label={`${prefix}输出规格`}><select disabled={disabled} value={q.resolution} onChange={e=>update('resolution',e.target.value)}>
       <option value="720p">720p · 16:9参考1280×720</option><option value="1080p">1080p · 16:9参考1920×1080</option><option value="2k">2K / QHD · 16:9参考2560×1440</option><option value="4k">4K UHD · 16:9参考3840×2160</option>
     </select></FormField>
-    <FormField label={`${prefix}质量模式`}><select disabled={disabled} value={q.mode} onChange={e=>update('mode',e.target.value)}><option value="preview">预览</option><option value="standard">标准</option><option value="high">高质量</option></select></FormField>
+    {modeUse==='generation'||modeUse==='encoding'?<FormField label={`${prefix}质量模式`}><select disabled={disabled} value={q.mode} onChange={e=>update('mode',e.target.value)}>
+      {qualityModes.map(mode=><option key={mode.value} value={mode.value}>{modeUse==='generation'?`${mode.label}（${mode.steps} 步）`:mode.value==='fast'?'快速编码':mode.label}</option>)}
+      {q.mode==='preview'?<option value="preview" disabled>已保存的旧预览</option>:null}
+    </select></FormField>:null}
     <FormField label={`${prefix}画幅`}><select disabled={disabled} value={q.aspect_ratio} onChange={e=>update('aspect_ratio',e.target.value)}><option value="16:9">16:9 横向</option><option value="9:16">9:16 竖向</option><option value="1:1">1:1 方形</option></select></FormField>
     <FormField label={`${prefix}处理方式`}><select disabled={disabled} value={q.processing} onChange={e=>update('processing',e.target.value)}><option value="lanczos">普通 Lanczos 缩放（已接入）</option><option value="native" disabled>原生目标分辨率（尚未验证）</option><option value="ai_super_resolution" disabled={!aiAvailable}>{aiAvailable?'4K输出（Real-ESRGAN逐帧超分）':sr?.state==='detected_not_tested'?'AI 视频超分（已检测，未实测）':sr?.state==='verified'?'AI 视频超分（此档位或画幅未验证）':sr?.state==='not_configured'?'AI 视频超分（尚未配置）':'AI 视频超分（能力尚未读取）'}</option><option value="seedvr2" disabled={!seedAvailable}>{seedAvailable?`${q.resolution}输出（SeedVR2时序视频超分）`:capabilities?.seedvr2?.state==='verified'?'SeedVR2（当前档位或画幅未验证）':'SeedVR2（尚未通过完整视频实测）'}</option><option value="reconstruction" disabled>模型高分辨率重建（尚未配置）</option></select></FormField>
-  </div>{!valid?<p role="alert" className="inline-notice warning">{showTechnicalDetails?'当前处理方式没有此分辨率／画幅的真实验证。请先验证所需规格，或明确选择普通Lanczos缩放；保存、启动和输出已阻止，不会静默降级。':'此处理方式不支持当前分辨率或画幅，请调整设置。'}</p>:null}
+  </div>{modeUse==='generation'&&workflow?<p className="form-hint" data-testid="h3-quality-route">本地 H3 工作流 {workflow.workflow} · {workflow.steps} 步。Context-IR：已启用（自动进行素材与提示词一致性分析）。{q.mode==='preview'?'旧预览设置保留，新的本地 H3 任务按 Fast 执行。':''}</p>:null}
+    {modeUse==='cloud'?<p className="form-hint">云端服务使用已配置的模型与接口参数，采样和工作流由供应商决定。这里调整成片输出与后处理；不会将本地 4／20／30 步配方发给云端。</p>:null}
+    {modeUse==='provider'?<p className="form-hint">当前使用服务档案中的普通本地工作流。这里调整输出与后处理；切换为 Context-IR 服务后才启用三档采样。</p>:null}
+    {!valid?<p role="alert" className="inline-notice warning">{showTechnicalDetails?'当前处理方式没有此分辨率／画幅的真实验证。请先验证所需规格，或明确选择普通Lanczos缩放；保存、启动和输出已阻止，不会静默降级。':'此处理方式不支持当前分辨率或画幅，请调整设置。'}</p>:null}
     <p className="form-hint">{showTechnicalDetails?<>{q.processing==='seedvr2'?'SeedVR2采用时序分块处理完整视频，仅开放已有完整视频验证的规格组合；仍需检查边界闪烁、面容和细节。':q.processing==='ai_super_resolution'?'Real-ESRGAN使用图像模型逐帧处理完整视频，不保证时序一致性；放大后面部、细节伪造和闪烁仍需人工审片。':'普通 Lanczos 是整个视频的缩放，不是 AI 超分。'} 原始版本保留；4K文件尺寸不代表原生4K细节。非16:9尺寸与实际模型参数由后端解析，画幅与原镜头不一致时会阻断生成。</>:q.processing==='seedvr2'?'SeedVR2时序超分，仅开放已验证的规格组合。':q.processing==='ai_super_resolution'?'Real-ESRGAN逐帧超分，当前支持已验证的4K画幅。':'普通缩放不增加原生细节。'}</p>
     {showTechnicalDetails?processingLimits?.map((line:string,index:number)=><p className="form-hint" key={index}>{line}</p>):null}
     {capabilityError?<p role="status" className="form-hint">超分验证状态未能读取，AI处理保持禁用：{capabilityError}</p>:null}
     {onRefreshCapabilities&&(showTechnicalDetails||capabilityError)?<button type="button" className="button button-ghost button-small" disabled={disabled} onClick={()=>void onRefreshCapabilities()}>{showTechnicalDetails?'重新读取超分验证状态（不启动模型）':'重新读取处理方式'}</button>:null}</>;
 }
 
-export function QualityPlan({plan,title='已保存的实际处理方案'}:{plan?:Row;title?:string}) {
+export function QualityPlan({plan,title='已保存的实际处理方案',modeUse='generation'}:{plan?:Row;title?:string;modeUse?:ModeUse}) {
   if(!plan)return null;
+  const {generation,...outputPlan}=plan;
   return <details className="workspace-details quality-plan"><summary>{title} · {String(plan.label||plan.method||'待解析')}</summary>
-    <p>请求输出 {plan.requested?.width}×{plan.requested?.height} · 基础生成 {plan.generation?.width}×{plan.generation?.height} · 采样 {plan.generation?.steps} 步</p>
+    <p>请求输出 {plan.requested?.width}×{plan.requested?.height}{modeUse==='generation'&&generation?` · 基础生成目标 ${generation.width}×${generation.height}`:''}</p>
     <p>处理方式 {plan.method==='lanczos'?'普通 Lanczos 缩放':plan.method==='seedvr2'?'SeedVR2时序视频超分':plan.method==='ai_super_resolution'?'Real-ESRGAN逐帧超分（无时序保证）':String(plan.method)} · {plan.supported?'此处理路径可提交':'此处理路径尚不支持'} · 视觉质量需人工审片</p>
-    {Array.isArray(plan.limits)?plan.limits.map((line:string)=><p key={line}>{line}</p>):null}<pre className="source-blocks">{JSON.stringify(plan,null,2)}</pre>
+    {Array.isArray(plan.limits)?plan.limits.map((line:string)=><p key={line}>{line}</p>):null}<pre className="source-blocks">{JSON.stringify(modeUse==='generation'?plan:outputPlan,null,2)}</pre>
   </details>;
 }
 
-export function QualityProfileEditor({scope,targetId,title,onSaved,onDirtyChange,showDetails=true}:{scope:'system'|'project'|'shot';targetId:string;title:string;onSaved?:()=>void;onDirtyChange?:(dirty:boolean)=>void;showDetails?:boolean}) {
+export function QualityProfileEditor({scope,targetId,title,onSaved,onDirtyChange,showDetails=true,modeUse='generation'}:{scope:'system'|'project'|'shot';targetId:string;title:string;onSaved?:()=>void;onDirtyChange?:(dirty:boolean)=>void;showDetails?:boolean;modeUse?:ModeUse}) {
   const quality=useQualityProfile(scope,targetId),[notice,setNotice]=useState('');
   useEffect(()=>{onDirtyChange?.(quality.dirty);return()=>onDirtyChange?.(false);},[quality.dirty,onDirtyChange]);
   return <section className="card studio-panel"><h2>{title}</h2><p>{scope==='system'?'保存为之后项目的制作默认；已有项目与历史视频保持各自快照。':scope==='shot'?'继承项目配置；保存后仅覆盖此镜的后续生成。':'项目设置适用于未单独覆盖的镜头。'}</p>
     {quality.loading?<p role="status">读取画质配置…</p>:null}{quality.error?<p role="alert" className="inline-notice warning">{quality.error}</p>:null}
-    {quality.profile?<>{showDetails?<p>配置来源：{quality.profile.inherited_from||'本层独立设置'} · 修订 {quality.profile.revision}</p>:null}<QualitySettingsFields prefix={scope==='shot'?'此镜':'默认'} value={quality.settings} onChange={quality.setSettings} capabilities={quality.capabilities} capabilityError={quality.capabilityError} onRefreshCapabilities={quality.refreshCapabilities} showTechnicalDetails={showDetails} disabled={quality.saving||quality.loading}/><div className="studio-actions"><button className="button button-primary" disabled={quality.saving||quality.loading||!quality.supported} onClick={()=>void quality.save().then(()=>{setNotice(showDetails?'实际画质配置已保存；已接收任务仍沿用原快照。':'画质设置已保存。');onSaved?.();}).catch(()=>{})}>保存{scope==='shot'?'此镜覆盖':'画质设置'}</button>{scope==='shot'?<button className="button button-secondary" disabled={quality.saving||quality.loading} onClick={()=>void quality.inherit().then(onSaved)}>恢复继承项目</button>:null}<button className="button button-secondary" disabled={quality.saving||quality.loading} onClick={()=>void quality.load()}>重新读取</button></div>{quality.dirty?<p>{showDetails?'有未保存设置；下方仍显示上次保存方案。':'有未保存的画质设置。'}</p>:null}{showDetails?<QualityPlan plan={quality.profile.plan}/>:null}</>:null}
+    {quality.profile?<>{showDetails?<p>配置来源：{quality.profile.inherited_from||'本层独立设置'} · 修订 {quality.profile.revision}</p>:null}<QualitySettingsFields prefix={scope==='shot'?'此镜':'默认'} value={quality.settings} onChange={quality.setSettings} capabilities={quality.capabilities} capabilityError={quality.capabilityError} onRefreshCapabilities={quality.refreshCapabilities} showTechnicalDetails={showDetails} modeUse={modeUse} disabled={quality.saving||quality.loading}/><div className="studio-actions"><button className="button button-primary" disabled={quality.saving||quality.loading||!quality.supported} onClick={()=>void quality.save().then(()=>{setNotice(showDetails?'实际画质配置已保存；已接收任务仍沿用原快照。':'画质设置已保存。');onSaved?.();}).catch(()=>{})}>保存{scope==='shot'?'此镜覆盖':'画质设置'}</button>{scope==='shot'?<button className="button button-secondary" disabled={quality.saving||quality.loading} onClick={()=>void quality.inherit().then(onSaved)}>恢复继承项目</button>:null}<button className="button button-secondary" disabled={quality.saving||quality.loading} onClick={()=>void quality.load()}>重新读取</button></div>{quality.dirty?<p>{showDetails?'有未保存设置；下方仍显示上次保存方案。':'有未保存的画质设置。'}</p>:null}{showDetails?<QualityPlan plan={quality.profile.plan} modeUse={modeUse}/>:null}</>:null}
     {notice?<p role="status">{notice}</p>:null}
   </section>;
 }
@@ -157,5 +171,5 @@ export function QualityPostprocess({shotId,videoId}:{shotId:string;videoId:strin
   },[renderId]);
   async function submit(){if(!quality.supported){setError('所选超分组合尚无真实验证，未提交任务。');return;}setBusy(true);setError('');try{const result=await request<QualityRenderDTO>('/api/quality/renders',{method:'POST',body:JSON.stringify({video_id:videoId,settings:quality.settings})});setRender(result);setParams(current=>{const next=new URLSearchParams(current);next.set('quality_render',result.id);return next;},{replace:true});}catch(e){setError(String(e));}finally{setBusy(false);}}
   const current=render?.source_video_id===videoId?render:null;
-  return <details className="studio-modify"><summary>此视频输出另一画质版本</summary><p>按下方明确选择的方法处理完整视频，保留原文件并创建独立待审版本。本操作不会修改项目或镜头默认配置。</p>{quality.error||error?<p role="alert">{quality.error||error}</p>:null}<QualitySettingsFields prefix="版本" value={quality.settings} onChange={quality.setSettings} capabilities={quality.capabilities} capabilityError={quality.capabilityError} onRefreshCapabilities={quality.refreshCapabilities} disabled={busy}/><button type="button" className="button button-secondary" disabled={busy||quality.loading||!quality.profile||!quality.supported||Boolean(current&&['queued','running'].includes(current.status))} onClick={()=>void submit()}>创建完整视频画质版本</button>{current?<><p role="status">处理记录 {current.id} · {current.status}</p>{current.error_message?<p role="alert">{current.error_message}</p>:null}{current.status==='generated'&&current.relative_path?<><video controls preload="metadata" src={api.mediaUrl(current.relative_path)} data-testid="quality-render-video"/><a href={api.mediaUrl(current.relative_path)} download>下载独立画质版本</a><QualityMediaReport metadata={{quality:current.result}}/></>:null}</>:null}</details>;
+  return <details className="studio-modify"><summary>此视频输出另一画质版本</summary><p>按下方明确选择的方法处理完整视频，保留原文件并创建独立待审版本。本操作不会修改项目或镜头默认配置。</p>{quality.error||error?<p role="alert">{quality.error||error}</p>:null}<QualitySettingsFields modeUse="encoding" prefix="版本" value={quality.settings} onChange={quality.setSettings} capabilities={quality.capabilities} capabilityError={quality.capabilityError} onRefreshCapabilities={quality.refreshCapabilities} disabled={busy}/><button type="button" className="button button-secondary" disabled={busy||quality.loading||!quality.profile||!quality.supported||Boolean(current&&['queued','running'].includes(current.status))} onClick={()=>void submit()}>创建完整视频画质版本</button>{current?<><p role="status">处理记录 {current.id} · {current.status}</p>{current.error_message?<p role="alert">{current.error_message}</p>:null}{current.status==='generated'&&current.relative_path?<><video controls preload="metadata" src={api.mediaUrl(current.relative_path)} data-testid="quality-render-video"/><a href={api.mediaUrl(current.relative_path)} download>下载独立画质版本</a><QualityMediaReport metadata={{quality:current.result}}/></>:null}</>:null}</details>;
 }

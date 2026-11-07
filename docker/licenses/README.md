@@ -1,9 +1,9 @@
 # Image license notices
 
-This directory is copied into both application images. The release maintainer
-must add the approved application license and third-party distribution notices
-before a public release. A local development build uses the OCI license value
-`NOASSERTION` until that review is complete; this is not a grant of permission.
+The root Apache-2.0 LICENSE is copied into both application images. Third-party
+notices and original upstream license texts are distributed alongside it. The
+historical MIT notice remains for previously distributed source; it does not
+replace the current root license or upstream notices.
 
 Base-image packages retain their own license/copyright files under
 `/usr/share/doc`. Model weights, native GPU runtimes and user media are external

@@ -102,7 +102,7 @@ def test_explicit_chinese_identity_gets_early_english_conditioning(features,gend
 
 
 def test_candidate_gender_unspecified_is_not_inferred_from_name_profession_or_clothes():
-    profile=IdentityProfile(age=38,description='角色丙，工程师',hair='短黑发',body='正常成年比例')
+    profile=IdentityProfile(age=38,description='陆衡，工程师',hair='短黑发',body='正常成年比例')
     hint,receipt,warnings=candidate_language_adapter(profile,'男士橄榄绿棉质工作夹克')
     assert receipt['gender']=='unspecified' and not receipt['gender_sources']
     assert 'adult male' not in hint and 'adult female' not in hint

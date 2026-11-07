@@ -146,7 +146,8 @@ def test_seed_release_uses_fixed_controller_without_mutating_global_h3_settings(
     monkeypatch.setattr(q,'seedvr_status',lambda _:verified_seed())
     item=q.create_render(session,settings,video.id,QualitySettings(processing='seedvr2'));session.commit()
     settings.comfyui_base_url='http://127.0.0.1:8188';seen=[]
-    async def release(local):
+    async def release(local,*,require_seed_runtime=False):
+        assert require_seed_runtime
         seen.append(local.comfyui_base_url);assert local is not settings
         return {'controlled':'no network/GPU'}
     monkeypatch.setattr(q,'confirm_gpu_release',release)

@@ -1,5 +1,6 @@
 """Ten independent selections over the existing service registry, not a second runner."""
 import json
+import re
 from pathlib import Path
 from typing import get_args
 from sqlalchemy import select
@@ -82,6 +83,56 @@ def _file(settings,path,sha):
     try:return bool(sha) and file_sha(safe_media_path(settings.media_root,path,must_exist=True))==sha
     except (OSError,AppError):return False
 
+def _context_video_evidence(session, settings, service, model, job, snapshot):
+    from app.services.h3_context_provider import context_origin
+    from app.services.h3_workflow_router import freeze_workflow
+
+    params = job.parameters_json
+    workflow = params.get('h3_workflow')
+    if (service.provider != 'comfyui' or service.encrypted_secret or job.provider != 'comfyui_h3'
+            or not job.provider_job_id or not isinstance(workflow, dict) or snapshot.get('h3_workflow') != workflow
+            or snapshot.get('service_id') != service.id or snapshot.get('service_revision') != service.revision
+            or snapshot.get('provider') != service.provider or snapshot.get('is_cloud') is not False
+            or snapshot.get('requested_model_id') != model
+            or not str(model).lower().replace('-', '_').startswith('minimax_h3')):
+        return None
+    try:
+        expected = freeze_workflow(workflow.get('quality_mode'))
+        from app.services.video_services import context_service_origins
+        origin, legacy = context_service_origins(settings, {'base_url': service.base_url, 'settings': service.settings_json})
+        if (snapshot.get('base_url') != origin
+                or snapshot.get('legacy_comfyui_base_url') != legacy):
+            return None
+    except AppError:
+        return None
+    if (workflow != expected or snapshot.get('workflow_sha256') != expected['workflow_sha256']
+            or snapshot.get('model_id') != expected['model_name'] or snapshot.get('workflow_version') != expected['workflow_id']
+            or job.workflow_version != expected['workflow_id'] or params.get('steps') != expected['actual_steps']):
+        return None
+    receipt = params.get('context_ir_execution') or {}
+    graph_sha = params.get('actual_workflow_sha256') or ''
+    if (not isinstance(receipt, dict) or receipt.get('workflow') != workflow or not receipt.get('compiler_receipt')
+            or not re.fullmatch(r'[0-9a-f]{64}', str(receipt.get('compiled_prompt_sha256')))
+            or not re.fullmatch(r'[0-9a-f]{64}', str(graph_sha))
+            or (workflow['quality_mode'] == 'fast' and not receipt.get('smd_sampling_receipt'))):
+        return None
+    for video in session.scalars(select(m.VideoRevision).where(m.VideoRevision.generation_job_id == job.id)):
+        metadata = video.metadata_json
+        if (video.project_id != job.project_id or video.shot_id != job.shot_id
+                or not metadata.get('playable_video') or metadata.get('h3_workflow') != workflow
+                or metadata.get('context_ir_execution') != receipt or metadata.get('actual_workflow_sha256') != graph_sha
+                or metadata.get('comfyui_prompt_id') != job.provider_job_id):
+            continue
+        decoded = session.scalar(select(m.QualityCheck.id).where(m.QualityCheck.video_revision_id == video.id,
+            m.QualityCheck.check_type == 'media_decode', m.QualityCheck.status == 'passed').limit(1))
+        if decoded and _file(settings, video.relative_path, metadata.get('sha256')):
+            return {'kind':'decoded_context_video', 'job_id':job.id, 'video_id':video.id, 'sha256':metadata['sha256'],
+                    'workflow_id':workflow['workflow_id'], 'quality_mode':workflow['quality_mode'],
+                    'actual_steps':workflow['actual_steps'], 'workflow_sha256':workflow['workflow_sha256'],
+                    'actual_workflow_sha256':graph_sha, 'compiled_prompt_sha256':receipt['compiled_prompt_sha256']}
+    return None
+
+
 def _evidence(session,settings,service,model,slot):
     if service.provider=='cloud_draft':return None
     if slot in {'screenplay_from_text','screenplay_from_image','screenplay_from_video'}:
@@ -106,15 +157,23 @@ def _evidence(session,settings,service,model,slot):
                 asset=session.get(m.CharacterAsset,job.result_asset_id) if job.result_asset_id else None
                 if _matches(job.snapshot_json.get('service_snapshot',{}),service,model) and asset and _file(settings,asset.relative_path,asset.sha256):return {'kind':'decoded_image','job_id':job.id,'asset_id':asset.id,'sha256':asset.sha256}
     elif slot=='video_generation':
-        current_workflow=None
+        current_workflow=legacy_evidence=None
         if service.provider=='comfyui':
             try:current_workflow=file_sha(Path(service.settings_json.get('workflow_path') or settings.h3_workflow_api_json))
-            except (OSError,TypeError):return None
+            except (OSError,TypeError):pass
         for job in session.scalars(select(m.GenerationJob).where(m.GenerationJob.status.in_(['generated','approved','revised']))):
-            snapshot=job.parameters_json.get('service_snapshot',{})
-            if not _matches(snapshot,service,model) or current_workflow and snapshot.get('workflow_sha256')!=current_workflow:continue
+            snapshot=job.parameters_json.get('service_snapshot') or {}
+            if job.parameters_json.get('h3_workflow') or job.parameters_json.get('context_ir_execution') or snapshot.get('h3_workflow'):
+                proof = _context_video_evidence(session, settings, service, model, job, snapshot)
+                if proof:return proof
+                continue
+            if legacy_evidence or not _matches(snapshot,service,model):continue
+            if service.provider=='comfyui' and (not current_workflow or snapshot.get('workflow_sha256')!=current_workflow):continue
             for video in session.scalars(select(m.VideoRevision).where(m.VideoRevision.generation_job_id==job.id)):
-                if video.metadata_json.get('playable_video') and _file(settings,video.relative_path,video.metadata_json.get('sha256')):return {'kind':'decoded_video','job_id':job.id,'video_id':video.id,'workflow_sha256':current_workflow}
+                if video.metadata_json.get('playable_video') and _file(settings,video.relative_path,video.metadata_json.get('sha256')):
+                    legacy_evidence={'kind':'decoded_video','job_id':job.id,'video_id':video.id,'workflow_sha256':current_workflow}
+                    break
+        return legacy_evidence
     elif slot in {'dialogue_generation','lip_sync'}:
         for task in session.scalars(select(m.MediaProcessTask).where(m.MediaProcessTask.slot==slot,m.MediaProcessTask.status=='succeeded')):
             snapshot=task.result_json.get('actual_service_snapshot') or (task.snapshot_json.get('active_route') or task.snapshot_json.get('route') or {}).get('selected',{}).get('service_snapshot',{})

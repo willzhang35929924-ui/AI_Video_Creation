@@ -24,6 +24,7 @@ beforeEach(()=>{
       services=[...services,created];return created;
     }
     if(url==='/api/settings/ai-services')return services;
+    if(url==='/api/settings/ai-service-options')return {container:false,defaults:{comfyui:'http://127.0.0.1:8189',local_llm:'http://127.0.0.1:1234/v1',context_ir:'http://127.0.0.1:8788'},video_workflows:[]};
     if(url==='/api/quality/capabilities')return {ai_super_resolution:{state:'not_configured'},seedvr2:{state:'not_configured'}};
     if(url==='/api/quality/profiles/system/default')return init?.method==='PUT'?{...profile,revision:3,settings:JSON.parse(String(init.body)).settings}:profile;
     throw new Error('Unexpected settings request: '+url);
@@ -42,7 +43,7 @@ it('opens service profiles and quality directly without diagnostic navigation or
   expect(screen.queryByRole('navigation',{name:'设置分区'})).not.toBeInTheDocument();
   expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
   for(const label of ['运行诊断','模型对比实验','质量模式与实际验证证据','hidden-server-version','hidden-plan-json'])expect(screen.queryByText(label)).not.toBeInTheDocument();
-  expect(mocked.mock.calls.every(([url])=>['/api/settings/ai-services','/api/quality/capabilities','/api/quality/profiles/system/default'].includes(url))).toBe(true);
+  expect(mocked.mock.calls.every(([url])=>['/api/settings/ai-services','/api/settings/ai-service-options','/api/quality/capabilities','/api/quality/profiles/system/default'].includes(url))).toBe(true);
 });
 
 it('adds the selected service module from the flat all-services view',async()=>{

@@ -4,6 +4,8 @@ import copy
 import asyncio
 import json
 import hashlib
+import math
+import re
 import shutil
 import uuid
 import weakref
@@ -16,6 +18,7 @@ import httpx
 
 from app.core.config import PROJECT_ROOT, Settings
 from app.core.errors import AppError
+from app.core.trusted_service_origins import local_service_client
 from app.services.gpu_gate import gpu_submission
 
 _motion_preprocess_locks=weakref.WeakKeyDictionary()
@@ -45,6 +48,136 @@ def bind_ordered_reference_slots(prompt,metadata,references):
     metadata['reference_paths']=result
     metadata['reference_tags']=[f'<Picture {i}>' for i in range(1,len(references)+1)]
     return result
+
+
+def _workflow_value(prompt, path):
+    if not isinstance(path, list) or not path or not all(isinstance(part, str) for part in path):
+        raise AppError(503, 'h3_sampling_contract_invalid', '采样契约字段路径无效')
+    current = prompt
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            raise AppError(503, 'h3_sampling_contract_invalid', '采样契约字段不存在', {'path': path})
+        current = current[part]
+    return current
+
+
+def _sampling_ancestors(prompt, node_id, *, skip_conditioning=False):
+    """Follow actual API links; mere presence of an unused LoRA is insufficient."""
+    visited, visiting = set(), set()
+    def visit(identifier):
+        if identifier in visiting:
+            raise AppError(503, 'h3_sampling_contract_invalid', '固定采样图存在循环连接')
+        if identifier in visited:
+            return
+        node = prompt.get(identifier)
+        if not isinstance(node, dict) or not isinstance(node.get('inputs'), dict):
+            raise AppError(503, 'h3_sampling_contract_invalid', '固定采样图引用了缺失节点')
+        visiting.add(identifier)
+        for key, value in node['inputs'].items():
+            if skip_conditioning and node['class_type'] == 'BasicGuider' and key == 'conditioning':
+                continue
+            if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str) and type(value[1]) is int:
+                if value[1] < 0:
+                    raise AppError(503, 'h3_sampling_contract_invalid', '固定采样图输出索引无效')
+                visit(value[0])
+        visiting.remove(identifier)
+        visited.add(identifier)
+    visit(node_id)
+    return visited
+
+
+def validate_sampling_contract(prompt, metadata):
+    """Validate a pinned sampling recipe, not model compatibility or its quality.
+
+    sampling_contract v1 contains steps, sampler_node and locked_inputs entries
+    {path: [node_id, 'inputs', field], value: expected_json_value}. Every input
+    in the sampler/guider/model/sigma chain must be pinned, except the dynamic
+    conditioning, noise and latent inputs. Old workflows remain configurable.
+    """
+    if 'sampling_contract' not in metadata:
+        return None
+    contract = metadata['sampling_contract']
+    allowed = {'version', 'steps', 'sampler_node', 'locked_inputs'}
+    if (not isinstance(contract, dict) or set(contract) != allowed or
+            type(contract['version']) is not int or contract['version'] != 1 or
+            type(contract['steps']) is not int or not 1 <= contract['steps'] <= 50 or
+            not isinstance(contract['sampler_node'], str)):
+        raise AppError(503, 'h3_sampling_contract_invalid', '不支持的固定采样契约或版本')
+    sampler_id = contract['sampler_node']
+    sampler = prompt.get(sampler_id, {})
+    if sampler.get('class_type') != 'SamplerCustomAdvanced' or not isinstance(sampler.get('inputs'), dict):
+        raise AppError(503, 'h3_sampling_contract_invalid', '固定采样契约必须指向实际 SamplerCustomAdvanced')
+    output_path = metadata.get('output_prefix_path')
+    _workflow_value(prompt, output_path)
+    if sampler_id not in _sampling_ancestors(prompt, output_path[0]):
+        raise AppError(503, 'h3_sampling_contract_invalid', '固定采样器未连接到实际保存输出')
+    critical = {sampler_id}
+    for key in ('sigmas', 'sampler', 'guider'):
+        link = sampler['inputs'].get(key)
+        if not (isinstance(link, list) and len(link) == 2 and isinstance(link[0], str) and type(link[1]) is int and link[1] >= 0):
+            raise AppError(503, 'h3_sampling_contract_invalid', '固定采样器缺少有效 ' + key + ' 连接')
+        critical.update(_sampling_ancestors(prompt, link[0], skip_conditioning=True))
+    entries = contract['locked_inputs']
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 512:
+        raise AppError(503, 'h3_sampling_contract_invalid', '固定采样契约缺少锁定输入')
+    locked = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {'path', 'value'}:
+            raise AppError(503, 'h3_sampling_contract_invalid', '固定采样契约锁定项无效')
+        path = entry['path']
+        actual = _workflow_value(prompt, path)
+        if len(path) != 3 or path[1] != 'inputs' or path[0] not in critical or tuple(path) in locked:
+            raise AppError(503, 'h3_sampling_contract_invalid', '固定采样契约含无效、重复或未执行的锁定节点')
+        if json.dumps(actual, sort_keys=True) != json.dumps(entry['value'], sort_keys=True):
+            raise AppError(409, 'h3_sampling_contract_changed', '采样器、LoRA 或 Sigma 配置已偏离固定契约，未提交生成', {'path': path})
+        locked.add(tuple(path))
+    for identifier in critical:
+        for key in prompt[identifier]['inputs']:
+            if identifier == sampler_id and key not in ('sigmas', 'sampler', 'guider'):
+                continue
+            if prompt[identifier]['class_type'] == 'BasicGuider' and key == 'conditioning':
+                continue
+            if (identifier, 'inputs', key) not in locked:
+                raise AppError(503, 'h3_sampling_contract_invalid', '固定采样契约未锁定完整执行链', {'node': identifier, 'input': key})
+    sigma_nodes = _sampling_ancestors(prompt, sampler['inputs']['sigmas'][0], skip_conditioning=True)
+    sources = [prompt[node] for node in sigma_nodes if prompt[node]['class_type'] in ('ManualSigmas', 'BasicScheduler')]
+    if len(sources) != 1:
+        raise AppError(503, 'h3_sampling_contract_invalid', '无法明确核验固定 Sigma 的实际步数')
+    source = sources[0]
+    if source['class_type'] == 'ManualSigmas':
+        try:
+            values = [float(value) for value in re.split(r'[\s,]+', source['inputs']['sigmas'].strip()) if value]
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            raise AppError(503, 'h3_sampling_contract_invalid', 'ManualSigmas 必须是完整数字序列') from exc
+        if (len(values) != contract['steps'] + 1 or not all(math.isfinite(value) and value >= 0 for value in values) or
+                values[-1] != 0 or not all(left > right for left, right in zip(values, values[1:]))):
+            raise AppError(503, 'h3_sampling_contract_invalid', 'ManualSigmas 数量、顺序或终点与固定步数不符')
+    elif type(source['inputs'].get('steps')) is not int or source['inputs']['steps'] != contract['steps']:
+        raise AppError(503, 'h3_sampling_contract_invalid', 'Scheduler 实际步数与固定契约不符')
+    return contract['steps']
+
+
+def apply_sampling_steps(prompt, metadata, parameters):
+    fixed = validate_sampling_contract(prompt, metadata)
+    path = metadata.get('steps_path')
+    if fixed is None and not path:
+        return
+    value = parameters.get('steps')
+    if value is None:
+        value = fixed if fixed is not None else _workflow_value(prompt, path)
+    try:
+        steps = int(value)
+        if isinstance(value, bool) or (isinstance(value, float) and value != steps) or not 1 <= steps <= 50:
+            raise ValueError
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise AppError(422, 'invalid_steps', '采样步数需为1..50的整数') from exc
+    if fixed is not None:
+        if steps != fixed:
+            raise AppError(409, 'h3_sampling_steps_locked', f'此工作流固定为{fixed}步；画质预设不能覆盖蒸馏采样契约')
+        metadata['sampling_receipt'] = {'policy': 'workflow_locked', 'steps': fixed, 'contract_version': 1}
+        return
+    ComfyUIH3Provider._set_path(prompt, path, steps)
+    metadata['sampling_receipt'] = {'policy': 'configurable', 'steps': steps, 'source': 'request' if parameters.get('steps') is not None else 'workflow'}
 
 
 @dataclass(slots=True)
@@ -170,6 +303,7 @@ class ComfyUIH3Provider:
             raise AppError(503, "h3_workflow_unverified", "工作流缺少 prompt_path 映射")
         if not all(isinstance(node, dict) and "class_type" in node for node in prompt.values()):
             raise AppError(503, "h3_workflow_invalid", "prompt 不是 ComfyUI API 格式节点图")
+        validate_sampling_contract(prompt, metadata)
         return copy.deepcopy(prompt), metadata
 
     @staticmethod
@@ -197,7 +331,7 @@ class ComfyUIH3Provider:
             workflow_error = exc.message
         try:
             timeout = 5.0  # Keep health probes bounded; generation requests use the service profile timeout.
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with local_service_client([self.settings.comfyui_base_url], timeout=timeout) as client:
                 stats_response, nodes_response = await client.get(
                     f"{self.settings.comfyui_base_url}/system_stats"
                 ), await client.get(f"{self.settings.comfyui_base_url}/object_info")
@@ -294,19 +428,18 @@ class ComfyUIH3Provider:
             raise AppError(422, "r2v_workflow_required", "必须使用官方原生 R2V 节点")
         if metadata.get("output_prefix_path"):
             self._set_path(prompt, metadata["output_prefix_path"], f"projects/{request.project_id}/{request.shot_id}/{request.job_id}")
-        for field, default in (("width", 640), ("height", 384), ("steps", 20)):
+        for field, default in (("width", 640), ("height", 384)):
             path = metadata.get(f"{field}_path")
             if path:
                 value = int(request.parameters.get(field, default))
                 if field in {"width", "height"} and (value < 32 or value > 1344 or value % 32):
                     raise AppError(422, "invalid_resolution", "分辨率必须为32的倍数，且不超过1344")
-                if field == "steps" and not 1 <= value <= 50:
-                    raise AppError(422, "invalid_steps", "采样步数需在1..50之间")
                 self._set_path(prompt, path, value)
+        apply_sampling_steps(prompt, metadata, request.parameters)
         logdir = PROJECT_ROOT / "logs" / "jobs" / request.job_id
         logdir.mkdir(parents=True, exist_ok=True)
         try:
-            async with httpx.AsyncClient(timeout=self.settings.comfyui_client_timeout_seconds, trust_env=False) as client:
+            async with local_service_client([self.settings.comfyui_base_url], timeout=self.settings.comfyui_client_timeout_seconds) as client:
                 uploads=[]
                 for index, ref in enumerate(request.reference_assets):
                     path = Path(ref["absolute_path"])
@@ -404,11 +537,11 @@ class ComfyUIH3Provider:
         if not prompt_id:
             if request.motion_references:raise AppError(502,'motion_submission_unknown','动作参考提交响应缺少任务 ID；保留任务，不自动重发')
             raise AppError(502, "comfyui_invalid_response", "ComfyUI 响应缺少 prompt_id")
-        return JobAccepted(str(prompt_id), "queued", metadata={"workflow": metadata.get("name"), "workflow_sha256": hashlib.sha256(json.dumps(prompt, sort_keys=True).encode()).hexdigest(), "log_dir": str(logdir),'reference_manifest':manifest,'reference_uploads':uploads,'motion_reference_uploads':motion_uploads})
+        return JobAccepted(str(prompt_id), "queued", metadata={"workflow": metadata.get("name"), "workflow_sha256": hashlib.sha256(json.dumps(prompt, sort_keys=True).encode()).hexdigest(), "log_dir": str(logdir),'reference_manifest':manifest,'reference_uploads':uploads,'motion_reference_uploads':motion_uploads,'sampling_receipt':metadata.get('sampling_receipt')})
 
     async def get_job(self, job_id: str) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+            async with local_service_client([self.settings.comfyui_base_url], timeout=10.0) as client:
                 response = await client.get(f"{self.settings.comfyui_base_url}/history/{job_id}")
                 response.raise_for_status()
                 payload = response.json()
@@ -440,7 +573,7 @@ class ComfyUIH3Provider:
 
     async def cancel(self, job_id: str) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=self.settings.comfyui_client_timeout_seconds) as client:
+            async with local_service_client([self.settings.comfyui_base_url], timeout=self.settings.comfyui_client_timeout_seconds) as client:
                 queue = (await client.get(f"{self.settings.comfyui_base_url}/queue")).json()
                 if any(str(row[1]) == job_id for row in queue.get("queue_running", [])):
                     response = await client.post(f"{self.settings.comfyui_base_url}/interrupt", json={"prompt_id": job_id})

@@ -18,6 +18,9 @@ export interface PipelineStart {
   width?: number;
   height?: number;
   shot_ids?: (string)[] | null;
+  prompt_overrides?: Record<string, any>;
+  reference_image_ids?: Record<string, any>;
+  motion_reference_overrides?: Record<string, any>;
   max_retries?: number;
 }
 
@@ -37,6 +40,8 @@ export interface ComposeInput {
   expected_decisions?: Record<string, any> | null;
   transition?: "cut" | "crossfade";
   transition_duration?: number;
+  resolution_mode?: "source" | "custom" | null;
+  allow_downscale?: boolean;
   width?: number;
   height?: number;
   fps?: 24 | 25 | 30;

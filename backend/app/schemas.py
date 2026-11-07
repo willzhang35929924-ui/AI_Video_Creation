@@ -128,6 +128,7 @@ class GenerationRequest(StrictModel):
 
 class RevisionRequest(GenerationRequest):
     instruction: str = Field(min_length=1)
+    use_project_video_service: bool = False
 
 
 class ReviewRequest(StrictModel):

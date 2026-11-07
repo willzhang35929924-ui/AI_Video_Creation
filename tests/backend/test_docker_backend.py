@@ -146,8 +146,10 @@ def test_only_trusted_adapter_request_bypasses_public_dns_pin(monkeypatch,settin
         async def request(self,method,url,**kwargs):seen.append((method,url,kwargs));return SimpleNamespace(status_code=200)
     def forbidden(*args):pytest.fail('Explicit trusted local adapter must not be sent to the public-URL importer')
     monkeypatch.setattr(ai_services.httpx,'AsyncClient',Client);monkeypatch.setattr(ai_services,'pin_public_url',forbidden)
+    monkeypatch.setattr(ai_services, 'pin_local_service_url', lambda url: ('http://192.168.65.254:8189/queue', 'host.docker.internal', 'host.docker.internal:8189'))
     asyncio.run(ai_services.service_request(settings,{'provider':'comfyui','base_url':'http://host.docker.internal:8189','settings':{}},'GET','/queue'))
-    assert seen[0][1]=='http://host.docker.internal:8189/queue'
+    assert seen[0][1]=='http://192.168.65.254:8189/queue'
+    assert seen[0][2]['headers']['Host']=='host.docker.internal:8189'
 
 
 def test_clean_defaults_do_not_seed_demo_business_records(monkeypatch):

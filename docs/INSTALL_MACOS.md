@@ -1,22 +1,14 @@
 # macOS 安装教程
 
-Mac 通过 Docker Desktop 运行相同的网页、后端、SQLite、任务编排和 FFmpeg。视频生成优先配置云端 API；不能将 Windows 上的 NVIDIA/CUDA 模型目录复制进 Mac 就直接运行。
+Mac 通过 Docker Desktop 运行网页、后台、SQLite、任务编排与 FFmpeg。本地 H3＋Context-IR＋4step LoRA 连接用户自己的 NVIDIA 推理主机；Windows CUDA 环境不能复制到 Mac 后直接运行。也可配置应用已支持的云端 API。
 
-> 验证边界：Linux AMD64 / ARM64 镜像已实际构建、发布并通过 CI 匿名拉取。当前没有 Mac 实机，Mac 物理设备上的启动与完整业务验证为 **BLOCKED**；Linux 构建、模拟运行和其他主机上的安装结果不能替代 Mac 实测或 Metal/MPS 模型验证。
->
-> 源码与 `latest` 镜像已公开，CI 已验证 Linux AMD64 / ARM64 匿名拉取。Mac 实机仍缺少设备验证，不能用这些结果替代 Mac 上的实际启动、模型推理和视频制作测试；详见 [发布验收记录](RELEASE_VALIDATION.md)。
+当前没有 Mac 物理设备上的完整验收，也没有 Linux GPU 节点真实生成验收。双架构构建、模拟 ARM64 运行和 Windows 实测均不能替代这些测试。实际范围见 [发布验收记录](RELEASE_VALIDATION.md)。
 
-## 1. 识别芯片与安装 Docker Desktop
+## 1. 安装 Docker Desktop
 
-点击苹果菜单 → 关于本机。显示“Apple M…”的是 Apple Silicon；显示 Intel 的是 Intel Mac。也可以打开“终端”运行：
+苹果菜单 → 关于本机，确认 Apple Silicon 或 Intel；也可运行 `uname -m`，注意 Rosetta 终端可能影响显示。按 [Docker 官方 Mac 安装说明](https://docs.docker.com/desktop/setup/install/mac-install/) 安装适合自己芯片及系统版本的 Docker Desktop。
 
-```bash
-uname -m
-```
-
-`arm64` 对应 Apple Silicon 的原生 ARM64 运行路线，`x86_64` 对应 Intel 的 AMD64 路线。若终端通过 Rosetta 运行，命令显示可能受到影响，优先根据“关于本机”确认芯片。
-
-在 [Docker 官方 Mac 安装页](https://docs.docker.com/desktop/setup/install/mac-install/) 下载对应芯片的安装包，并按当前官方系统要求安装。启动 Docker Desktop，等待引擎就绪。终端验证：
+启动 Docker Desktop 并等待引擎运行，在终端检查：
 
 ```bash
 docker version
@@ -24,66 +16,59 @@ docker compose version
 docker info --format '{{.OSType}}/{{.Architecture}}'
 ```
 
-默认不应手动强制 `platform: linux/amd64` 来绕过 ARM64 问题。生产多架构镜像应由 Docker 自动选择适用架构；没有适用清单时应报告发布问题。
+Apple Silicon 默认构建 Linux ARM64，Intel 默认 Linux AMD64。不要把强制 AMD64 模拟运行当成原生适配或真实 Mac 验收。
 
-## 2. 下载与启动
+## 2. 下载并启动网页
 
-在 [项目仓库](https://github.com/willzhang35929924-ui/AI_Video_Creation) 点击 **Code → Download ZIP**，解压后在终端进入包含 `compose.yaml` 的目录，例如：
-
-```bash
-cd ~/Downloads/video-factory
-docker compose up -d
-```
-
-目录名以你实际解压结果为准；含空格时用引号包住完整路径。也可安装 Git 后运行：
+在 [项目仓库](https://github.com/willzhang35929924-ui/AI_Video_Creation) **Code → Download ZIP** 后完整解压，终端进入含 `compose.yaml` 的目录。使用 Git 时：
 
 ```bash
-git clone https://github.com/willzhang35929924-ui/AI_Video_Creation video-factory
+git clone https://github.com/willzhang35929924-ui/AI_Video_Creation.git video-factory
 cd video-factory
 docker compose up -d
-```
-
-生产部署不要求你先安装 Python、Node.js、数据库、FFmpeg，也不要求复制 `.env`。初次拉取完成后：
-
-```bash
 docker compose ps
 open http://127.0.0.1:8080
 ```
 
-可选辅助脚本：`bash ./scripts/start.sh`。直接用 `bash` 运行不依赖解压后是否保留可执行权限。
+默认构建当前下载的源码，首次需要网络、CPU 与磁盘空间。`pull_policy: build` 自动构建，无需额外加 `--build`。应用主机无需另装 Python、Node.js、数据库或 FFmpeg，也不需要先创建 `.env`。
 
-端口占用时，运行 `cp .env.example .env`，用文本编辑器修改 `WEB_PORT=8081`，再执行 `docker compose up -d`；访问地址相应改为 `http://127.0.0.1:8081`。`.env` 是自己的部署配置，不上传 GitHub。
+可选脚本为 `bash ./scripts/start.sh`。8080 被占用时运行 `cp .env.example .env`，修改 `WEB_PORT` 后重新启动；`.env` 不上传 GitHub。
 
-## 3. 配置云端模型并做小样
+默认项目名 `video-factory` 固定了命名卷前缀。下载第二份源码不会自动得到独立业务数据；开发测试使用独立 `compose.dev.yaml`（项目 `video-factory-dev`、端口 `18083`）。可选 `compose.prebuilt.yaml` 拉取 GHCR 发行镜像，但旧镜像可能缺少本次更新，不应覆盖新版业务库。
 
-1. 进入系统设置的服务档案，按用途选择应用已支持的 API 协议，填写真实的服务地址、模型和密钥。
-2. 保存并测试连接。语言用途的聊天模型不能代替视频用途的视频模型；能读取模型列表不代表已经开通生成权限。
-3. 在项目工作台下载模板，导入一个短镜头，核对解析；人物与产品参考是可选项，按剧本需要准备。
-4. 启动制作，实际等待生成并审核结果；合成 MP4 后下载播放，核对声音、时长和画面。
+## 3. 连接自己的 NVIDIA 推理节点
 
-Mac 的本地 Docker 健康检查与付费云端推理是不同测试。完整流程见 [使用教程](USER_GUIDE_ZH.md)。
+先在 Windows NVIDIA 主机按 [本地推理节点教程](local-inference.md) 安装模型、运行环境和项目节点，启动 **8788** 节点入口。当前原生安装器将 Linux 标为 `BLOCKED_UNVERIFIED_RUNTIME` 并阻止启动，Linux GPU 路线尚未完成独立验收。
 
-## 4. 本地模型与远程节点
+在 Mac 的网页中：
 
-Docker Desktop 的 Linux 容器不能直接获得 Apple 的 Metal/MPS 运行环境，也不能执行项目的 Windows 专用模型启动脚本。若某模型官方支持 macOS 原生推理，需要你在宿主机独立安装，再确认本项目已有适用的服务协议、连接测试和真实生成结果；本项目没有因此自动保证该模型可用。
+1. **系统设置 → 添加服务 → 视频生成 → 本地 / 私有 ComfyUI**。
+2. 内置工作流选 **Context-IR 三档：Fast 4 / Quality 20 / Quality 30**。
+3. 地址填写自有 GPU 主机的私网地址，例如 `http://192.168.1.20:8788`；勾选 **确认这是我管理的本地模型服务**，保存并测试连接。
+4. 项目选用该视频档案；制作画质选 Fast 4 步、标准 20 步或高质量 30 步，保存后启动新任务。
 
-已部署在 Mac、Windows GPU 机或 Mac mini 上的服务，必须先在各自主机真实运行。连接当前 Mac 宿主机通常用 `host.docker.internal`；连接另一台主机则用受控局域网地址和认证。配置相应本地服务 origin 白名单并检查监听、防火墙和连通性。不要把容器 `localhost` 当作宿主机。
+这条设置路径无需编辑 `.env`。连接当前 Mac 自己已支持的宿主服务时可用 `host.docker.internal`；它不能代表另一台 NVIDIA 主机。在 GPU 节点的 `allowed_clients` 中加入已核对的 Mac/Docker 客户端精确私网 IP；若出现 403，在节点日志中核对 `client_ip`，按本地教程配置白名单。节点保持私有，不开放到公共互联网。
 
-Windows 上的 H3、CosyVoice、IndexTTS、SeedVR2 原生运行环境与磁盘路径不能原封不动用于 Mac。它们的模型权重不在应用镜像内；不能把“功能页面还在”写成“本地推理已适配 Mac”。
+Mac Docker 不会获得 Windows CUDA、宿主 Apple Metal/MPS 或原生 Windows 启动器。CosyVoice、IndexTTS、SeedVR2 等也必须使用本项目实际支持的运行方式；任意 HTTP 地址不等于已有对应远程适配器。
+
+## 4. 云端 API 与第一条小样
+
+使用云端服务时，在服务档案按用途选择已实现的 API 协议、地址和模型，填写自己的密钥并测试。云端地址使用 HTTPS；语言模型的 `/v1/models` 或聊天接口不能替代视频生成接口。三档 Context-IR 路线属于本地 H3，不能仅换一个云端域名沿用。
+
+下载 [剧本模板.docx](templates/剧本模板.docx)，填写一条短镜头后在项目工作台导入并核对。人物与产品参考按需上传；声音要求使用实际支持的策略与授权素材。开始制作后等待真实返回，播放审核分镜，批准并合成 MP4，下载检查画面、声音和时长。
+
+基础健康、连接测试、真实生成与人工审核分别判断；不要用网页能打开证明视频链路已经通过。详见 [完整使用教程](USER_GUIDE_ZH.md)。
 
 ## 5. 更新、备份与更换磁盘
 
 ```bash
-# 更新镜像并按需重建，保留数据卷
-docker compose up -d
-
-# 备份私人业务数据
+docker compose logs --tail=100 backend frontend
+docker compose exec backend python -m app.container_entrypoint doctor
 bash ./scripts/backup-docker.sh
-
-# 停止；需要时再 up -d
 docker compose stop
+docker compose start
 ```
 
-备份归档包含数据库、用户文件和加密主密钥，另存到可靠磁盘，不上传 GitHub。Docker 命名卷通常由 Docker Desktop 管理，单纯复制源码文件夹不能迁移业务数据。更换硬盘或从 Windows 迁移时应按 [备份恢复教程](DOCKER_RELEASE_GUIDE_ZH.md) 恢复到空卷，再重新检查模型地址和服务能力；Windows 原生凭据与模型安装不是 Docker 数据备份。
+升级前备份，更新源码后执行 `docker compose up -d`。归档包含 SQLite、媒体和解密主密钥，是私人数据；另存到可靠磁盘，不上传仓库。Docker 数据卷由 Docker Desktop 管理，复制源码文件夹不能备份卷，也不能迁移 NVIDIA 主机的模型。
 
-不要在升级或普通卸载中删除 volumes。故障处理见 [故障排查](TROUBLESHOOTING_ZH.md)。
+更换硬盘或电脑按 [恢复教程](DOCKER_RELEASE_GUIDE_ZH.md) 恢复到新的空卷，重新核对服务主机与模型能力。保留原卷，不使用 `docker compose down -v` 作为更新方式。遇到问题见 [故障排查](TROUBLESHOOTING_ZH.md)。

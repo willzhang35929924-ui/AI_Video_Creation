@@ -30,14 +30,28 @@ def local_settings(settings, snapshot):
         valid_url = '?' not in url and '#' not in url and '@' not in urlsplit(url).netloc
     except AppError:
         valid_url = False
-    if not valid_url or not (is_loopback_service(url) or is_trusted_local_service(url)):
+    if not valid_url or not (is_loopback_service(url) or is_trusted_local_service(url, snapshot.get('settings'))):
         raise AppError(409, 'remote_comfy_not_supported', 'H3 仅允许回环或管理员配置的受信本地 ComfyUI 地址')
     workflow = Path(snapshot['settings'].get('workflow_path') or settings.h3_workflow_api_json or '')
     return replace(settings, comfyui_base_url=snapshot['base_url'], h3_workflow_api_json=workflow, comfyui_client_timeout_seconds=snapshot.get('settings',{}).get('timeout'))
 
 
-def select_video_service(session, settings, project_id, service_id=None, model_id=None):
+def select_video_service(session, settings, project_id, service_id=None, model_id=None, *, quality_mode=None, frozen_workflow=None):
     service, snapshot = resolve_service(session, 'video_generation', service_id, project_id, model_id)
+    if quality_mode is not None or frozen_workflow is not None:
+        if service.provider != 'comfyui' or service.encrypted_secret:
+            raise AppError(409, 'context_ir_service_required', '三档 Context-IR 制作需要本机 MiniMax H3 服务，请选择本地服务')
+        from app.services.h3_context_provider import ContextIRH3Provider, context_origin
+        from app.services.h3_workflow_router import freeze_workflow
+        if not str(snapshot['model_id']).lower().replace('-', '_').startswith('minimax_h3'):
+            raise AppError(409, 'context_ir_model_required', '三档 Context-IR 工作流仅适用于 MiniMax H3，本次所选模型未提交')
+        origin, legacy_origin = context_service_origins(settings, snapshot)
+        route = dict(frozen_workflow) if frozen_workflow is not None else freeze_workflow(quality_mode)
+        snapshot.update(h3_workflow=route, base_url=origin, requested_model_id=snapshot['model_id'], legacy_comfyui_base_url=legacy_origin,
+                        model_id=route['model_name'], workflow_sha256=route['workflow_sha256'],
+                        workflow_version=route['workflow_id'])
+        return service, snapshot, ContextIRH3Provider(replace(settings, comfyui_base_url=origin), route, legacy_origin,
+                                                   profile_settings=snapshot.get('settings'))
     if service.provider == 'comfyui':
         resolved = local_settings(settings, snapshot)
         graph = json.loads(resolved.h3_workflow_api_json.read_text(encoding='utf-8'))
@@ -60,6 +74,23 @@ def select_video_service(session, settings, project_id, service_id=None, model_i
     if contract != 'video-jobs-v1':
         raise AppError(409, 'video_contract_required', '请选择实际支持的视频接口协议；聊天接口不能生成视频')
     return service, snapshot, CloudVideoJobs(settings, snapshot, reveal(service.encrypted_secret))
+
+
+def context_service_origins(settings, snapshot):
+    """Select once from the profile; retain native workstation legacy bindings."""
+    from app.services.h3_context_provider import context_origin
+
+    profile = snapshot.get('settings') or {}
+    explicit = profile.get('h3_context_ir') is True or profile.get('workflow_profile') == 'context_ir'
+    selected = context_origin(snapshot['base_url'], profile)
+    if explicit:
+        return selected, None
+    if settings.container_mode or not is_loopback_service(selected):
+        raise AppError(409, 'context_ir_profile_required',
+                       '请在系统设置的视频服务中选择 Context-IR 三档，并填写原生推理节点地址（默认端口 8788）')
+    # Existing Windows projects bound to the old 8189 service keep their frozen
+    # peer routing. New portable profiles always use their own selected origin.
+    return context_origin(settings.h3_context_comfyui_url), selected
 
 
 class CloudVideoJobs:
@@ -219,6 +250,13 @@ class Wan26ImageToVideo(CloudVideoJobs):
 
 def existing_provider(session,settings,snapshot):
     if snapshot['provider']=='comfyui':
+        if snapshot.get('h3_workflow'):
+            from app.services.h3_context_provider import ContextIRH3Provider, context_origin
+            profile = snapshot.get('settings') or {}
+            origin = context_origin(snapshot['base_url'], profile)
+            legacy = snapshot.get('legacy_comfyui_base_url')
+            return ContextIRH3Provider(replace(settings, comfyui_base_url=origin), snapshot['h3_workflow'],
+                                       context_origin(legacy, profile) if legacy else None, profile_settings=profile)
         return ComfyUIH3Provider(local_settings(settings,snapshot))
     service=session.get(AIService,snapshot['service_id'])
     if not service or not service.enabled:

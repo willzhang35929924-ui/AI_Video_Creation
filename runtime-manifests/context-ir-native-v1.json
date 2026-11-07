@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "profile_id": "local-h3ir-qwen4b-v3",
+  "platform_status": {
+    "windows_nvidia": "source-pinned production workflow previously exercised; portable supervisor requires independent acceptance",
+    "linux_nvidia": "BLOCKED_UNVERIFIED_RUNTIME",
+    "mac_metal": "UNSUPPORTED"
+  },
+  "comfy_repository": "https://github.com/Comfy-Org/ComfyUI",
+  "comfy_revision": "8010b48d2c1be986613f8e8c761527d205bd756f",
+  "comfy_version_observed": "0.39.0",
+  "core_pins": {
+    "comfy/weight_adapter/lora.py": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+    "comfy/weight_adapter/base.py": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+    "comfy/lora.py": "24ace0806193466947662dc408642e2615f255259f5a45393043b67a47174f17",
+    "comfy/lora_convert.py": "0790e993706b6e5c255fd4000f8f48abed80e318274da5264681eb799df25d0b",
+    "comfy/model_patcher.py": "7edc88d9eae6a88637625d257dc73684cfc012a29446bf88e70d22e3a6be3994",
+    "comfy/patcher_extension.py": "1c7b3b855278d0b95d1c1a705fa0b3c91a265f320e2f97bdeb9d15469d6d4ac7",
+    "comfy/samplers.py": "f2c264ca9d394612f828e3ffe167c856a278a10e1711b269f0ba65dccb66393f",
+    "comfy/k_diffusion/sampling.py": "cfc4221ed0bc1f84a6f5689d3ec440cad3008c2541ab8f5e2599d1a73fac74ce",
+    "comfy/sampler_helpers.py": "53c82235bfea0c4edf3cd5219f080c44c45ac1c9a6c3171f2aae151e18b56b91",
+    "comfy/sd.py": "e567fdcf7c4539a536787b4b51b8abe996c3db4e41d6d61e41b260cfc2ee3165",
+    "nodes.py": "8c5a0239a4d3b9709085348a96d25184d28fa2267c2421b7f354614c03f3139c",
+    "comfy_extras/nodes_minimax_h3.py": "108ceff11e5a5c9a34a57bbc380447cf9941beb673a1bd421abc818de54ccd5c",
+    "comfy/ops.py": "a0b8c7f32a146b383a795363bef35e480ffa84b5b3e9c9503f323b1446876f45",
+    "comfy/quant_ops.py": "37f0054dfbd8430524ac2c73dafd25b8ad4eabc490a2b7490eeebde8dffbc749",
+    "comfy/model_management.py": "045ab96003386a43e647c8ab96f22fbf3be6c577e2fc578ea31c6faa22facbd5",
+    "server.py": "8ee5389b439d4676c59b208d43099d573dadfbee1f2c3740311ed7213832d3f5"
+  },
+  "torch_source_pins": {
+    "Lib/site-packages/torch/utils/_contextlib.py": "c4b52075af6b23784336b88d1c608c1ba22bcece245f03d20e8ff12b8bb774c9",
+    "Lib/site-packages/torch/autograd/grad_mode.py": "35f0a6be03336e2e78db5fcbaf574b2122ba2f4496c83036c29203ccc0687416"
+  },
+  "openh3_repository": "https://github.com/ruashots/ComfyUI-OpenH3-IR",
+  "openh3_revision": "8660988b033d427f346e72fdbcf2d45ede48edbe",
+  "openh3_node_pins": {
+    "compiler.py": "6b5de1530053fdd6e0aeea52fd9e04c146561c07078d95577e77075e11dbcf3f",
+    "conftest.py": "fb478a7c8b12e0cb6109bcc599a31c0e89e8093a4b3781f8912f32275f0464ad",
+    "contract.py": "9c5ec5d93b16c650cc4aaf768dfcc866fe927dc68703e0dcf0deeccd8bc9062d",
+    "h3ir_client.py": "d207a3acac34dcb0081322c6c5ab3b7a0c2eb2b557491fc9044e230dbe580c95",
+    "media.py": "5a78753feab6de30f59db126019b6397ad55c73bc6c07b446c8ffe1210580f45",
+    "nodes.py": "acbca94950022fda305ed72b817b8c4a1b97737d648a7679f374f9ef3f9c974a",
+    "tray.py": "e7b21b7dbb86a1038a03aa8ae2a01a66677ca1a24e351855be5432e13e1487f9",
+    "web_api.py": "a92c7e7183170f40a42a199a99c91bc68474da584619460ecc1b6fafac32a2c2",
+    "__init__.py": "a69f21a6892de624c2d695ff4ba3b572bf7cd28f99af00be476a4a075fcfc28c"
+  },
+  "compiler_distribution": "open-h3-ir==0.4.1",
+  "compiler_source_pins": {
+    "acceptance.py": "ed92ee248d7fd24dad1f76aeb4074e13238c55156fdb6a7628e59fa5e5fd3e52",
+    "analyse.py": "fc2814f60951e76acb384ce05937568f85430699aee88e83f2ee00fd77f59d50",
+    "backend.py": "b5d219f873a7c7b60fea19d44f4273c3b3f09fdaf9d51131d937f281c1959d39",
+    "cli.py": "366d8c80f9e2abbb593f5fc783b42bfc58eb3d6b4ae056b2fafdf652b33fd3c7",
+    "comfy.py": "c03144c6fef96fb579e30286221b2dc1ce82806ec57262cd7ccc79ab054a4afd",
+    "compile.py": "f96d893ff2b895c524329f11c10bed8999a5436d6c09ce64d95590819195772b",
+    "config.py": "ef095b43ad4f831cfa6fc4f9ec9d48f82b618f89285c657627815d949438ec9c",
+    "contract.py": "987d0a6673303d59de5afb050cdbea971a5acf5c497632a1a0c706fa6bf98468",
+    "creativity.py": "bc2ee8511b1932ed5377e86169676a6c7c51f38f95373b85163baefff64aca3b",
+    "director.py": "ec56d04aff017510e4ffc8e5dca73756d1c4c613e1ec6128f5f49173a41334d9",
+    "draft.py": "00ce464f604654f06b964d0800facc2e1a4afef1598250b915fae4d5865f1b0e",
+    "grid.py": "340b933c368b09cd8eb3d6cfad484a9efd9f358dd96619232088a4915eada60a",
+    "licence.py": "851131967afcd2c55b9da31ea47c6b1e0ce36d3f3b22c9c4de36d1ea75d1debb",
+    "lora.py": "45fb6bd27abd7066cd504abdcc2d2fd170cc6c5359dd6999a758c79204a578ea",
+    "mode.py": "787be12d5e3f23107875be44afb62fb4a7bdd3713b17f92526ab5049409c9534",
+    "models.py": "cd9d3f59d8843fb1e7681393a4f8217cc3dcdbcc5f3904e54fb210150dcee08d",
+    "plan.py": "75abb6841f2084fc8b026d2dd8fd85e27d43b829c8354402167703850422c9a2",
+    "prose.py": "4ad714c522e907e2990cc8f9f2bf68b82aaf31668bc98167a0ab5d4375746876",
+    "render.py": "b1372803e7454ad6d61103684fc9e55f2fe61a9e98a0cbc443c08468e1d548e4",
+    "repair.py": "b69c86f48606b90b229fba4485c89e0397484e80b93536e607fde49001e27bbe",
+    "service.py": "0e05361605999b53abd25bc6c44b0a378b80a95440781a76af4b48d8b82cce27",
+    "shots.py": "55b11533f926ac1304511c7bd879193d093539b6c79a2a2487d77bbe4e55904b",
+    "style.py": "d0d7d64c9c5aedcfcda0419365c6fe2a1274bea2afb4f2ac5ef4ca9fead3a58d",
+    "textnorm.py": "952ea52456ef94ec47dec7bd806db7cf548d1b938337b058cd3d1c924cc345e0",
+    "tokens.py": "37a9f9e6b9b327ff83c7d70f5de998fc5bffa4daeec212e81c6d87348c9735e9",
+    "uploads.py": "50a5b043b2c0209df8b7f182e174e293390a4cdb01b7ddbf25416f3d59024694",
+    "validate.py": "193332bbf2ef06d6d68618456519b3e662bd83b0cc542b79630fa4fdcafccb8f",
+    "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evalloop/controls.py": "2269f94f3566d5a69d62c7c9351368b6f93c42e6f102361578d47a3968cf0155",
+    "evalloop/score.py": "aef43343afab2a48e32cc7a5b45fdc69490d28179a31ac32c61f64e02d50d38c",
+    "evalloop/suite.py": "29db766f26ce59db8df5e048cf4fe90928bc40db91c510ea1a4c6f11a6ec8f9d",
+    "evalloop/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "project_nodes": [
+    {
+      "name": "VideoFactoryLocalVLMGuard",
+      "files": {
+        "compile_node.py": "da8382a22ddd864f191d5193a21ba1740ed86c18421f8d1e646d34d05f44fb8d",
+        "guard.py": "e3a31b15b9dd518d5935515a7859133f602cbcb76b6e7cab74fb08b49240546c",
+        "local_h3ir_backend_profile.py": "1ce73ec41735a5cc71bb7b6461e7ee1cb0759b3b3b71e98a7803e3a0cb6471f5",
+        "__init__.py": "c370a05a4818652bb47e77563953fafac0253cb32c0a96e6760349045f9ac24c"
+      }
+    },
+    {
+      "name": "VideoFactoryReferenceCachePolicy",
+      "files": {
+        "cache_policy.py": "aabe39075926241903794a9eddc74af28b31d10458e6b8d2058993502fdc6eaf",
+        "__init__.py": "3a854c669bbe7b7875072c1375bab80bba87b1690096a0cee213250e865008db"
+      },
+      "policy_version": "videofactory-reference-cache-policy-v2r1",
+      "note": "Project V2R1 source equals the observed installed policy; install only this deployment name, never V1 and V2R1 together"
+    },
+    {
+      "name": "VideoFactorySamplingAudit",
+      "files": {
+        "smd_audit.py": "77ddc2854bcb7e0625843722911f1d930588ed5e605b669097f3305253329c85",
+        "__init__.py": "230031baf9f4fa255ff2e7a839188a51b20325ff03fe77f5cf79dfd5d3101946"
+      }
+    },
+    {
+      "name": "VideoFactoryWriterEnvelopeFormat",
+      "files": {
+        "writer_format.py": "f60f1200baed5b6b2aae96e70e6e4cc97e6985c3bc288b01879161377064c0bf",
+        "__init__.py": "2457c40ecde2c9130e778e56c69061d1c52fd2909311a0513442b14e98a96fd9"
+      }
+    }
+  ],
+  "allowed_graph_nodes": [
+    "BasicGuider",
+    "BasicScheduler",
+    "CreateVideo",
+    "KSamplerSelect",
+    "LoraLoaderModelOnly",
+    "ManualSigmas",
+    "MiniMaxH3SigmaShift",
+    "OpenH3IRCompile",
+    "OpenH3IRDirector",
+    "OpenH3IRMedia",
+    "OpenH3IRSetup",
+    "PreviewAny",
+    "RandomNoise",
+    "SamplerCustomAdvanced",
+    "SaveVideo",
+    "VAEDecode",
+    "VAEDecodeAudio",
+    "VideoFactoryLocalH3IRCompile",
+    "VideoFactoryLocalVLMGuard",
+    "VideoFactorySMDSamplingAudit"
+  ],
+  "required_nodes": [
+    "BasicGuider",
+    "BasicScheduler",
+    "CreateVideo",
+    "KSamplerSelect",
+    "LoraLoaderModelOnly",
+    "ManualSigmas",
+    "MiniMaxH3SigmaShift",
+    "OpenH3IRCompile",
+    "OpenH3IRDirector",
+    "OpenH3IRMedia",
+    "OpenH3IRSetup",
+    "PreviewAny",
+    "RandomNoise",
+    "SamplerCustomAdvanced",
+    "SaveVideo",
+    "VAEDecode",
+    "VAEDecodeAudio",
+    "VideoFactoryLocalH3IRCompile",
+    "VideoFactoryLocalVLMGuard",
+    "VideoFactorySMDSamplingAudit"
+  ],
+  "models": [
+    {
+      "category": "diffusion_models",
+      "name": "minimax_h3_ref2va_pruned_w6a8.safetensors",
+      "bytes": 15983746636,
+      "sha256": "ece96bbbce76670ec782de84acc888fd9d9b210bd2ab97c1957b39896734f9f1",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/diffusion_models/minimax_h3_ref2va_pruned_w6a8.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "diffusion_models",
+      "name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "bytes": 20970379616,
+      "sha256": "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "diffusion_models",
+      "name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "bytes": 20970379616,
+      "sha256": "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "text_encoders",
+      "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "bytes": 15687142551,
+      "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "vae",
+      "name": "minimax_h3_video_vae_int8_convrot.safetensors",
+      "bytes": 2811065184,
+      "sha256": "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/vae/minimax_h3_video_vae_int8_convrot.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "vae",
+      "name": "minimax_h3_audio_vae_fp32.safetensors",
+      "bytes": 605254808,
+      "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+      "repository": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "source": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/e5eb578a89295337b8ff433a035929ce0279e0b6/vae/minimax_h3_audio_vae_fp32.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    },
+    {
+      "category": "loras",
+      "name": "SMD-MiniMax-H3-Ref2VA-4step.safetensors",
+      "bytes": 1956183672,
+      "sha256": "9c6f61221a1043ee709af0d32ae083c17efeb36950b4b08a945296b5b9c39353",
+      "repository": "zjwfufu/SMD-MiniMax-H3-Ref2VA-4step-ComfyUI",
+      "revision": "9544cef6ca00bcedb34a7139032634c4558ed4f8",
+      "source": "https://huggingface.co/zjwfufu/SMD-MiniMax-H3-Ref2VA-4step-ComfyUI/resolve/9544cef6ca00bcedb34a7139032634c4558ed4f8/SMD-MiniMax-H3-Ref2VA-4step.safetensors",
+      "license": "MiniMax-H3-Community-License-Agreement"
+    }
+  ],
+  "qwen_files": [
+    {
+      "name": "chat_template.json",
+      "bytes": 5502,
+      "sha256": "6f8a6a55027e3da5160105556cda5dd69f6423f1c32645f6730d32de7773d0c4",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/chat_template.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "config.json",
+      "bytes": 1505,
+      "sha256": "edac7703329133edfc53e46ac0081835144c99d7eebf28b71c732694d435224d",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/config.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "configuration.json",
+      "bytes": 73,
+      "sha256": "f888421726665e8a84b738eed42a64875aed79de8be7daade851ac8bf4c0cef9",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/configuration.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "generation_config.json",
+      "bytes": 269,
+      "sha256": "8469742d1fce0de951c8909b26a2c0c0d8490837ce476efb114da9e0cefc4d44",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/generation_config.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "merges.txt",
+      "bytes": 1671839,
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/merges.txt",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "model-00001-of-00002.safetensors",
+      "bytes": 4967229296,
+      "sha256": "30a01a0556622645a3cce87b655bbbbbc1f170c196099f1b666c93202c3339a9",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/model-00001-of-00002.safetensors",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "model-00002-of-00002.safetensors",
+      "bytes": 3908490048,
+      "sha256": "046296a2a387efb43b0c997d5833c789604d168834f6e0d3064bf7bb13d002a6",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/model-00002-of-00002.safetensors",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "model.safetensors.index.json",
+      "bytes": 64742,
+      "sha256": "58a7841d7bff2548dd91577d216274a83cf1b500bc6a534b809d6c1b1707cf2b",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/model.safetensors.index.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "preprocessor_config.json",
+      "bytes": 390,
+      "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/preprocessor_config.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "tokenizer.json",
+      "bytes": 7032403,
+      "sha256": "a5d85b6dcc535e6b93115a9ef287e6132fdbf30270da6218194ba742261173c7",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/tokenizer.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "bytes": 10868,
+      "sha256": "c2da771801886ad9ae98181793ffd3dfb7f1af30f6f7c6a4e15d7dbba52e2399",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/tokenizer_config.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "video_preprocessor_config.json",
+      "bytes": 385,
+      "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/video_preprocessor_config.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    },
+    {
+      "name": "vocab.json",
+      "bytes": 2776833,
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+      "repository": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "302de2efb1dd6de1ee943eb1277dc6875550563d",
+      "source": "https://modelscope.cn/models/Qwen/Qwen3-VL-4B-Instruct/resolve/302de2efb1dd6de1ee943eb1277dc6875550563d/vocab.json",
+      "verification": "saved repository metadata + observed auxiliary file bytes; weight hashes reused from prior full-file verification"
+    }
+  ],
+  "qwen_profile": {
+    "id": "h3ir-qwen4b-32k",
+    "model_id": "Qwen/Qwen3-VL-4B-Instruct",
+    "context_length": 32768,
+    "offline": true,
+    "internal_endpoint": "http://127.0.0.1:8772/v1"
+  },
+  "comfy_packages": {
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "torchaudio": "2.11.0+cu128",
+    "open-h3-ir": "0.4.1",
+    "transformers": "5.19.0",
+    "safetensors": "0.8.0",
+    "av": "19.0.1",
+    "psutil": "7.2.2"
+  },
+  "qwen_packages": {
+    "torch": "2.8.0+cu128",
+    "torchvision": "0.23.0+cu128",
+    "transformers": "4.57.6",
+    "accelerate": "1.12.0",
+    "safetensors": "0.6.2",
+    "fastapi": "0.116.2",
+    "uvicorn": "0.35.0",
+    "psutil": "7.2.2",
+    "numpy": "2.2.6",
+    "pillow": "11.3.0",
+    "jsonschema": "4.26.0",
+    "lm-format-enforcer": "0.11.3",
+    "pydantic": "2.14.1",
+    "tokenizers": "0.22.2",
+    "huggingface-hub": "0.36.2"
+  },
+  "sources_and_licenses": [
+    {
+      "name": "ComfyUI",
+      "license": "GPL-3.0",
+      "source": "https://github.com/Comfy-Org/ComfyUI"
+    },
+    {
+      "name": "ComfyUI-OpenH3-IR and open-h3-ir",
+      "license": "Apache-2.0",
+      "source": "https://github.com/ruashots/ComfyUI-OpenH3-IR"
+    },
+    {
+      "name": "ComfyUI-MiniMaxH3Mod (optional; not used by these two graphs)",
+      "license": "MIT",
+      "source": "https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod",
+      "revision_observed": "517e8c419a8584fbf69fceb487bc39d83e6a6ec8"
+    },
+    {
+      "name": "Qwen3-VL-4B-Instruct",
+      "license": "Apache-2.0",
+      "source": "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct"
+    },
+    {
+      "name": "H3 and SMD adapter",
+      "license": "MiniMax-H3-Community-License-Agreement",
+      "source": "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE"
+    }
+  ],
+  "weights_included": false,
+  "weights_downloaded_by_installer": false,
+  "openh3_node_hash_format": "sha256 after CRLF-to-LF only; all other bytes exact",
+  "python_versions": {
+    "comfy_python": [
+      3,
+      12
+    ],
+    "qwen_python": [
+      3,
+      10
+    ]
+  }
+}

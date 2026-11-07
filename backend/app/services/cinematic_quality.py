@@ -114,7 +114,7 @@ def generation_inputs_hash(session,shot):
     return fingerprint({'visual':visual_inputs(session,shot),'duration':shot.duration_seconds,'aspect_ratio':shot.aspect_ratio,'dialogue':dialogue,'audio':audio})
 
 
-def shot_preflight(session,settings,shot,require_visual=True):
+def shot_preflight(session,settings,shot,require_visual=True,*,context_inputs=False,explicit_visual_ids=None,explicit_motion=None):
     from app.services.screenplay import shot_bundle
     from app.core.paths import safe_media_path
     detail,scene,script,prod,entities=production_context(session,shot);findings=[];bundle=shot_bundle(session,shot.id)
@@ -122,14 +122,19 @@ def shot_preflight(session,settings,shot,require_visual=True):
     if enabled:
         siblings=list(session.scalars(select(m.StoryboardShot).join(m.ShotDetail,m.ShotDetail.shot_id==m.StoryboardShot.id).join(m.Scene,m.Scene.id==m.ShotDetail.scene_id).where(m.Scene.script_revision_id==script.id).order_by(m.StoryboardShot.order,m.StoryboardShot.id)))
         report=inspect_ir(database_ir(session,script,siblings))
-        findings.extend(f for f in report['findings'] if f['shot_key'] in [None,shot.id] and f['severity'] in ['blocker','review'])
-    if not enabled:findings.append(issue('legacy_rules','review','旧镜头未采用电影规范；须主动建立新修订以应用新规范',shot.id))
+        findings.extend(f for f in report['findings'] if f['shot_key'] in [None,shot.id] and f['severity'] in ['blocker','review']
+                        and not(context_inputs and f['code']=='cast_unknown'))
+    if not enabled and not context_inputs:findings.append(issue('legacy_rules','review','旧镜头未采用电影规范；须主动建立新修订以应用新规范',shot.id))
+    image_participants=[p for p in bundle['participants'] if p['reference_asset_ids_json']] if context_inputs else bundle['participants']
     for p in bundle['participants']:
-        if p['version_state']!='approved' or not p['reference_asset_ids_json']:findings.append(issue('identity_not_ready','blocker',p['name']+'缺少正式身份或已审核参考',shot.id,repair='identity'))
-    if bundle['participants']:
+        if context_inputs:
+            version=session.get(m.CharacterVersion,p['character_version_id']) if p.get('character_version_id') else None
+            if version and version.character_id!=p['character_id']:findings.append(issue('identity_version_owner_mismatch','blocker',p['name']+'的身份版本属于另一人物',shot.id,repair='identity'))
+        elif p['version_state']!='approved' or not p['reference_asset_ids_json']:findings.append(issue('identity_not_ready','blocker',p['name']+'缺少正式身份或已审核参考',shot.id,repair='identity'))
+    if image_participants:
         try:
             from app.services.identity_references import actor_references
-            actor_references(session,settings,bundle['participants'])
+            actor_references(session,settings,image_participants)
         except Exception as exc:
             from app.core.errors import AppError
             if isinstance(exc,AppError):findings.append(issue(exc.code,'blocker',exc.message,shot.id,repair='identity'))
@@ -139,21 +144,22 @@ def shot_preflight(session,settings,shot,require_visual=True):
     if products:
         try:
             product_references=shot_references(session,settings,shot)
-            if not product_references:findings.append(issue('product_reference_missing','blocker','产品镜头缺少有效的已绑定参考图片',shot.id))
+            if not product_references and not context_inputs:findings.append(issue('product_reference_missing','blocker','产品镜头缺少有效的已绑定参考图片',shot.id))
         except Exception as exc:
             from app.core.errors import AppError
             if isinstance(exc,AppError):findings.append(issue(exc.code,'blocker',exc.message,shot.id,repair='product'))
             else:raise
-    if not bundle['participants'] and not products:findings.append(issue('cast_not_ready','blocker','镜头尚无可确认人物或产品绑定',shot.id))
+    if not context_inputs and not bundle['participants'] and not products:findings.append(issue('cast_not_ready','blocker','镜头尚无可确认人物或产品绑定',shot.id))
     for e in entities:
         if e is None:findings.append(issue('design_missing','blocker','当前绑定的制作设定已不存在',shot.id))
         elif e.project_id!=shot.project_id:findings.append(issue('design_project_mismatch','blocker','制作设定属于其他项目',shot.id))
         elif e.status!='approved':findings.append(issue('design_unreviewed','review',e.name+' v'+str(e.version)+'尚未审核确认',shot.id,repair='wardrobe' if e.kind=='wardrobe' else 'scene' if e.kind=='scene_state' else 'prop'))
     beats=prod.get('beats',[])
-    if prod.get('motion_references'):
+    motion_selection=explicit_motion if context_inputs and explicit_motion is not None else prod.get('motion_references')
+    if motion_selection:
         try:
             from app.services.motion_references import resolve_motion_references
-            resolve_motion_references(session,settings,shot,prod['motion_references'])
+            resolve_motion_references(session,settings,shot,motion_selection)
             findings.append(issue('motion_hash_checked_on_submit','suggestion','动作参考文件将在提交时重新核验 SHA；预检只确认素材版本与路径',shot.id,repair='action'))
         except Exception as exc:
             from app.core.errors import AppError
@@ -165,13 +171,22 @@ def shot_preflight(session,settings,shot,require_visual=True):
         if value and control in ['first_frame','last_frame','exact_lip_sync','voice_clone','aperture','shutter']:
             findings.append(issue('unsupported_control','blocker','当前H3工作流未验证精确控制：'+control,shot.id))
     visuals=[];input_hash=fingerprint(visual_inputs(session,shot))
-    if len(prod.get('visual_ids',[]))!=len(set(prod.get('visual_ids',[]))):findings.append(issue('duplicate_visual_reference','blocker','视觉引用包含重复ID，未重复送给模型',shot.id))
-    for identifier in prod.get('visual_ids',[]):
+    visual_selection=list(prod.get('visual_ids',[]))
+    if context_inputs and explicit_visual_ids is not None:
+        # An explicit input replaces composition images. Keep independently
+        # bound scene references and validate every selected ID below.
+        visual_selection=[*explicit_visual_ids,*(identifier for identifier in visual_selection
+            if (visual:=session.get(m.ProductionVisual,identifier)) is not None and visual.kind=='scene_reference'
+            and identifier not in explicit_visual_ids)]
+    if len(visual_selection)!=len(set(visual_selection)):findings.append(issue('duplicate_visual_reference','blocker','视觉引用包含重复ID，未重复送给模型',shot.id))
+    for identifier in visual_selection:
         visual=session.get(m.ProductionVisual,identifier)
         if not visual or visual.project_id!=shot.project_id or visual.status!='approved':findings.append(issue('visual_not_approved','blocker','所选视觉参考未批准或不属于此项目',shot.id));continue
         if visual.kind=='scene_reference' and (not scene or visual.scene_id!=scene.id or visual.entity_id!=prod.get('scene_state_id') or visual.snapshot_json.get('visual_inputs',{}).get('environment')!=scene.environment_json):findings.append(issue('scene_reference_mismatch','blocker','场景参考与本镜场景状态或环境不符，请选择对应版本',shot.id));continue
-        if visual.shot_id and visual.shot_id!=shot.id:findings.append(issue('keyframe_wrong_shot','blocker','关键画面属于其他镜头',shot.id));continue
-        if visual.kind=='keyframe' and visual.snapshot_json.get('inputs_hash')!=input_hash:findings.append(issue('keyframe_stale','blocker','关键画面对应旧版表演/造型/场景，请重新确认或生成当前版本',shot.id));continue
+        if (visual.shot_id and visual.shot_id!=shot.id) or (context_inputs and visual.kind=='keyframe' and visual.shot_id!=shot.id):findings.append(issue('keyframe_wrong_shot','blocker','关键画面属于其他镜头',shot.id));continue
+        explicit_upload=context_inputs and identifier in (explicit_visual_ids or []) and visual.snapshot_json.get('source')=='user_upload'
+        if visual.kind=='keyframe' and not explicit_upload and visual.snapshot_json.get('inputs_hash')!=input_hash:findings.append(issue('keyframe_stale','blocker','关键画面对应旧版表演/造型/场景，请重新确认或生成当前版本',shot.id));continue
+        if context_inputs and visual.kind not in {'scene_reference','keyframe'}:findings.append(issue('context_visual_unsupported','blocker','此素材不是已批准场景参考或镜头图片',shot.id));continue
         try:
             import hashlib
             path=safe_media_path(settings.media_root,visual.relative_path,must_exist=True)

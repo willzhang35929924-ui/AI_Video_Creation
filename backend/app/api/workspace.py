@@ -214,7 +214,7 @@ async def upload_audio(audio_id:str,request:Request,file:UploadFile=File(...),se
 
 @router.get('/word-imports/templates/{kind}')
 def download_template(kind:str):
-    names={'blank':'剧本导入模板.docx','example':'剧本导入示例.docx'}
+    names={'blank':'剧本模板.docx','example':'剧本导入示例.docx'}
     if kind not in names:raise AppError(404,'template_missing','模板不存在')
     p=PROJECT_ROOT/'docs/templates'/names[kind]
     if not p.exists():raise AppError(503,'template_unavailable','模板尚未安装')

@@ -267,6 +267,36 @@
         "authorized_for_motion": {
           "title": "Authorized For Motion",
           "type": "boolean"
+        },
+        "reference_role": {
+          "anyOf": [
+            {
+              "enum": [
+                "structure",
+                "action"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Role"
+        },
+        "target_character_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Character Id"
         }
       },
       "required": [

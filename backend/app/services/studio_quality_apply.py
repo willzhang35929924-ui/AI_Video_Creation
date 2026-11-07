@@ -127,6 +127,26 @@ def apply_saved_quality(session, settings, project_id, expected_profile_revision
         quality_service.inherited_settings(session, project_id) or {}).model_dump()
     snapshot = copy.deepcopy(run.snapshot_json)
     options = snapshot.setdefault('options', {})
+    context_ids = set(snapshot.get('h3_context_by_shot', {})) & set(snapshot.get('shot_ids', []))
+    legacy_ids = set(snapshot.get('shot_ids', [])) - context_ids
+    context_quality = {}
+    if context_ids:
+        for shot_id in context_ids:
+            frozen = options.get('quality_by_shot', {}).get(shot_id)
+            override = quality_service.find_profile(session, 'shot', shot_id)
+            requested = QualitySettings.model_validate(override.settings_json if override else project_settings)
+            if not frozen or requested.mode != QualitySettings.model_validate(frozen).mode:
+                raise AppError(409, 'quality_apply_context_mode_frozen',
+                               '本轮 Context-IR 制作已锁定工作流与采样步数。已保存的画质模式将在新建制作时生效。',
+                               {'run_id': run.id, 'shot_id': shot_id})
+            context_quality[shot_id] = requested
+    for shot_id in legacy_ids:
+        override = quality_service.find_profile(session, 'shot', shot_id)
+        requested = QualitySettings.model_validate(override.settings_json if override else project_settings)
+        if requested.mode == 'fast':
+            raise AppError(409, 'quality_apply_legacy_fast_requires_new_run',
+                           'Fast 使用 SMD4 与 Context-IR。已保存此设置，请新建制作以启用四步工作流。',
+                           {'run_id': run.id, 'shot_id': shot_id})
     nodes = copy.deepcopy(run.nodes_json or [])
     proposals = []
     skipped = []
@@ -165,9 +185,12 @@ def apply_saved_quality(session, settings, project_id, expected_profile_revision
                    for n in nodes):
                 raise AppError(409, 'quality_apply_media_busy',
                                '本镜配音混合或口型任务尚在处理，保留其输入和画质快照')
-            override = quality_service.find_profile(session, 'shot', shot_id)
-            new_quality = QualitySettings.model_validate(
-                override.settings_json if override else project_settings)
+            if shot_id in context_quality:
+                new_quality = context_quality[shot_id]
+            else:
+                override = quality_service.find_profile(session, 'shot', shot_id)
+                new_quality = QualitySettings.model_validate(
+                    override.settings_json if override else project_settings)
             if new_quality.aspect_ratio != shot.aspect_ratio:
                 raise AppError(409, 'quality_apply_aspect_mismatch',
                                '保存的画质画幅与本镜不一致，请明确保存正确画幅，未拉伸或裁切')
@@ -230,7 +253,8 @@ def apply_saved_quality(session, settings, project_id, expected_profile_revision
         changes.append({'shot_id': shot.id, 'source_video_id': proposal['source'].id,
                         'previous': previous, 'settings': proposal['quality'], 'route': route})
     if proposals:
-        options['quality'] = project_settings
+        if legacy_ids:
+            options['quality'] = project_settings
         values = {'snapshot_json': snapshot, 'nodes_json': nodes,
                   'status': 'running' if run.status == 'completed_with_errors' else run.status,
                   'error_message': '；'.join(n.get('error') or '' for n in nodes

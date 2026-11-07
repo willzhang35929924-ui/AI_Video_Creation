@@ -8,16 +8,21 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.core.config import PROJECT_ROOT
+from app.core.errors import AppError
 from app.core.paths import safe_media_path
 from app.models import AuditEvent, FinalComposition, VideoRevision
+from app.schemas_product import AssemblyOutput
+from app.services.assembly import probe, resolve_output_resolution
 from app.services.quality import inspect_media
 
 
 def compose(settings, paths: list[Path], destination: Path, log_path: Path):
+    output = resolve_output_resolution(AssemblyOutput(), [probe(path, settings) for path in paths])
+    width, height = output['width'], output['height']
     command = [settings.ffmpeg_path, "-hide_banner", "-n"]
     for path in paths:
         command.extend(["-i", str(path)])
-    filters = [f"[{index}:v:0]scale=640:384:force_original_aspect_ratio=decrease,pad=640:384:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p,setpts=PTS-STARTPTS[v{index}]" for index in range(len(paths))]
+    filters = [f"[{index}:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=24,format=yuv420p,setpts=PTS-STARTPTS[v{index}]" for index in range(len(paths))]
     filters.append("".join(f"[v{i}]" for i in range(len(paths))) + f"concat=n={len(paths)}:v=1:a=0[outv]")
     command.extend(["-filter_complex", ";".join(filters), "-map", "[outv]", "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-movflags", "+faststart", str(destination)])
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +42,7 @@ def compose(settings, paths: list[Path], destination: Path, log_path: Path):
         result = subprocess.run(cover_command, stdout=log, stderr=log, timeout=60, shell=False)
         if result.returncode:
             raise RuntimeError("Final cover extraction failed")
-    return {"command": command, "checks": checks, "has_audio": False, "audio_note": "本次合成输出无音轨；片段原始音轨保留在各版本文件。", "log_path": str(log_path), "cover_relative_path": str(cover.relative_to(settings.media_root)).replace("\\", "/")}
+    return {"command": command, "checks": checks, "width": width, "height": height, "has_audio": False, "audio_note": "本次合成输出无音轨；片段原始音轨保留在各版本文件。", "log_path": str(log_path), "cover_relative_path": str(cover.relative_to(settings.media_root)).replace("\\", "/")}
 
 
 async def process_composition(settings, session_factory):
@@ -69,7 +74,7 @@ async def process_composition(settings, session_factory):
             item.metadata_json = metadata
             session.add(AuditEvent(object_type="final_composition", object_id=identifier, action="composed", details_json=metadata))
             session.commit()
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+    except (AppError, OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         with session_factory() as session:
             item = session.get(FinalComposition, identifier)
             item.status = "failed"

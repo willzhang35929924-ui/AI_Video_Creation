@@ -123,6 +123,8 @@ class TimelineTransition(ProductModel):
 
 
 class AssemblyOutput(ProductModel):
+    resolution_mode: Literal['source', 'custom'] | None = None
+    allow_downscale: bool = False
     width: int = Field(default=640, ge=128, le=3840)
     height: int = Field(default=384, ge=128, le=3840)
     fps: int = Field(default=24, ge=12, le=60)

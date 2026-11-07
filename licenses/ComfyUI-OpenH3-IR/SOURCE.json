@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/ruashots/ComfyUI-OpenH3-IR",
+  "commit": "8660988b033d427f346e72fdbcf2d45ede48edbe",
+  "files": [
+    {
+      "file": "LICENSE",
+      "source_url": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "copy": "byte-for-byte upstream response; no text edits or newline conversion"
+    },
+    {
+      "file": "NOTICE",
+      "source_url": "https://raw.githubusercontent.com/ruashots/ComfyUI-OpenH3-IR/8660988b033d427f346e72fdbcf2d45ede48edbe/NOTICE",
+      "bytes": 3488,
+      "sha256": "1cca5b2d75f00e5456a2267373d9863663911c2c15c8154ba1112ef53785c511",
+      "copy": "byte-for-byte upstream response; no text edits or newline conversion"
+    }
+  ],
+  "root_license_unchanged": true
+}

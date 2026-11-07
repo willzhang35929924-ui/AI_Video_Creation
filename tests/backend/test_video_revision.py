@@ -196,7 +196,8 @@ def test_revision_preview_and_generation_keep_exact_edited_prompt(client, revisi
         assert payload.prompt_override == edited
 
 
-def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revision_source, monkeypatch):
+@pytest.mark.parametrize('context_retry', [False, True])
+def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revision_source, monkeypatch, context_retry):
     from app.api import routes
     source = revision_source
     edited = '保留这个精简后的原文。'
@@ -206,11 +207,16 @@ def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revi
         previous.parameters_json = {**previous.parameters_json, 'prompt_override': edited,
             'prompt_override_used': True, 'compiled_prompt': 'Old derived body',
             'instruction': '缓慢推进。', 'provider_submission': {'sent_prompt': 'Old submitted body'}}
+        if context_retry:
+            previous.parameters_json = {**previous.parameters_json, 'h3_workflow': {'workflow_id':'frozen-context-retry-test'}}
         session.commit()
     captured = {}
-    async def generate(request, session, shot, payload, *, instruction=None, retry_count=0):
+    async def generate(request, session, shot, payload, *, instruction=None, retry_count=0,
+                       frozen_job=None, frozen_service=None, legacy_production=False):
         captured.update(prompt_override=payload.prompt_override, parameters=payload.parameters,
-                        instruction=instruction, retry_count=retry_count)
+                        instruction=instruction, retry_count=retry_count,
+                        frozen_job_id=frozen_job.id if frozen_job else None,
+                        frozen_service=frozen_service, legacy_production=legacy_production)
         return session.get(m.GenerationJob, source.job_id), None
     monkeypatch.setattr(routes, 'generate_for_shot', generate)
     response = client.post('/api/jobs/'+source.job_id+'/retry')
@@ -218,4 +224,7 @@ def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revi
     assert captured['prompt_override'] == edited
     assert captured['instruction'] == '缓慢推进。'
     assert captured['retry_count'] == 1
+    assert captured['frozen_job_id'] == (source.job_id if context_retry else None)
+    assert captured['frozen_service'] == (None if context_retry else {'service_id':'source-service','model_id':'source-model'})
+    assert captured['legacy_production'] is (not context_retry)
     assert not {'prompt_override', 'prompt_override_used', 'compiled_prompt', 'provider_submission'} & captured['parameters'].keys()

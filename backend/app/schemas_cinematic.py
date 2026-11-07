@@ -94,12 +94,16 @@ class MotionReferenceInput(BaseModel):
     trim_start_seconds:float=Field(ge=0)
     trim_end_seconds:float=Field(gt=0)
     authorized_for_motion:bool
+    reference_role:Literal['structure','action']|None=None
+    target_character_id:str|None=Field(default=None,min_length=1,max_length=64)
 
     @model_validator(mode='after')
     def valid_segment(self):
         if not self.authorized_for_motion:raise ValueError('请明确确认本镜可以使用该视频的动作参考')
         if not 2 <= self.trim_end_seconds-self.trim_start_seconds <= 15:
             raise ValueError('动作参考片段需为2至15秒')
+        if self.target_character_id and self.reference_role != 'action':
+            raise ValueError('只有动作与姿态参考可以明确绑定人物')
         return self
 
 
@@ -197,6 +201,8 @@ class RunInput(BaseModel):
     width:int=Field(default=1024,ge=256,le=3840,multiple_of=8)
     height:int=Field(default=576,ge=256,le=3840,multiple_of=8)
     seed:int=Field(default=20261023,ge=0,le=2_147_483_647)
+    assembly_resolution_mode:Literal['source','custom']|None=None
+    assembly_allow_downscale:bool=False
     assembly_width:int=Field(default=1280,ge=128,le=3840,multiple_of=2)
     assembly_height:int=Field(default=720,ge=128,le=3840,multiple_of=2)
     confirmed:bool=False

@@ -1,0 +1,765 @@
+{
+  "schema_version": 1,
+  "comfy_revision": "8010b48d2c1be986613f8e8c761527d205bd756f",
+  "all_core_pins_match": true,
+  "core_files": [
+    {
+      "file": "comfy/weight_adapter/lora.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/weight_adapter/lora.py",
+      "sha256": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "expected": "e506062b4eb189be4c36f88270e0fd4dcce038c79a98f7163604ed6b44efe4b5",
+      "match": true
+    },
+    {
+      "file": "comfy/weight_adapter/base.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/weight_adapter/base.py",
+      "sha256": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "expected": "484f0d83a96e700f80c793e4bcc6a897d633233e51a59191d91da5e59da345c7",
+      "match": true
+    },
+    {
+      "file": "comfy/lora.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/lora.py",
+      "sha256": "24ace0806193466947662dc408642e2615f255259f5a45393043b67a47174f17",
+      "expected": "24ace0806193466947662dc408642e2615f255259f5a45393043b67a47174f17",
+      "match": true
+    },
+    {
+      "file": "comfy/lora_convert.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/lora_convert.py",
+      "sha256": "0790e993706b6e5c255fd4000f8f48abed80e318274da5264681eb799df25d0b",
+      "expected": "0790e993706b6e5c255fd4000f8f48abed80e318274da5264681eb799df25d0b",
+      "match": true
+    },
+    {
+      "file": "comfy/model_patcher.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/model_patcher.py",
+      "sha256": "7edc88d9eae6a88637625d257dc73684cfc012a29446bf88e70d22e3a6be3994",
+      "expected": "7edc88d9eae6a88637625d257dc73684cfc012a29446bf88e70d22e3a6be3994",
+      "match": true
+    },
+    {
+      "file": "comfy/patcher_extension.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/patcher_extension.py",
+      "sha256": "1c7b3b855278d0b95d1c1a705fa0b3c91a265f320e2f97bdeb9d15469d6d4ac7",
+      "expected": "1c7b3b855278d0b95d1c1a705fa0b3c91a265f320e2f97bdeb9d15469d6d4ac7",
+      "match": true
+    },
+    {
+      "file": "comfy/samplers.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/samplers.py",
+      "sha256": "f2c264ca9d394612f828e3ffe167c856a278a10e1711b269f0ba65dccb66393f",
+      "expected": "f2c264ca9d394612f828e3ffe167c856a278a10e1711b269f0ba65dccb66393f",
+      "match": true
+    },
+    {
+      "file": "comfy/k_diffusion/sampling.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/k_diffusion/sampling.py",
+      "sha256": "cfc4221ed0bc1f84a6f5689d3ec440cad3008c2541ab8f5e2599d1a73fac74ce",
+      "expected": "cfc4221ed0bc1f84a6f5689d3ec440cad3008c2541ab8f5e2599d1a73fac74ce",
+      "match": true
+    },
+    {
+      "file": "comfy/sampler_helpers.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/sampler_helpers.py",
+      "sha256": "53c82235bfea0c4edf3cd5219f080c44c45ac1c9a6c3171f2aae151e18b56b91",
+      "expected": "53c82235bfea0c4edf3cd5219f080c44c45ac1c9a6c3171f2aae151e18b56b91",
+      "match": true
+    },
+    {
+      "file": "comfy/sd.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/sd.py",
+      "sha256": "e567fdcf7c4539a536787b4b51b8abe996c3db4e41d6d61e41b260cfc2ee3165",
+      "expected": "e567fdcf7c4539a536787b4b51b8abe996c3db4e41d6d61e41b260cfc2ee3165",
+      "match": true
+    },
+    {
+      "file": "nodes.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/nodes.py",
+      "sha256": "8c5a0239a4d3b9709085348a96d25184d28fa2267c2421b7f354614c03f3139c",
+      "expected": "8c5a0239a4d3b9709085348a96d25184d28fa2267c2421b7f354614c03f3139c",
+      "match": true
+    },
+    {
+      "file": "comfy_extras/nodes_minimax_h3.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy_extras/nodes_minimax_h3.py",
+      "sha256": "108ceff11e5a5c9a34a57bbc380447cf9941beb673a1bd421abc818de54ccd5c",
+      "expected": "108ceff11e5a5c9a34a57bbc380447cf9941beb673a1bd421abc818de54ccd5c",
+      "match": true
+    },
+    {
+      "file": "comfy/ops.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/ops.py",
+      "sha256": "a0b8c7f32a146b383a795363bef35e480ffa84b5b3e9c9503f323b1446876f45",
+      "expected": "a0b8c7f32a146b383a795363bef35e480ffa84b5b3e9c9503f323b1446876f45",
+      "match": true
+    },
+    {
+      "file": "comfy/quant_ops.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/quant_ops.py",
+      "sha256": "37f0054dfbd8430524ac2c73dafd25b8ad4eabc490a2b7490eeebde8dffbc749",
+      "expected": "37f0054dfbd8430524ac2c73dafd25b8ad4eabc490a2b7490eeebde8dffbc749",
+      "match": true
+    },
+    {
+      "file": "comfy/model_management.py",
+      "url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/8010b48d2c1be986613f8e8c761527d205bd756f/comfy/model_management.py",
+      "sha256": "045ab96003386a43e647c8ab96f22fbf3be6c577e2fc578ea31c6faa22facbd5",
+      "expected": "045ab96003386a43e647c8ab96f22fbf3be6c577e2fc578ea31c6faa22facbd5",
+      "match": true
+    }
+  ],
+  "model_metadata": [
+    {
+      "repo": "Comfy-Org/MiniMax-H3",
+      "revision": "e5eb578a89295337b8ff433a035929ce0279e0b6",
+      "url": "https://huggingface.co/api/models/Comfy-Org/MiniMax-H3/revision/e5eb578a89295337b8ff433a035929ce0279e0b6?blobs=true",
+      "card_data": {
+        "license": "other",
+        "license_name": "minimax-h3-community-license-agreement",
+        "license_link": "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE",
+        "tags": [
+          "comfyui",
+          "diffusion-single-file"
+        ],
+        "base_model": [
+          "MiniMaxAI/MiniMax-H3"
+        ]
+      },
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+          "size": 1519
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "22cfc37cd46b546fafa23ff61babb916da400b94",
+          "size": 8293
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_bf16.safetensors",
+          "blobId": "d09c38a854fe071c3261b0baf139c2829e81dbeb",
+          "size": 66280487368,
+          "lfs": {
+            "sha256": "907d4add438438ec1544f5240c3b38532ed934fe6be75677a6bbda2a6fdd6182",
+            "size": 66280487368,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors",
+          "blobId": "886b100d3f46051e9a0d7e99c192428627e2dda2",
+          "size": 34038892334,
+          "lfs": {
+            "sha256": "7ad4c73e6e378b822ffd1629f27f632d3787d95f5e468e3af958f98c58df96a5",
+            "size": 34038892334,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_pruned_bf16.safetensors",
+          "blobId": "c3ee4ab26ecbc2df640025689225427ee0c160bf",
+          "size": 40225724176,
+          "lfs": {
+            "sha256": "a32572fb90b5508b201ec7c2eddcc184b13ddfd3c6f6d2cf06a0b46535d541b4",
+            "size": 40225724176,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+          "blobId": "483e4ccdf5a8ea7a8d5278541874120c94be1ba3",
+          "size": 20958205608,
+          "lfs": {
+            "sha256": "12944c1f7791637e7de12208aef04da82bd26b95271b1b47d817364315ade993",
+            "size": 20958205608,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "blobId": "552dd33920a833fa613c73f0ca2335bb6ff0e4d1",
+          "size": 20970379616,
+          "lfs": {
+            "sha256": "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a",
+            "size": 20970379616,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_fl2va_pruned_w6a8.safetensors",
+          "blobId": "1b229603beec5ca2d5442631d087783ea1c448c2",
+          "size": 15983746636,
+          "lfs": {
+            "sha256": "ac746a2e41628ab25afd44d2b22a7fab8d7e66cd07a01bf89ed9d74b0d3f0c35",
+            "size": 15983746636,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_bf16.safetensors",
+          "blobId": "2d2b9b58f07bd6d783bf11b30d6fe5538bfa2eef",
+          "size": 66280487368,
+          "lfs": {
+            "sha256": "e32c54c1a7b4f5f397f195cea267ccb18806303bb665678c4bee60953bdf3026",
+            "size": 66280487368,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_int8_convrot.safetensors",
+          "blobId": "5469849009740241d79c12dddbf1cee1116b1573",
+          "size": 34038894550,
+          "lfs": {
+            "sha256": "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9",
+            "size": 34038894550,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_pruned_bf16.safetensors",
+          "blobId": "344814907052df784fb60ff1508ad82ef97a59a5",
+          "size": 40225724176,
+          "lfs": {
+            "sha256": "37c0da793e20ca735272ec2be655f08a2e10f97a3ec8fdfb40f5b39a736ed6fe",
+            "size": 40225724176,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
+          "blobId": "62f4ccb3d9363adf42d633d3745e4c0ca8fbf6ec",
+          "size": 20958205608,
+          "lfs": {
+            "sha256": "f86f2f79ebd2d76eb8eeb46091e83982e6ff51d255747e7b16e92834b392b8e9",
+            "size": 20958205608,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+          "blobId": "7d456c7b17fc9ba27722ddc4971bfb6e46bf831a",
+          "size": 20970379616,
+          "lfs": {
+            "sha256": "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779",
+            "size": 20970379616,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "diffusion_models/minimax_h3_ref2va_pruned_w6a8.safetensors",
+          "blobId": "648c4f7a888ca62d911559efc700a02b9e393850",
+          "size": 15983746636,
+          "lfs": {
+            "sha256": "ece96bbbce76670ec782de84acc888fd9d9b210bd2ab97c1957b39896734f9f1",
+            "size": 15983746636,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_art_is_explosion.safetensors",
+          "blobId": "4d92c617801678d53480f1fa8de4e8fe8edf7d8f",
+          "size": 512120,
+          "lfs": {
+            "sha256": "00e8679c77ce1fc3fd3accb67bc4db56d626b6b27609797504ab00e2b997145f",
+            "size": 512120,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_blooming_flowers.safetensors",
+          "blobId": "700f6a601dedf854602a766ca3365d6f1b02565b",
+          "size": 1259640,
+          "lfs": {
+            "sha256": "934d1d2c50bf27cd0b3785b0f44b0b62119a90b2901f9193782d86ff7191cbe9",
+            "size": 1259640,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_bullet_time.safetensors",
+          "blobId": "56630d96198fa14795f92097049ea764c2519528",
+          "size": 962680,
+          "lfs": {
+            "sha256": "e318b200d28c22fcf41d9b25ce481dd5a766f0ac50561663e33401975ea1bcae",
+            "size": 962680,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_dark_magic.safetensors",
+          "blobId": "4834dfed44c541e23267a741931c6351ecd627bc",
+          "size": 604280,
+          "lfs": {
+            "sha256": "71df9fe76f9cbb34a7508fc49d46bf35ee51744aaa17789c6406e1bec49f5866",
+            "size": 604280,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_fire_breath.safetensors",
+          "blobId": "3f6346e1e22270a2248a28664b8e89120a046b20",
+          "size": 1208440,
+          "lfs": {
+            "sha256": "ed048cf52802774a819e916bbf6ad6eaa047027abc6cd0decc63daccbb93c9f1",
+            "size": 1208440,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_four_seasons.safetensors",
+          "blobId": "42dae47cb9959aa15df2d9e0fc5d64181890506b",
+          "size": 1454200,
+          "lfs": {
+            "sha256": "9a432e89afc942d1ea27055372a6fb81c4dc0f4c0498a49b9f5eff1a015f1034",
+            "size": 1454200,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_kiss_camera.safetensors",
+          "blobId": "d957d2bb995e7017f35bd5970449f32fdf960c93",
+          "size": 993400,
+          "lfs": {
+            "sha256": "9da82f56c26f2a81b80803a31486d31036c122112203b62d4991759a90ddf4b8",
+            "size": 993400,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_spiral_ascent.safetensors",
+          "blobId": "927d0268a44aaa65bc494cb7ea91844bfb9c6661",
+          "size": 1341560,
+          "lfs": {
+            "sha256": "767b6bdccee4c41805802a07bf3c04ba9582fbb8e7bc4bd416ff8e000e3e29b9",
+            "size": 1341560,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_storm_magic.safetensors",
+          "blobId": "647347d0c0fd6dba079bf1d544c3310b57d90580",
+          "size": 1403000,
+          "lfs": {
+            "sha256": "5047cd4499207ef20d62872c7153a476e216e7edabd12b595802f567666d7425",
+            "size": 1403000,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "embeddings/minimaxh3_truman_show.safetensors",
+          "blobId": "f4aff1f7e53037ef4d8d436506ae1b7392564cc1",
+          "size": 921720,
+          "lfs": {
+            "sha256": "3830e6ab9d7b95965f5497a6691bd92e33f8bf7a62bafb7b2331b268ff98aa00",
+            "size": 921720,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+          "blobId": "7aa23a8ccbb6d79e8d861439fe82801c5cf1096f",
+          "size": 1956192992,
+          "lfs": {
+            "sha256": "c396a9a06f58399e9df9754b18299818d84a2ddd371724ba48fe4a41221437dc",
+            "size": 1956192992,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+          "blobId": "9bc880321fcbed8375b4951e8caf696cac4390c7",
+          "size": 1956193000,
+          "lfs": {
+            "sha256": "2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e",
+            "size": 1956193000,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+          "blobId": "a3eb4468b7576e53eaa091725397a0789de96d5a",
+          "size": 1956193000,
+          "lfs": {
+            "sha256": "5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c",
+            "size": 1956193000,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model_patches/minimax_h3_fun_controlnet_union_2.0_pruned_bf16.safetensors",
+          "blobId": "559692f8045289ff691f673dfe978817f7713df4",
+          "size": 8382288792,
+          "lfs": {
+            "sha256": "cd48bdc11b1f1a3b934746c898d25123754b335c13d37d5c421f8373079282b4",
+            "size": 8382288792,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model_patches/minimax_h3_fun_controlnet_union_2.0_pruned_int8_convrot.safetensors",
+          "blobId": "0db0a986b0390c72ad9950b522d90d8d56bb7998",
+          "size": 4531220608,
+          "lfs": {
+            "sha256": "890af58bb350f0c2f6c409b1c67ea8f4196654297d037769b72de1e6f504c612",
+            "size": 4531220608,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model_patches/minimax_h3_fun_controlnet_union_pruned_bf16.safetensors",
+          "blobId": "edf8b5e97566b1f7702f2802f840e6a644c9d7d2",
+          "size": 4222169456,
+          "lfs": {
+            "sha256": "57fe1e64928a63a55e3cd4586b55cd5d0eb4980648b6f31e5d9dac16fe7f1c48",
+            "size": 4222169456,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model_patches/minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
+          "blobId": "128a55d59bdf25ca628181d17df074fd116db3db",
+          "size": 2296635360,
+          "lfs": {
+            "sha256": "9c645c0a308c8af361efd43b409710f6f8fec0db297c29503e141a84991fed0c",
+            "size": 2296635360,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors",
+          "blobId": "6853d92901ec875951cc1c386dc0fe038a796f4d",
+          "size": 51506295256,
+          "lfs": {
+            "sha256": "600d567f6a9629c8574e8e7041b199bdd9c59a986afa7906910a81919610607d",
+            "size": 51506295256,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+          "blobId": "995573ff360d00441b6a69c38983f09ff23dc206",
+          "size": 27141342152,
+          "lfs": {
+            "sha256": "bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923",
+            "size": 27141342152,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "blobId": "c8148bfabfef79b69607053f977a39e0736429c0",
+          "size": 15687142551,
+          "lfs": {
+            "sha256": "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6",
+            "size": 15687142551,
+            "pointerSize": 136
+          }
+        },
+        {
+          "rfilename": "vae/minimax_h3_audio_vae_fp32.safetensors",
+          "blobId": "90bf58595930e7d56cbe9fecb4ea647d5c0e3aec",
+          "size": 605254808,
+          "lfs": {
+            "sha256": "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48",
+            "size": 605254808,
+            "pointerSize": 134
+          }
+        },
+        {
+          "rfilename": "vae/minimax_h3_video_vae_fp16.safetensors",
+          "blobId": "56a63ef27e68f3b6d5cd4c704f51f291e40f3e11",
+          "size": 5207808496,
+          "lfs": {
+            "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522",
+            "size": 5207808496,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "vae/minimax_h3_video_vae_int8_convrot.safetensors",
+          "blobId": "6f2cfdd92cc282a93a288b0dad6b58fb833f5b74",
+          "size": 2811065184,
+          "lfs": {
+            "sha256": "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e",
+            "size": 2811065184,
+            "pointerSize": 135
+          }
+        }
+      ]
+    },
+    {
+      "repo": "zjwfufu/SMD-MiniMax-H3-Ref2VA-4step-ComfyUI",
+      "revision": "9544cef6ca00bcedb34a7139032634c4558ed4f8",
+      "url": "https://huggingface.co/api/models/zjwfufu/SMD-MiniMax-H3-Ref2VA-4step-ComfyUI/revision/9544cef6ca00bcedb34a7139032634c4558ed4f8?blobs=true",
+      "card_data": {
+        "language": [
+          "en"
+        ],
+        "tags": [
+          "smd",
+          "comfyui",
+          "diffusion-single-file",
+          "diffusion-distillation",
+          "few-step",
+          "lora",
+          "minimax",
+          "minimax-h3",
+          "video-generation",
+          "audio-video",
+          "4-step",
+          "reference-to-video"
+        ],
+        "base_model": [
+          "MiniMaxAI/MiniMax-H3"
+        ],
+        "base_model_relation": "adapter",
+        "pipeline_tag": "image-to-video",
+        "license": "other",
+        "license_name": "minimax-h3-community-license-agreement",
+        "license_link": "LICENSE"
+      },
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "0a58a3b7208024e0f5546fbb874989ee4239e734",
+          "size": 1800
+        },
+        {
+          "rfilename": "LICENSE",
+          "blobId": "c389b45855337ccec8ddeb389f4fe902abcd0b19",
+          "size": 17604
+        },
+        {
+          "rfilename": "NOTICE",
+          "blobId": "50bcd09247a31bc0608acbfaf0cd3365795c353c",
+          "size": 274
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "d39274b8346ffbf3538ff61458166bc31e6cb2fe",
+          "size": 4460
+        },
+        {
+          "rfilename": "SETUP.md",
+          "blobId": "296f5e7ec351c8ac8ef98eb91d127666cc90cd1e",
+          "size": 3945
+        },
+        {
+          "rfilename": "SMD-MiniMax-H3-Ref2VA-4step.safetensors",
+          "blobId": "9e02e1a6f73eb4cb8c096bdf6765ff5adaeeef96",
+          "size": 1956183672,
+          "lfs": {
+            "sha256": "9c6f61221a1043ee709af0d32ae083c17efeb36950b4b08a945296b5b9c39353",
+            "size": 1956183672,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "case.json",
+          "blobId": "b20fa3562aea8f95e54c3c53aeb041c29d79d285",
+          "size": 3614
+        },
+        {
+          "rfilename": "conversion.json",
+          "blobId": "618b278ee4aa6c7e1dba19434ec0db1e6f57ff2f",
+          "size": 851
+        },
+        {
+          "rfilename": "download_models.py",
+          "blobId": "c1e707acd3bd8cbcd79fe8c15c67252ea355ec58",
+          "size": 4376
+        },
+        {
+          "rfilename": "examples/generation.json",
+          "blobId": "10b05b84c9ce1ce6736c21e33b92fb0ab19b4eef",
+          "size": 723
+        },
+        {
+          "rfilename": "examples/poster.webp",
+          "blobId": "6163bc95b1a865e2990c6af57784b0074151d659",
+          "size": 21178
+        },
+        {
+          "rfilename": "examples/preview.mp4",
+          "blobId": "063094d9f275614a80071517d99a85a159fb508a",
+          "size": 547238,
+          "lfs": {
+            "sha256": "02d9341d2137de57551ddf73d5416455cddd3f4f1040fd1bd38983f5d0658b04",
+            "size": 547238,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "examples/sample.mp4",
+          "blobId": "f3a5c9dd5502b722ee1008cc521b84d19b9ab2aa",
+          "size": 1632336,
+          "lfs": {
+            "sha256": "7b1409ba324f389673583bb200f2f832c32a18c2c5a6212a173216a3ac93c5f1",
+            "size": 1632336,
+            "pointerSize": 132
+          }
+        },
+        {
+          "rfilename": "inputs/SMD-MiniMax-H3-Ref2VA-4step_ref_dog.png",
+          "blobId": "5d5de9716b4cf6987342a28223d8b03ae5d91c06",
+          "size": 810871,
+          "lfs": {
+            "sha256": "6b16db993ff16833d48012234d811ae9712a358da1c8b3ac6bc05124ddc49c71",
+            "size": 810871,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "inputs/SMD-MiniMax-H3-Ref2VA-4step_ref_woman.png",
+          "blobId": "f748fa5aa704927b959fb600f9a50324c7b2113d",
+          "size": 799333,
+          "lfs": {
+            "sha256": "08bdadae2f0ce2cb39b98153a6173ec360378b73b389276e2acfaac7f37971b3",
+            "size": 799333,
+            "pointerSize": 131
+          }
+        },
+        {
+          "rfilename": "models.json",
+          "blobId": "7b7db2854d3ac876a2c46c91ed0318d58cc12f55",
+          "size": 1756
+        },
+        {
+          "rfilename": "models_bf16.json",
+          "blobId": "34e6984d449005b6687627fb485f6c1ad84e31dd",
+          "size": 1736
+        },
+        {
+          "rfilename": "runtime_constraints.txt",
+          "blobId": "a1d30fe9f6c35eabf580c68a9d75adbf2463ca9c",
+          "size": 182
+        },
+        {
+          "rfilename": "sampling.json",
+          "blobId": "ef9abc89ab60ea853d78e4f54a94b944d57585f2",
+          "size": 618
+        },
+        {
+          "rfilename": "validation.json",
+          "blobId": "862380b32d75165f4bfc9fe45c9ceeb09ccdbcc5",
+          "size": 2042
+        },
+        {
+          "rfilename": "workflow.json",
+          "blobId": "0b65d4f4dd288451652c9798c13454aab6113527",
+          "size": 27786
+        },
+        {
+          "rfilename": "workflow_api.json",
+          "blobId": "e40e862779f19efdade3bf59d21f664e824b33d0",
+          "size": 7125
+        },
+        {
+          "rfilename": "workflow_bf16.json",
+          "blobId": "3e6d2a4021cb5420f7b19e9c50bca713218d9637",
+          "size": 27605
+        },
+        {
+          "rfilename": "workflow_bf16_api.json",
+          "blobId": "00d597bfe58a2e7cbc714516707674431401b678",
+          "size": 7097
+        }
+      ]
+    },
+    {
+      "repo": "Qwen/Qwen3-VL-4B-Instruct",
+      "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+      "url": "https://huggingface.co/api/models/Qwen/Qwen3-VL-4B-Instruct/revision/main?blobs=true",
+      "card_data": {
+        "license": "apache-2.0",
+        "pipeline_tag": "image-text-to-text",
+        "library_name": "transformers"
+      },
+      "files": [
+        {
+          "rfilename": ".gitattributes",
+          "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+          "size": 1519
+        },
+        {
+          "rfilename": "README.md",
+          "blobId": "542417095b66d3fc13be22bbf6722928787b8ef4",
+          "size": 7133
+        },
+        {
+          "rfilename": "chat_template.json",
+          "blobId": "e49e75bdda104c8de941eb20e0b3765184fb27bc",
+          "size": 5502
+        },
+        {
+          "rfilename": "config.json",
+          "blobId": "22be8bb79043d39840ca5e70d7a2dab80311602c",
+          "size": 1505
+        },
+        {
+          "rfilename": "generation_config.json",
+          "blobId": "e116347d7ef42621c7a5957f82c015c38d939c1f",
+          "size": 269
+        },
+        {
+          "rfilename": "merges.txt",
+          "blobId": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+          "size": 1671839
+        },
+        {
+          "rfilename": "model-00001-of-00002.safetensors",
+          "blobId": "c76bab650cbb4864c0f85f6d3af26ba3fe857165",
+          "size": 4967229296,
+          "lfs": {
+            "sha256": "30a01a0556622645a3cce87b655bbbbbc1f170c196099f1b666c93202c3339a9",
+            "size": 4967229296,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model-00002-of-00002.safetensors",
+          "blobId": "e2792feb019e73e6f15d89bc62295fd424807583",
+          "size": 3908490048,
+          "lfs": {
+            "sha256": "046296a2a387efb43b0c997d5833c789604d168834f6e0d3064bf7bb13d002a6",
+            "size": 3908490048,
+            "pointerSize": 135
+          }
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "blobId": "3b52de97496e2f4501dfa92a87642f60db3e22a1",
+          "size": 64742
+        },
+        {
+          "rfilename": "preprocessor_config.json",
+          "blobId": "2ea84a437d448ff71b08df68fdd949d5cc4ebb64",
+          "size": 390
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "blobId": "c6cc1014128b19d1fc46b1d30a23e3b1d35db421",
+          "size": 7032403
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "blobId": "d3d3763207692c78780f4bf42d4dadf49a5c8012",
+          "size": 10868
+        },
+        {
+          "rfilename": "video_preprocessor_config.json",
+          "blobId": "3ba673a5ad7d4d13f54155ecd38b2a94a6dac8fe",
+          "size": 385
+        },
+        {
+          "rfilename": "vocab.json",
+          "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+          "size": 2776833
+        }
+      ]
+    }
+  ],
+  "weights_downloaded": false
+}

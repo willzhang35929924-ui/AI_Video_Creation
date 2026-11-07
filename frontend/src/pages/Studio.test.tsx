@@ -171,6 +171,7 @@ describe('Studio UI contracts', () => {
 
   it('saves review decision, video identity, trim, position and concurrency revision before allowing compose', async () => {
     const user=userEvent.setup();
+    for(const shot of data.shots||[])if(shot.video)shot.video.metadata_json={...shot.video.metadata_json,width:1080,height:1920};
     render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
     expect(await screen.findByTestId('studio-review-video')).toHaveAttribute('src',expect.stringContaining('test/shot1.mp4'));
     expect(screen.getByRole('button',{name:'按审核结果合成成片'})).toBeDisabled();
@@ -184,7 +185,7 @@ describe('Studio UI contracts', () => {
     await user.click(screen.getByRole('button',{name:'按审核结果合成成片'}));
     await waitFor(()=>expect(mockRequest.mock.calls.some(([url])=>url.endsWith('/compose'))).toBe(true));
     const compose=mockRequest.mock.calls.find(([url])=>url.endsWith('/compose'))!;
-    expect(JSON.parse(String(compose[1]?.body))).toEqual({transition:'cut',transition_duration:.5,width:1280,height:720,fps:24,audio_policy:'preserve',subtitles:false,expected_decisions:{s1:3,s2:3}});
+    expect(JSON.parse(String(compose[1]?.body))).toEqual({transition:'cut',transition_duration:.5,width:1080,height:1920,resolution_mode:'source',allow_downscale:false,fps:24,audio_policy:'preserve',subtitles:false,expected_decisions:{s1:3,s2:3}});
   });
 
   it('lets review edit and submit an over-7000-character prompt without truncating it',async()=>{
@@ -274,11 +275,13 @@ describe('Studio UI contracts', () => {
     expect(screen.getByLabelText('裁剪起点（秒）')).toHaveValue(.5);
     expect(mockRequest.mock.calls.some(([url,init])=>url.endsWith('/decision')&&init?.method==='POST')).toBe(false);
   });
-  it('initializes final output from the project 4K profile and preserves an explicit 1080p edit after refresh',async()=>{
+  it('seeds custom output from the project profile if source dimensions are missing and preserves a manual edit',async()=>{
     const user=userEvent.setup();data.shots![0].decision.action='keep';
     const base=mockRequest.getMockImplementation()!;
     mockRequest.mockImplementation(async(url,init)=>url==='/api/quality/profiles/project/p1'?{scope:'project',target_id:'p1',revision:1,settings:{resolution:'4k',mode:'standard',aspect_ratio:'16:9',processing:'lanczos'},plan:{requested:{width:3840,height:2160}}}:base(url,init));
     render(<MemoryRouter initialEntries={['/studio-review?project=p1']}><StudioReviewPage/></MemoryRouter>);
+    await screen.findByTestId('studio-review-video');
+    await user.selectOptions(screen.getByLabelText('输出尺寸模式'),'custom');
     await waitFor(()=>expect(screen.getByLabelText('输出宽度')).toHaveValue(3840));
     expect(screen.getByLabelText('输出高度')).toHaveValue(2160);
     await user.clear(screen.getByLabelText('输出宽度'));await user.type(screen.getByLabelText('输出宽度'),'1920');

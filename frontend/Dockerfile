@@ -22,12 +22,13 @@ COPY --chown=101:101 frontend/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build --chown=101:101 /app/dist /usr/share/nginx/html
 COPY --chown=101:101 docker/licenses /usr/share/doc/video-factory
 COPY --chown=101:101 licenses /usr/share/doc/video-factory/licenses
+COPY --chown=101:101 LICENSE /usr/share/doc/video-factory/LICENSE
 COPY --chown=101:101 THIRD_PARTY_NOTICES.md /usr/share/doc/video-factory/THIRD_PARTY_NOTICES.md
 ARG APP_VERSION=unreleased
 ARG VCS_REF=unknown
 ARG VCS_SOURCE=""
 ARG BUILD_DATE=""
-ARG APP_LICENSE=MIT
+ARG APP_LICENSE=Apache-2.0
 LABEL org.opencontainers.image.title="Video Factory Frontend" \
     org.opencontainers.image.description="React application served by unprivileged Nginx; no model weights or private runtime data" \
     org.opencontainers.image.version="${APP_VERSION}" \

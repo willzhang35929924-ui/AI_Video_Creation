@@ -54,6 +54,7 @@ COPY tests/backend/test_cinematic.py /app/tests/backend/test_cinematic.py
 COPY scripts /app/scripts
 COPY docker /app/docker
 COPY licenses /app/licenses
+COPY LICENSE /app/LICENSE
 COPY THIRD_PARTY_NOTICES.md /app/THIRD_PARTY_NOTICES.md
 
 RUN mkdir -p /app/data/media /app/data/.secrets /app/logs /app/reports \
@@ -66,7 +67,7 @@ ARG APP_VERSION=unreleased
 ARG VCS_REF=unknown
 ARG VCS_SOURCE=""
 ARG BUILD_DATE=""
-ARG APP_LICENSE=MIT
+ARG APP_LICENSE=Apache-2.0
 LABEL org.opencontainers.image.title="Video Factory Backend" \
     org.opencontainers.image.description="FastAPI, SQLite, workflow workers and FFmpeg; model inference runs in separately configured services" \
     org.opencontainers.image.version="${APP_VERSION}" \

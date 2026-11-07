@@ -61,8 +61,9 @@ def test_review_accepts_and_persists_long_prompt_override_and_instruction(client
 
     captured = {}
 
-    def capture_pipeline(_session, _settings, _project_id, options):
+    def capture_pipeline(_session, _settings, _project_id, options, *, prior_quality=None):
         captured.update(options)
+        captured['prior_quality'] = prior_quality
 
     from app.services import studio_pipeline
     monkeypatch.setattr(studio_pipeline, 'create_pipeline', capture_pipeline)
@@ -76,6 +77,8 @@ def test_review_accepts_and_persists_long_prompt_override_and_instruction(client
     assert response.status_code == 200, response.text
     assert captured['prompt_overrides'][shot_id] == prompt
     assert captured['instructions'][shot_id] == instruction
+    # This first review has no saved run/video quality to freeze or fabricate.
+    assert captured['prior_quality'] is None
     with client.app.state.session_factory() as session:
         decision = session.scalar(
             select(m.StudioDecision).where(
@@ -206,14 +209,18 @@ def test_local_h3_workflow_serializes_full_long_prompt(settings, tmp_path, monke
     original = httpx.AsyncClient
     transport = httpx.MockTransport(handler)
     monkeypatch.setattr(providers, 'PROJECT_ROOT', tmp_path)
-    monkeypatch.setattr(providers.httpx, 'AsyncClient', lambda *args, **kwargs:
-                        original(*args, transport=transport, **kwargs))
+    client_origins = []
+    def transport_client(origins, **kwargs):
+        client_origins.append(origins)
+        return original(transport=transport, trust_env=False, follow_redirects=False, **kwargs)
+    monkeypatch.setattr(providers, 'local_service_client', transport_client)
     payload = providers.VideoGenerationRequest(job_id='local-long-prompt', project_id='p', shot_id='s',
         prompt=prompt, negative_prompt='', duration_seconds=5, aspect_ratio='16:9', seed=1,
         parameters={'width':1024, 'height':576}, output_dir=tmp_path/'output', reference_assets=[
             {'asset_id':'image', 'absolute_path':str(image), 'sha256':hashlib.sha256(image.read_bytes()).hexdigest()}])
     result = asyncio.run(providers.ComfyUIH3Provider(config).submit(payload))
     assert result.provider_job_id == 'isolated-transport-only'
+    assert client_origins and all(origins == [config.comfyui_base_url] for origins in client_origins)
     mapping = json.loads(workflow.read_text(encoding='utf-8'))['_video_factory']['prompt_path']
     body = captured[0]
     for key in mapping:

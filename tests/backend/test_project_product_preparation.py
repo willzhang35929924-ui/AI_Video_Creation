@@ -27,7 +27,7 @@ def image_bytes(index=0):
     return stream.getvalue()
 
 
-def product_with_images(client, name='示例产品', count=2):
+def product_with_images(client, name='捏捏乐', count=2):
     response = client.post('/api/product-library', json={'name': name, 'category': 'isolated test'})
     assert response.status_code == 201, response.text
     identifier = response.json()['id']
@@ -43,8 +43,8 @@ def project_with_shots(client):
     with client.app.state.session_factory() as session:
         shots = [m.StoryboardShot(project_id=project['id'], order=order, scene_title=title,
             visual_prompt=prompt, status=status) for order, title, prompt, status in [
-                (1, '示例产品外盒', '固定产品外盒静止于桌面。', 'generated'),
-                (2, '真实内托', '相机展示示例产品内部结构。', 'approved'),
+                (1, '捏捏乐外盒', '固定产品外盒静止于桌面。', 'generated'),
+                (2, '真实内托', '相机展示捏捏乐内部结构。', 'approved'),
                 (3, '无关风景', '窗外的树木轻轻晃动。', 'draft'),
             ]]
         session.add_all(shots)
@@ -370,7 +370,7 @@ def test_real_photos_upload_freeze_and_compiler_reference_hashes_are_original(cl
     if not all(path.is_file() for path in paths):
         pytest.skip('Optional workstation photos are not present on this installation')
     settings.import_max_mb = 50
-    product = client.post('/api/product-library', json={'name': '示例产品真实照片回归'}).json()
+    product = client.post('/api/product-library', json={'name': '捏捏乐真实照片回归'}).json()
     sources = [(path.name, path.read_bytes(), 'image/jpeg' if path.suffix == '.jpg' else 'image/png') for path in paths]
     response = client.post(f"/api/product-library/{product['id']}/images", files=[('files', item) for item in sources])
     assert response.status_code == 201 and len(response.json()['added']) == 2 and not response.json()['errors'], response.text

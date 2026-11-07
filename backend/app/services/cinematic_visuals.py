@@ -59,8 +59,9 @@ def build_visual(session,settings,project_id,payload,uploaded=False):
         detail,linked_scene,script,production,entities=production_context(session,shot);scene=scene or linked_scene
         rules=script.parsed_json.get('rules_snapshot') or rules if script else rules
         context=visual_inputs(session,shot)
-        participants=shot_bundle(session,shot.id)['participants']
-        actors,references=actor_references(session,settings,participants,first_only=True)
+        if not uploaded:
+            participants=shot_bundle(session,shot.id)['participants']
+            actors,references=actor_references(session,settings,participants,first_only=True)
         names={a['display_name']:f'performer {a["subject_index"]}' for a in actors}
         for actor in actors:
             index=actor['subject_index'];performer_names[actor['display_name']]=index
@@ -72,14 +73,14 @@ def build_visual(session,settings,project_id,payload,uploaded=False):
             wardrobe=entity.spec_json if entity else actor['performance'].get('wardrobe') or actor['profile'].get('wardrobes',[])
             definitions.append(f'Reference image {actor["picture_indices"][0]} defines only performer {index}: {description}. Screen position: {position}. Independent action: {action or "no additional action specified"}. Preserve this performer independently from all other references. Their wardrobe only: '+json.dumps(wardrobe,ensure_ascii=False))
             language_coverage.append({'actor_id':actor['actor_id'],'identity':coverage,'position_covered':position_covered,'action_covered':action_covered})
-        if scene:
+        if scene and not uploaded:
             candidates=session.scalars(select(m.ProductionVisual).where(m.ProductionVisual.scene_id==scene.id,m.ProductionVisual.kind=='scene_reference',m.ProductionVisual.status=='approved').order_by(m.ProductionVisual.created_at.desc()))
             scene_reference=next((v for v in candidates if v.entity_id==production.get('scene_state_id') and v.snapshot_json.get('visual_inputs',{}).get('environment')==scene.environment_json),None)
             if scene_reference:
                 references.append({'asset_id':scene_reference.id,'sha256':scene_reference.sha256,'relative_path':scene_reference.relative_path,'production_visual_id':scene_reference.id,'role':'scene','picture_index':len(references)+1})
                 definitions.append(f'Reference image {len(references)} defines the room layout, practical light sources and material appearance only.'+(' Keep all performer identities from the earlier person references.' if actors else ' The location remains unoccupied.'))
         from app.services.product_library import shot_references
-        product_refs=shot_references(session,settings,shot,stage='keyframe')
+        product_refs=shot_references(session,settings,shot,stage='keyframe') if not uploaded else []
         if product_refs and not uploaded:
             budget=max(0,native_limit-len(references)) if snapshot['provider']=='comfyui' else len(product_refs)
             ordered=product_refs

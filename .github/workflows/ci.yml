@@ -89,6 +89,8 @@ jobs:
         run: python scripts/build_cinematic_contracts.py --check
       - name: Run all backend tests included in the public source tree
         run: python -m pytest -rs tests/backend
+      - name: Verify native Context-IR installer and supervisor boundaries without models
+        run: python -m unittest discover -s scripts/local_inference -p test_native_runtime.py -v
       - name: Check verified backup and restore helper
         run: python -m unittest discover -s docker -p test_volume_archive.py -v
 

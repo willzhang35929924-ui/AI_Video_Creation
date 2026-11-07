@@ -169,3 +169,45 @@ def test_keep_decision_calls_real_video_approval_with_request(client,settings):
     assert response.status_code==200,response.text
     with client.app.state.session_factory() as db:
         assert db.get(m.VideoRevision,video).review_status=='approved'
+
+
+def test_final_keeps_reviewed_resolution_and_recovers_legacy_smaller_canvas(client, settings):
+    project, ids = setup_review(client, settings)
+    base = '/api/studio/projects/' + project
+    for index, (shot, video) in enumerate(ids):
+        result = client.post(base + '/shots/' + shot + '/decision', json={
+            'action': 'keep' if index == 0 else 'exclude', 'video_id': video})
+        assert result.status_code == 200, result.text
+
+    default = client.post(base + '/compose', json={})
+    assert default.status_code == 202, default.text
+    default_id = default.json()['render_id']
+    smaller = {'resolution_mode': 'custom', 'width': 320, 'height': 180}
+    denied = client.post(base + '/compose', json=smaller)
+    assert denied.status_code == 422
+    assert denied.json()['error']['code'] == 'assembly_downscale_confirmation_required'
+    opted_in = client.post(base + '/compose', json={**smaller, 'allow_downscale': True})
+    assert opted_in.status_code == 202, opted_in.text
+    legacy_id, historical_render_id = (opted_in.json()[key] for key in ('assembly_id', 'render_id'))
+
+    with client.app.state.session_factory() as db:
+        default_render = db.get(m.AssemblyRender, default_id)
+        assert (default_render.snapshot_json['output']['width'], default_render.snapshot_json['output']['height']) == (640, 360)
+        timeline = db.get(m.Assembly, legacy_id)
+        saved = timeline.timeline_json
+        legacy_output = {key: value for key, value in saved['output'].items()
+                         if key not in {'resolution_mode', 'allow_downscale'}}
+        timeline.timeline_json = {**saved, 'output': legacy_output}
+        revision = timeline.revision
+        db.commit()
+
+    refreshed = client.post('/api/assemblies/' + legacy_id + '/render', json={'revision': revision})
+    assert refreshed.status_code == 202, refreshed.text
+    snapshot = refreshed.json()['snapshot_json']
+    assert (snapshot['output']['width'], snapshot['output']['height']) == (640, 360)
+    assert snapshot['output']['resolution_mode'] == 'source'
+    assert snapshot['clips'][0]['video_id'] == ids[0][1]
+    with client.app.state.session_factory() as db:
+        historical = db.get(m.AssemblyRender, historical_render_id).snapshot_json['output']
+        assert (historical['width'], historical['height']) == (320, 180)
+        assert db.get(m.Assembly, legacy_id).timeline_json['output'] == legacy_output

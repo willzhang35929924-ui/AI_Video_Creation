@@ -1,0 +1,390 @@
+{
+  "last_node_id": 6,
+  "last_link_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "VAELoader",
+      "title": "本机 H3 视频 VAE（不加载 DiT / LoRA）",
+      "pos": [
+        30,
+        50
+      ],
+      "size": [
+        350,
+        180
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            1,
+            5
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_int8_convrot.safetensors"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "title": "上传一个人物或一个 SKU 的参考照片",
+      "pos": [
+        30,
+        300
+      ],
+      "size": [
+        350,
+        310
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "UNSET_UPLOAD_REAL_REFERENCE.png",
+        "image"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "MiniMaxH3RefModExtract",
+      "title": "创建独立 RefMod：Full Reference，不训练 LoRA",
+      "pos": [
+        450,
+        50
+      ],
+      "size": [
+        440,
+        740
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 1
+        },
+        {
+          "name": "refs_image.ref_image_0",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "mods",
+          "type": "H3_REF_MODS",
+          "links": [
+            3
+          ]
+        },
+        {
+          "name": "details",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3RefModExtract"
+      },
+      "widgets_values": [
+        "my_asset_v1",
+        "encode",
+        "identity",
+        0.0,
+        512,
+        32,
+        32,
+        22,
+        0,
+        false,
+        false,
+        1,
+        8192,
+        "manual",
+        "characters",
+        "同一个人物；产品请更换分类并使用独立名字",
+        false,
+        "error"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "MiniMaxH3RefModSave",
+      "title": "保存：同名会覆盖；首次请使用唯一名称",
+      "pos": [
+        960,
+        50
+      ],
+      "size": [
+        400,
+        170
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mods",
+          "type": "H3_REF_MODS",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "mods",
+          "type": "H3_REF_MODS",
+          "links": null
+        },
+        {
+          "name": "saved_paths",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3RefModSave"
+      },
+      "widgets_values": [
+        "",
+        "characters"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "MiniMaxH3RefModsLoader",
+      "title": "保存后刷新；人物与产品各选独立文件",
+      "pos": [
+        1450,
+        50
+      ],
+      "size": [
+        420,
+        620
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mods",
+          "type": "H3_REF_MODS",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "prompt_hint",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3RefModsLoader"
+      },
+      "widgets_values": [
+        false,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        "(none)",
+        1.0,
+        1,
+        16384,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0,
+        "All",
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 6,
+      "type": "MiniMaxH3RefModInspect",
+      "title": "加载后检查元数据；需要图像预览时改 stored",
+      "pos": [
+        1940,
+        50
+      ],
+      "size": [
+        400,
+        260
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mods",
+          "type": "H3_REF_MODS",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "details",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "image_preview",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "name": "audio_preview",
+          "type": "AUDIO",
+          "links": null
+        },
+        {
+          "name": "reference_map",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MiniMaxH3RefModInspect"
+      },
+      "widgets_values": [
+        0,
+        "off",
+        1.0,
+        "first_frame"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      3,
+      0,
+      "VAE"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      1,
+      "IMAGE"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      0,
+      "H3_REF_MODS"
+    ],
+    [
+      4,
+      5,
+      0,
+      6,
+      0,
+      "H3_REF_MODS"
+    ],
+    [
+      5,
+      1,
+      0,
+      6,
+      1,
+      "VAE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5,
+      "offset": [
+        0,
+        0
+      ]
+    },
+    "video_factory": {
+      "pack_commit": "517e8c419a8584fbf69fceb487bc39d83e6a6ec8",
+      "status": "template_pending_runtime_validation",
+      "creation": "Left branch creates and saves once. Right branch is a reusable loader/inspector for later native conditioning use.",
+      "source": "https://github.com/Luisacaotica/ComfyUI-MiniMaxH3Mod",
+      "identity_guarantee": false
+    }
+  },
+  "version": 0.4
+}
