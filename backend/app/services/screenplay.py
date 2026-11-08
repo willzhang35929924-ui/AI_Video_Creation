@@ -25,7 +25,7 @@ def get(session, model, identifier):
 
 def touch_shot(session, shot_id):
     shot = get(session, StoryboardShot, shot_id)
-    active = session.scalar(select(GenerationJob).where(GenerationJob.shot_id == shot_id, GenerationJob.status.in_(['submitting','queued','submitted','running','cancelling','reconciling','unknown'])))
+    active = session.scalar(select(GenerationJob).where(GenerationJob.shot_id == shot_id, GenerationJob.status.in_(['submitting','queued','submitted','running','postprocessing','cancelling','reconciling','unknown'])))
     if active:
         raise AppError(409, 'generation_active', '请先取消运行中的分镜任务，再修改其输入')
     if shot.status == 'deleted':

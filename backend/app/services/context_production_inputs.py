@@ -13,6 +13,9 @@ from app.services.cinematic_rules import fingerprint
 from app.services.identity_references import actor_references, reference_manifest, verified_image
 from app.services.motion_references import resolve_motion_references
 from app.services.product_library import shot_product_snapshot, shot_references
+from app.services.revision_constraints import (
+    apply_revision_overrides, extract_revision_constraints, revision_constraints_text,
+)
 from app.services.screenplay import shot_bundle
 
 
@@ -136,17 +139,50 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
             ref['absolute_path'] = str(verified_image(settings, ref))
     motion = resolve_motion_references(session, settings, shot, motion_values)
 
+    # Freeze caller-authored scale independently of the model's prose. Only
+    # generation copies are overlaid; approved screenplay entities stay intact.
+    entity_specs = [{'id': e.id, 'logical_id': e.logical_id, 'name': e.name,
+                     'kind': e.kind, 'spec': e.spec_json} for e in entities if e]
+    constraints = extract_revision_constraints(instruction, prompt_override=prompt_override, targets=entity_specs)
+    effective_action, effective_specs, override_audit = apply_revision_overrides(shot.action, entity_specs, constraints)
+    prop_targets = [row for row in entity_specs if row['kind'] == 'prop']
+    product_refs = [ref for ref in references if ref.get('role') == 'product' and ref.get('product_id')]
+    product_groups = {ref['product_id'] for ref in product_refs}
+    target_bindings = []
+    for item in constraints['items']:
+        matching = {ref['product_id'] for ref in product_refs if (
+            ref['product_id'] in (item.get('target_entity_id'), item.get('product_id'))
+            or ref.get('product_logical_id') == item['target_key'])}
+        reason = 'explicit_product_or_screenplay_prop_identity'
+        if (not matching and len(prop_targets) == 1 and len(product_groups) == 1
+                and prop_targets[0]['id'] == item.get('target_entity_id')):
+            matching = product_groups
+            reason = 'single_declared_shot_prop_and_single_bound_product'
+        if len(matching) == 1:
+            product_id = next(iter(matching))
+            item['product_id'] = product_id
+            for ref in product_refs:
+                if ref['product_id'] == product_id:
+                    ref.setdefault('constraint_target_keys', []).append(item['target_key'])
+            target_bindings.append({'target_key': item['target_key'], 'product_id': product_id, 'reason': reason})
+
     user_prompt = prompt_override if prompt_override is not None else shot.visual_prompt
     user_prompt = str(user_prompt or '').strip()
     if prompt_override is not None and not user_prompt:
         raise AppError(422, 'prompt_override_empty', '自定义提示词不能为空')
-    parts = [user_prompt] if user_prompt else []
+    effective_visual, _, _ = apply_revision_overrides(user_prompt, entity_specs, constraints)
+    override_audit['visual_prompt_changed'] = effective_visual != user_prompt
+    if effective_visual != user_prompt:
+        override_audit['visual_prompt_before'] = user_prompt
+    parts = [effective_visual] if effective_visual else []
+    if constraints['items']:
+        parts = ([f'本次修订指令：{instruction}'] if instruction else []) + [revision_constraints_text(constraints)] + parts
     if prompt_override is not None:
         parts.append('首段是本次明确的镜头制作要求。与下列原分镜的一般描述发生冲突时，以首段为准，并保留独立绑定素材的角色和使用范围。')
     for label, value in (
-        ('镜头', shot.scene_title), ('叙述', shot.narration), ('动作', shot.action), ('机位与运镜', shot.camera_move),
+        ('镜头', shot.scene_title), ('叙述', shot.narration), ('动作', effective_action), ('机位与运镜', shot.camera_move),
         ('地点', shot.location), ('光线', shot.lighting), ('声音', shot.audio_direction),
-        ('本次修订指令', instruction),
+        ('本次修订指令', instruction if not constraints['items'] else None),
     ):
         if value and str(value).strip():
             parts.append(f'{label}：{value}')
@@ -186,7 +222,7 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
         ('对白', lines if audio_policy != 'skip' else None),
         ('声音事件', [{key: event.get(key) for key in ('kind','description','start_seconds','end_seconds','volume')}
                       for event in audio_events]),
-        ('已绑定制作设定', [{'名称': e.name, '类别': e.kind, '内容': e.spec_json} for e in entities if e]),
+        ('已绑定制作设定', [{'名称': e['name'], '类别': e['kind'], '内容': e['spec']} for e in effective_specs]),
         ('动作节拍', production.get('beats')),
     ):
         if value:
@@ -204,6 +240,8 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
         'duration_seconds': shot.duration_seconds, 'aspect_ratio': shot.aspect_ratio,
         'generation_inputs_hash': generation_inputs_hash(session, shot), 'prompt_override': prompt_override,
         'instruction': instruction, 'prompt': '\n'.join(parts), 'negative_prompt': shot.negative_prompt or '',
+        'revision_constraints': constraints, 'revision_overrides_audit': override_audit,
+        'constraint_target_bindings': target_bindings,
         'explicit_visual_ids': image_ids, 'explicit_motion': motion_values, 'audio_policy': audio_policy,
         'silent': audio_policy == 'skip', 'spoken_language': spoken_language,
         'references': _without_paths(references), 'motion_references': _without_paths(motion),
@@ -240,7 +278,7 @@ def restore_context_inputs(session, settings, shot, snapshot):
     frozen_visuals = [ref['asset_id'] for ref in data['references'] if ref.get('production_visual_id')]
     if frozen_visuals != preflight['visual_ids']:
         raise AppError(409, 'context_input_snapshot_stale', '镜头的视觉参考选择已变化，未替换原任务素材')
-    frozen_props = [{key: value for key, value in ref.items() if key != 'picture_index'} for ref in data['references']
+    frozen_props = [{key: value for key, value in ref.items() if key not in {'picture_index', 'constraint_target_keys'}} for ref in data['references']
                     if ref.get('source') == 'screenplay_prop_reference']
     if frozen_props:
         detail, scene, _, production, entities = production_context(session, shot)

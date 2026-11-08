@@ -81,7 +81,7 @@ def archive(identifier:str,mode:str='archive',session:Session=Depends(get_db)):
 def unbind_project(identifier:str,binding_id:str,session:Session=Depends(get_db)):
     binding=session.get(m.ProjectProductBinding,binding_id)
     if not binding or binding.product_id!=identifier:raise AppError(404,'product_binding_missing','产品项目引用不存在')
-    active={'queued','submitting','submitted','running','cancelling'}
+    active={'queued','submitting','submitted','running','postprocessing','cancelling'}
     for model in (m.GenerationJob,m.ProductionVisual,m.MediaProcessTask):
         if session.scalar(select(model.id).where(model.project_id==binding.project_id,model.status.in_(active)).limit(1)):
             raise AppError(409,'product_binding_busy','该项目仍有制作任务，待结束后解除引用')

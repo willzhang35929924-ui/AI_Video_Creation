@@ -82,7 +82,7 @@ def _video(session,settings,identifier,project_id,shot_id):
     if row.metadata_json.get('sha256') and row.metadata_json['sha256']!=sha:raise AppError(409,'media_input_changed','输入视频SHA发生变化')
     return row,{'id':row.id,'path':str(path),'sha256':sha}
 
-def create_task(session,settings,payload,kind=None,route=None,*,dialogue_text_override=None):
+def create_task(session,settings,payload,kind=None,route=None,*,dialogue_text_override=None,audio_timing_overrides=None):
     _owned(session,m.Project,payload.project_id,payload.project_id)
     shot=_owned(session,m.StoryboardShot,payload.shot_id,payload.project_id) if payload.shot_id else None
     if shot and shot.status=='deleted':raise AppError(409,'shot_deleted','已删除镜头不再派发任务')
@@ -174,6 +174,18 @@ def create_task(session,settings,payload,kind=None,route=None,*,dialogue_text_ov
     elif kind=='lip_sync':
         parameters.pop('target_participant_id',None)
         if set(parameters)-{'seed','inference_steps','guidance_scale','duration_policy'}:raise AppError(422,'lip_parameter_unsupported','口型参数不在固定适配器范围')
+    if audio_timing_overrides is not None:
+        voice_sources=[value for key,value in sources.items() if key.startswith('audio_')]
+        if (kind!='audio_mix' or not isinstance(audio_timing_overrides,list)
+                or len(audio_timing_overrides)!=len(voice_sources)
+                or any(not isinstance(value,dict) or set(value)-{'start_seconds','end_seconds','volume'} for value in audio_timing_overrides)):
+            raise AppError(422,'audio_timing_override','内部混音时序快照无效，未猜测原配音起点或音量')
+        for source,timing in zip(voice_sources,audio_timing_overrides):
+            # A trusted revision plan preserves the source mix's explicit
+            # timing. Do this before fingerprinting and without mutating assets.
+            source['metadata']={key:value for key,value in source.get('metadata',{}).items()
+                                if key not in {'start_seconds','end_seconds','volume'}}
+            source['metadata'].update(copy.deepcopy(timing))
     frozen={'kind':kind,'route':snapshot_route,'parameters':parameters,'inputs':compiled,'sources':sources,
         'participant_id':participant.id if participant else None,'character_version_id':participant.character_version_id if participant else None,
         'dialogue_line_id':line.id if line else None,'project_id':payload.project_id,'shot_id':payload.shot_id}
@@ -277,7 +289,7 @@ def _publish(session,settings,task,snapshot,destination,actual):
         source=session.get(m.VideoRevision,snapshot['sources']['video_path']['id'])
         revision=(session.scalar(select(func.max(m.VideoRevision.revision)).where(m.VideoRevision.shot_id==source.shot_id)) or 0)+1
         metadata={**source.metadata_json,'sha256':sha,'width':actual['width'],'height':actual['height'],'duration_seconds':actual['duration'],
-            'frame_rate':actual['fps'],'file_size':destination.stat().st_size,'playable_video':True,'source_video_id':source.id,
+            'frame_rate':actual['fps'],'has_audio':bool(actual.get('audio')),'file_size':destination.stat().st_size,'playable_video':True,'source_video_id':source.id,
             'root_source_video_id':source.metadata_json.get('root_source_video_id',source.id),'processing_task_id':task.id,'processing_kind':task.kind,
             'processing_chain':[*source.metadata_json.get('processing_chain',[]),{'task_id':task.id,'kind':task.kind,'input_video_id':source.id,'input_sha256':snapshot['sources']['video_path']['sha256'],'output_sha256':sha}]}
         metadata.pop('quality_render_id',None)

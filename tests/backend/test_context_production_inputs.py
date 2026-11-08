@@ -213,9 +213,12 @@ def test_context_revision_requires_explicit_migration_and_shares_preview_inputs(
     session.add_all([video, m.QualityProfile(scope='shot', target_id=shot.id, settings_json={'mode':'fast'})]); session.commit()
     request = Request({'type':'http', 'app':SimpleNamespace(state=SimpleNamespace(settings=settings))})
     payload = RevisionRequest(instruction='Hold the camera still.', prompt_override='Waves over smooth stones.')
+    before_jobs = list(session.scalars(select(m.GenerationJob.id)))
     with pytest.raises(AppError) as rejected:
         revision_preview(video.id, payload, request, session)
-    assert rejected.value.code == 'context_ir_service_required'
+    assert rejected.value.code == 'video_contract_required'
+    assert list(session.scalars(select(m.GenerationJob.id))) == before_jobs
+    assert old.provider == 'cloud_video_jobs_v1' and 'h3_workflow' not in old.parameters_json
 
 
     payload.use_project_video_service = True
@@ -250,6 +253,7 @@ def test_context_revision_requires_explicit_migration_and_shares_preview_inputs(
     with pytest.raises(AppError) as rejected:
         revision_preview(video.id, payload, request, session)
     assert rejected.value.code == 'context_ir_service_required'
+    assert len(calls) == 1  # no second local submission and no cloud request
 
 
 def test_context_routing_evidence_matches_only_its_service_recipe_and_model(session, settings):
@@ -291,3 +295,59 @@ def test_context_routing_evidence_matches_only_its_service_recipe_and_model(sess
     job.parameters_json = {**job.parameters_json, 'service_snapshot':{**snapshot, 'model_id':service.default_model,
         'workflow_sha256':hashlib.sha256(legacy_workflow.read_bytes()).hexdigest()}}
     assert not candidate(session, settings, service, 'video_generation').eligible
+
+def test_revision_scale_overlays_only_generation_copy_and_freezes_original_provenance(session, settings):
+    project, shot = add_shot(session, 'Targeted physical scale revision')
+    shot.action = 'P02腹部凹陷3cm后松开。'
+    shot.visual_prompt = 'P02高12.5cm，宽15cm，放在地毯上。'
+    prop = m.ProductionEntity(project_id=project.id, logical_id='P02', kind='prop', name='Green plush tree',
+        status='approved', spec_json={'dimensions':'高约12.5cm，宽约15cm','material':'plush'})
+    session.add(prop);session.flush()
+    detail=m.ShotDetail(shot_id=shot.id,source_json={'production':{'prop_states':[{'entity_id':prop.id,'prop_key':'P02','holder':'person A'}]}})
+    session.add(detail);session.flush()
+    snapshot=collect_context_inputs(session,settings,shot,instruction='P02尺寸高3.5cm，宽5cm。按压后回弹。')
+    assert '12.5' not in snapshot['prompt'] and '15cm' not in snapshot['prompt']
+    assert '凹陷3cm' not in snapshot['prompt']
+    assert snapshot['revision_constraints']['items'][0]['target_entity_id']==prop.id
+    assert snapshot['revision_overrides_audit']['entity_fields'][0]['before']=='高约12.5cm，宽约15cm'
+    assert snapshot['revision_overrides_audit']['visual_prompt_before']==shot.visual_prompt
+    assert snapshot['screenplay_snapshot']['shot']['visual_prompt']==shot.visual_prompt
+    assert prop.spec_json=={'dimensions':'高约12.5cm，宽约15cm','material':'plush'}
+    assert shot.action=='P02腹部凹陷3cm后松开。'
+    assert restore_context_inputs(session,settings,shot,snapshot)==([],[])
+
+
+def test_revision_scale_explicit_prop_references_have_frozen_unique_target_binding(session, settings, imported_props):
+    data=imported_props
+    snapshot=collect_context_inputs(session,settings,data.shot,instruction='P_GREEN高度3.5cm，宽度5cm。')
+    item=snapshot['revision_constraints']['items'][0]
+    assert item['target_entity_id']==data.props[1].id and item['product_id']==data.props[1].id
+    assert snapshot['constraint_target_bindings']==[{'target_key':'P_GREEN','product_id':data.props[1].id,
+        'reason':'explicit_product_or_screenplay_prop_identity'}]
+    assert 'constraint_target_keys' not in snapshot['references'][0]
+    assert snapshot['references'][1]['constraint_target_keys']==['P_GREEN']
+    restored,_=restore_context_inputs(session,settings,data.shot,snapshot)
+    assert restored[1]['constraint_target_keys']==['P_GREEN']
+
+
+def test_revision_scale_does_not_guess_between_two_declared_props_and_one_blanket_product(session, settings, imported_props):
+    data=imported_props
+    session.add(m.AuditEvent(object_type='storyboard_shot',object_id=data.shot.id,action='product_reference_selection_saved'))
+    session.flush()
+    snapshot=collect_context_inputs(session,settings,data.shot,instruction='P_GREEN高3.5cm宽5cm。')
+    assert len(snapshot['references'])==1
+    assert snapshot['constraint_target_bindings']==[]
+    assert 'constraint_target_keys' not in snapshot['references'][0]
+
+
+def test_revision_scale_single_declared_prop_and_one_blanket_product_can_map_uniquely(session, settings, imported_props):
+    data=imported_props
+    data.detail.source_json={**data.detail.source_json,'production':{'prop_states':[
+        {'entity_id':data.props[1].id,'prop_key':'P_GREEN','holder':'left hand'}]}}
+    session.flush()
+    snapshot=collect_context_inputs(session,settings,data.shot,instruction='P_GREEN只有水杯大小。')
+    assert len(snapshot['references'])==1
+    assert snapshot['constraint_target_bindings']==[{'target_key':'P_GREEN','product_id':data.image.product_id,
+        'reason':'single_declared_shot_prop_and_single_bound_product'}]
+    assert snapshot['references'][0]['constraint_target_keys']==['P_GREEN']
+    assert restore_context_inputs(session,settings,data.shot,snapshot)[0][0]['constraint_target_keys']==['P_GREEN']

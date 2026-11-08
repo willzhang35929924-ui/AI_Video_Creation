@@ -5,7 +5,7 @@ import type { StudioOverview, StudioProject } from './studio-contract';
 import { Badge } from '../components/ui';
 
 const statusLabels: Record<string, string> = {
-  draft: '尚未开始', pending: '待处理', queued: '等待执行', running: '正在执行',
+  draft: '尚未开始', pending: '待处理', queued: '等待执行', running: '正在执行', postprocessing:'修订后处理',
   submitting: '正在提交', submitted: '已提交服务', waiting_dependencies: '等待前置素材',
   waiting_assets: '等待参考素材', waiting: '等待前置条件', retrying: '正在重试',
   completed: '执行完成', succeeded: '执行成功', generated: '已生成', approved: '已审核',

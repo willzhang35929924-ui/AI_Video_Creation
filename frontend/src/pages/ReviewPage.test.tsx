@@ -22,11 +22,68 @@ vi.mock('../components/ui',async original=>{
   }};
 });
 
-afterEach(() => { cleanup(); immediateEdit.value=null; vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); immediateEdit.value=null; vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const response = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 const video = { id: 'v1', project_id: 'p1', shot_id: 's1', revision: 1, relative_path: 'original.mp4',
   review_status: 'pending', metadata_json: { mode: 'cloud', provider: 'cloud_lk888_h3_v2' } };
+
+it('loads the legacy recovery diagnosis from selected-video details and resumes only postprocessing',async()=>{
+  const recovery={available:true,required:true,state:'available',reason:'旧配音和高清尚未接回'};
+  const calls:string[]=[];
+  const fetcher=vi.fn(async(url:string)=>{
+    const path=new URL(url,'http://localhost').pathname;
+    if(path==='/api/projects')return response([{id:'p1',name:'项目'}]);
+    if(path==='/api/projects/p1/videos')return response([video]);
+    if(path==='/api/videos/v1')return response({...video,metadata_json:{...video.metadata_json,revision_processing_recovery:recovery}});
+    if(path==='/api/videos/v1/resume-revision-processing'){
+      calls.push(path);return response({job:{id:'j1',status:'postprocessing'},provider_resubmitted:false,replayed:false});
+    }
+    throw new Error(path);
+  });
+  vi.stubGlobal('fetch',fetcher);
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage/></ToastProvider></MemoryRouter>);
+  const user=userEvent.setup();
+  const resume=await screen.findByRole('button',{name:'恢复此修订的配音与画质'});
+  expect(screen.getByRole('button',{name:'通过为候选成片'})).toBeDisabled();
+  await user.click(resume);
+  expect(await screen.findByText('正在补齐修订的配音与画质，完成后可审核最终版本')).toBeInTheDocument();
+  expect(calls).toEqual(['/api/videos/v1/resume-revision-processing']);
+  expect(fetcher.mock.calls.some(([url])=>String(url).endsWith('/revise'))).toBe(false);
+});
+
+it('continues polling postprocessing after refresh and does not unlock another generation',async()=>{
+  let tick:(()=>Promise<void>)|undefined;
+  vi.spyOn(window,'setInterval').mockImplementation(((fn:()=>Promise<void>,delay:number)=>{
+    if(delay===2500)tick=fn;return 123;
+  }) as typeof window.setInterval);
+  vi.spyOn(window,'clearInterval').mockImplementation(()=>{});
+  const raw={...video,metadata_json:{...video.metadata_json,revision_postprocess:{job_id:'j1',state:'processing'},
+    revision_processing_recovery:{required:true,available:false,state:'processing',reason:'配音画质处理中'}}};
+  let polls=0,done=false;
+  const final={...video,id:'complete',revision:2,relative_path:'complete.mp4',metadata_json:{revision_postprocess:{job_id:'j1',state:'ready'}}};
+  vi.stubGlobal('fetch',vi.fn(async(url:string)=>{
+    const path=new URL(url,'http://localhost').pathname;
+    if(path==='/api/projects')return response([{id:'p1',name:'项目'}]);
+    if(path==='/api/projects/p1/videos')return response(done?[final,raw]:[raw]);
+    if(path==='/api/videos/v1')return response(raw);
+    if(path==='/api/videos/complete')return response(final);
+    if(path==='/api/jobs/j1'){polls++;return response({id:'j1',shot_id:'s1',status:done?'generated':'postprocessing',provider:'local',
+      parameters_json:{revision_postprocess:{state:done?'ready':'processing',final_video_id:done?'complete':null}}});}
+    throw new Error(path);
+  }));
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage/></ToastProvider></MemoryRouter>);
+  await waitFor(()=>expect(tick).toBeDefined());
+  await act(async()=>{await tick?.();});
+  expect(polls).toBe(1);
+  expect(screen.getByRole('button',{name:'基于当前版本重新生成'})).toBeDisabled();
+  expect(screen.getByRole('button',{name:'通过为候选成片'})).toBeDisabled();
+  expect(screen.getByText('正在补齐修订的配音与画质，完成后可审核最终版本')).toBeInTheDocument();
+  done=true;
+  await act(async()=>{await tick?.();});
+  expect(await screen.findByLabelText('镜头版本 2 视频播放器')).toHaveAttribute('src',expect.stringContaining('complete.mp4'));
+  expect(screen.getByRole('button',{name:'通过为候选成片'})).toBeEnabled();
+});
 
 it.each([
   ['video=v1&job=j2&shot=s2','v1'],

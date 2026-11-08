@@ -50,7 +50,9 @@ def test_real_two_clip_hard_cut_keeps_delayed_video_and_audio_tail(settings, tmp
     digest=hashlib.sha256(source.read_bytes()).hexdigest()
     video=SimpleNamespace(id='v1',project_id='project',shot_id='shot',generation_job_id='job',revision=1,
                           review_status='approved',relative_path=source.name,metadata_json={'sha256':digest},thumbnail_paths_json=[])
-    session=SimpleNamespace(get=lambda model, identifier: video)
+    from app.models import GenerationJob
+    job=SimpleNamespace(id='job',project_id='project',shot_id='shot',parameters_json={},status='generated')
+    session=SimpleNamespace(get=lambda model, identifier: job if model is GenerationJob else video)
     monkeypatch.setattr('app.services.assembly.resolve_service', lambda *args: (SimpleNamespace(provider='ffmpeg'), {'settings':{}}))
     request=TimelineRequest.model_validate({'clips':[{'video_id':'v1'},{'video_id':'v1'}],
         'transitions':[{'type':'cut','duration':0,'audio':'cut'}],

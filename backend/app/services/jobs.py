@@ -119,6 +119,8 @@ def video_outputs(history):
 async def poll_job(settings, session_factory, job_id):
     with session_factory() as session:
         job = session.get(GenerationJob, job_id)
+        if (job.parameters_json.get('revision_postprocess') or {}).get('raw_video_id'):
+            return  # local postprocessing owns this preserved raw; never redownload/reimport it
         provider_id = job.provider_job_id
         snapshot = job.parameters_json.get('service_snapshot')
         workflow = job.parameters_json.get('h3_workflow')
@@ -292,9 +294,11 @@ async def poll_job(settings, session_factory, job_id):
             registry.metadata_json={**registry.metadata_json,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data),'audio_mix':mixing}
             for check in checks:
                 session.add(QualityCheck(video_revision_id=video.id, check_type=check["check_type"], status=check["status"], details_json=check.get("details", {})))
-            job.status='generated'
-            job.progress = 1.0
-            job.finished_at = datetime.now(timezone.utc)
+            from app.services.revision_postprocess import attach_raw
+            if not attach_raw(job, video):
+                job.status='generated'
+                job.progress = 1.0
+                job.finished_at = datetime.now(timezone.utc)
         elif job.status == "failed":
             job.error_code = "comfyui_execution_failed" if job.provider=='comfyui_h3' else 'cloud_video_execution_failed'
             job.error_message = result.get("error") or ('ComfyUI 任务失败' if job.provider=='comfyui_h3' else '云端视频任务失败')
@@ -417,4 +421,6 @@ async def process_video_tick(settings: Settings, session_factory):
                 elif isinstance(error, AppError) and error.code not in {'comfyui_status_failed'}:
                     job.status='failed';job.error_code=error.code;job.error_message=error.message
                     job.finished_at=datetime.now(timezone.utc);session.commit()
+    from app.services.revision_postprocess import process_tick as revision_processing_tick
+    await revision_processing_tick(settings, session_factory)
     await process_composition(settings, session_factory)

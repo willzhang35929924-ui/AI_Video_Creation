@@ -15,7 +15,7 @@ def state(value):
     if value in {'cancelled'}:return 'cancelled'
     if value in {'blocked','studio_paused','paused'}:return 'blocked'
     if value=='skipped':return 'skipped'
-    return 'running' if value in {'running','submitting','submitted','dispatching','cancelling'} else 'queued'
+    return 'running' if value in {'running','postprocessing','submitting','submitted','dispatching','cancelling'} else 'queued'
 
 def dto(session,kind,row):
     project=getattr(row,'project_id',None);shot=getattr(row,'shot_id',None)

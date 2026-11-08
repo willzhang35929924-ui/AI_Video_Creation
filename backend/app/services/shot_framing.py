@@ -10,7 +10,7 @@ from app.core.errors import AppError
 from app.schemas_studio import ShotFramingUpdate
 
 ASPECTS=['16:9','9:16','1:1']
-ACTIVE={'queued','submitting','submitted','running','cancelling','reconciling','unknown','deferred'}
+ACTIVE={'queued','submitting','submitted','running','postprocessing','cancelling','reconciling','unknown','deferred'}
 EDITABLE_RUNS={'paused','exceptions','completed','completed_with_errors','cancelled','failed'}
 BLOCK_MESSAGES={
     'run':'当前制作批次尚未暂停，请先暂停，再修改画幅并新建制作；原冻结任务保留。',

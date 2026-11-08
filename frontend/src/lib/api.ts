@@ -670,6 +670,11 @@ export const api = {
       }),
     ),
 
+  resumeRevisionProcessing: async (id: string) =>
+    unwrap<{ job: GenerationJob; provider_resubmitted: false; replayed: boolean }>(
+      await request(`/api/videos/${encodeURIComponent(id)}/resume-revision-processing`, { method: 'POST' }),
+    ),
+
   approveVideo: async (id: string, review: { operator: string; reason?: string } = { operator: "local-user" }) =>
     normalizeVideo(
       unwrap<VideoRevision>(

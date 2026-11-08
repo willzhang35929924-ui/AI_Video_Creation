@@ -509,7 +509,7 @@ def patch_shot(shot_id: str, payload: ShotPatch, session: Session = Depends(get_
     shot = required(session, StoryboardShot, shot_id, "分镜")
     if shot.status == "deleted":
         raise AppError(409, "shot_deleted", "已删除分镜不可编辑")
-    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','cancelling','reconciling','unknown'])).limit(1))
+    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','postprocessing','cancelling','reconciling','unknown'])).limit(1))
     if active:raise AppError(409,'generation_active','分镜生成任务尚未结束或结果未知，不能修改输入',{'job_id':active})
     changes = payload.model_dump(exclude_unset=True)
     if not changes:
@@ -534,7 +534,7 @@ def reject_shot(shot_id: str, payload: ReviewRequest, session: Session = Depends
     shot = required(session, StoryboardShot, shot_id, "分镜")
     if shot.status == "deleted":
         raise AppError(409, "shot_deleted", "已删除分镜不可审核")
-    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','cancelling','reconciling','unknown'])).limit(1))
+    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','postprocessing','cancelling','reconciling','unknown'])).limit(1))
     if active:raise AppError(409,'generation_active','分镜生成任务尚未结束或结果未知，不能修改审核状态',{'job_id':active})
     shot.status = "rejected"
     shot.approved_at = None
@@ -555,7 +555,7 @@ def delete_shot(shot_id: str, session: Session = Depends(get_db)) -> dict[str, A
         select(GenerationJob.id)
         .where(
             GenerationJob.shot_id == shot.id,
-            GenerationJob.status.in_(["submitting", "queued", "submitted", "running", "cancelling", "reconciling", "unknown"]),
+            GenerationJob.status.in_(["submitting", "queued", "submitted", "running", "postprocessing", "cancelling", "reconciling", "unknown"]),
         )
         .limit(1)
     )
@@ -830,7 +830,7 @@ def review_asset(asset_id: str, payload: AssetReviewRequest, session: Session = 
 @router.post("/shots/{shot_id}/assign-character")
 def assign_character(shot_id: str, payload: CharacterAssignment, session: Session = Depends(get_db)) -> dict[str, Any]:
     shot = required(session, StoryboardShot, shot_id, "分镜")
-    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','cancelling','reconciling','unknown'])).limit(1))
+    active=session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id==shot.id,GenerationJob.status.in_(['submitting','queued','submitted','running','postprocessing','cancelling','reconciling','unknown'])).limit(1))
     if active:raise AppError(409,'generation_active','分镜生成任务尚未结束或结果未知，不能更换人物参考',{'job_id':active})
     character = required(session, Character, payload.character_id, "角色")
     version = required(session, CharacterVersion, payload.character_version_id, "角色版本")
@@ -906,8 +906,11 @@ def _legacy_generation_inputs(session, settings, shot, payload, instruction, fro
     if not settings.h3_demo_mode and not references:
         raise AppError(409, "approved_reference_required", "真实 H3 任务至少需要一个已批准且可读的人物或已绑定产品参考素材")
     prompt, negative = (structured_inputs[2], structured_inputs[3].get('model_lab_negative_prompt','')) if structured_inputs else build_prompt(shot, version, instruction)
-    from app.services.video_revisions import editable_generation_prompt
-    return version, references, prompt, editable_generation_prompt(prompt, instruction, structured=structured, prompt_override=payload.prompt_override), negative, structured_inputs[3] if structured_inputs else None
+    from app.services.video_revisions import editable_generation_prompt, cloud_revision_targets
+    source_snapshot = structured_inputs[3] if structured_inputs else None
+    targets = cloud_revision_targets(session, source_snapshot, references)
+    return version, references, prompt, editable_generation_prompt(prompt, instruction, structured=structured,
+        prompt_override=payload.prompt_override, targets=targets), negative, source_snapshot
 
 
 async def generate_for_shot(
@@ -924,8 +927,12 @@ async def generate_for_shot(
     frozen_context: dict | None = None,
     legacy_production: bool = False,
     production_scope: dict | None = None,
+    revision_postprocess: dict | None = None,
 ) -> tuple[GenerationJob, VideoRevision | None]:
     settings = settings_from(request)
+    if revision_postprocess:
+        from app.services.revision_postprocess import validate_generation_plan
+        validate_generation_plan(session, settings, shot, revision_postprocess)
     requested_mode = payload.parameters.get('requested_mode')
     if requested_mode and requested_mode != ('demo' if settings.h3_demo_mode else 'real'):
         raise AppError(409, 'provider_mode_mismatch', '请求模式与后端配置不一致；拒绝自动切换 Provider')
@@ -935,7 +942,7 @@ async def generate_for_shot(
     if shot.status != 'approved':
         raise AppError(409, 'shot_not_approved', '分镜尚未审核通过')
     duplicate = session.scalar(select(GenerationJob.id).where(GenerationJob.shot_id == shot.id,
-        GenerationJob.status.in_(['queued', 'submitting', 'submitted', 'running', 'cancelling', 'reconciling', 'unknown'])).limit(1))
+        GenerationJob.status.in_(['queued', 'submitting', 'submitted', 'running', 'postprocessing', 'cancelling', 'reconciling', 'unknown'])).limit(1))
     if duplicate:
         raise AppError(409, 'generation_already_active', '该分镜已有运行中的生成任务', {'job_id': duplicate})
 
@@ -1011,7 +1018,7 @@ async def generate_for_shot(
         'service_snapshot','screenplay_snapshot','script_revision_id','output_relative_dir','character_version_id',
         'duration_seconds','negative_prompt','reference_manifest','motion_references','motion_inputs_hash',
         'actual_motion_reference_uploads','actual_reference_uploads','h3_workflow','context_inputs','context_silent','context_spoken_language',
-        'context_ir_enabled','context_ir_version','quality_request','production_scope')}
+        'context_ir_enabled','context_ir_version','quality_request','production_scope','revision_postprocess')}
     configured = service_snapshot['settings'] if service_snapshot else {}
     from app.services.model_lab import default_generation_parameters
     saved_defaults=default_generation_parameters(session,service_snapshot) if service_snapshot else {}
@@ -1047,6 +1054,7 @@ async def generate_for_shot(
             'aspect_ratio': shot.aspect_ratio, 'negative_prompt': negative, 'instruction': instruction,
             'compiled_prompt': compiled_prompt, 'prompt_override_used': prompt_override is not None, 'prompt_override': prompt_override,
             'character_version_id': version_id, **({'screenplay_snapshot': screenplay_snapshot} if screenplay_snapshot else {}),
+            **({'revision_postprocess': revision_postprocess} if revision_postprocess else {}),
             **({'context_inputs': context_snapshot} if context_snapshot else {}),
             **({'motion_references': [{k:v for k,v in ref.items() if k!='absolute_path'} for ref in motion_references],
                 'motion_inputs_hash': motion_inputs_hash} if motion_references else {})},
@@ -1212,6 +1220,11 @@ async def retry_job(request: Request, job_id: str, session: Session = Depends(ge
     previous = required(session, GenerationJob, job_id, "任务")
     if previous.status not in {"failed", "cancelled"}:
         raise AppError(409, "job_not_retryable", "仅失败或已取消任务可以重试")
+    from app.services.revision_postprocess import retry as retry_postprocess
+    if retry_postprocess(session, settings_from(request), previous):
+        audit(session, 'generation_job', previous.id, 'revision_postprocess_retry', {'provider_resubmitted': False})
+        session.commit()
+        return {'job': row_dict(previous), 'video_revision': None, 'retried_from': previous.id, 'provider_resubmitted': False}
     shot = required(session, StoryboardShot, previous.shot_id, "分镜")
     params = dict(previous.parameters_json)
     selected_snapshot = params.pop('service_snapshot',{})
@@ -1227,7 +1240,8 @@ async def retry_job(request: Request, job_id: str, session: Session = Depends(ge
         GenerationRequest(seed=previous.seed, parameters=params, service_id=selected_snapshot.get('service_id'),
                           model_id=selected_snapshot.get('model_id'), prompt_override=prompt_override),
         instruction=instruction, retry_count=previous.retry_count + 1, frozen_job=context_job,
-        frozen_service=(selected_snapshot or None) if not context_job else None, legacy_production=not context_job)
+        frozen_service=(selected_snapshot or None) if not context_job else None, legacy_production=not context_job,
+        revision_postprocess=previous.parameters_json.get('revision_postprocess'))
     return {"job": row_dict(job), "video_revision": row_dict(video) if video else None, "retried_from": previous.id}
 
 
@@ -1250,7 +1264,7 @@ async def cancel_job(request: Request, job_id: str, session: Session = Depends(g
 
 
 @router.get("/videos/{video_id}")
-def get_video(video_id: str, session: Session = Depends(get_db)) -> dict[str, Any]:
+def get_video(video_id: str, request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     video = required(session, VideoRevision, video_id, "视频版本")
     result = row_dict(video)
     result["media_url"] = f"/api/media/{video.relative_path}"
@@ -1261,8 +1275,20 @@ def get_video(video_id: str, session: Session = Depends(get_db)) -> dict[str, An
     result["referenceAssets"] = job.reference_assets_json
     result["metadata_json"] = {**video.metadata_json, "prompt": job.prompt, "original_prompt": job.parameters_json.get("original_prompt", job.prompt), "revision_instruction": job.parameters_json.get("instruction"), "provider_job_id": job.provider_job_id, **({'comfyui_prompt_id':job.provider_job_id} if job.provider == 'comfyui_h3' else {}), "character_version_id": character_version_id, "character_id": character_version.character_id if character_version else None, "references": job.reference_assets_json}
     result["quality_checks"] = [row_dict(row) for row in session.scalars(select(QualityCheck).where(QualityCheck.video_revision_id == video.id).order_by(QualityCheck.created_at)).all()]
+    from app.services.revision_postprocess import recovery_status
+    result['metadata_json']['revision_processing_recovery'] = recovery_status(session, settings_from(request), video)
     result["history"] = [row_dict(row) for row in session.scalars(select(VideoRevision).where(VideoRevision.shot_id == video.shot_id).order_by(VideoRevision.revision)).all()]
     return result
+
+
+@router.post('/videos/{video_id}/resume-revision-processing', status_code=status.HTTP_202_ACCEPTED)
+def resume_revision_processing(video_id: str, request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
+    from app.services.revision_postprocess import resume_existing
+    video = required(session, VideoRevision, video_id, '视频版本')
+    job, replayed = resume_existing(session, settings_from(request), video)
+    session.commit()
+    return {'job': row_dict(job), 'video_revision': row_dict(video),
+            'provider_resubmitted': False, 'replayed': replayed}
 
 
 @router.post("/videos/{video_id}/recheck-duration")
@@ -1284,8 +1310,10 @@ async def revise_video(request: Request, video_id: str, payload: RevisionRequest
         job, video = await generate_for_shot(request, session, shot, generation, instruction=payload.instruction)
     else:
         generation, service, quality, context = prepare_context_revision(session, settings, shot, current, payload)
+        from app.services.revision_postprocess import freeze_plan
+        processing_plan = freeze_plan(session, settings, shot, current, payload.instruction, quality=quality)
         job, video = await generate_for_shot(request, session, shot, generation, instruction=payload.instruction,
-            frozen_service=service, frozen_quality=quality, frozen_context=context)
+            frozen_service=service, frozen_quality=quality, frozen_context=context, revision_postprocess=processing_plan)
     previous_job = session.get(GenerationJob, current.generation_job_id)
     if previous_job.provider == "comfyui_h3":
         previous_job.status = "revised"
@@ -1302,6 +1330,12 @@ async def revise_video(request: Request, video_id: str, payload: RevisionRequest
 @router.post("/videos/{video_id}/approve")
 def approve_video(video_id: str, payload: ReviewRequest, request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     video = required(session, VideoRevision, video_id, "视频版本")
+    from app.services.revision_postprocess import assert_review_ready
+    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video)
+    from app.services.revision_postprocess import recovery_status
+    recovery = recovery_status(session, settings_from(request), video)
+    if recovery.get('required') and recovery.get('state') not in {'ready'}:
+        raise AppError(409, 'revision_postprocess_required', recovery.get('reason') or '请先恢复此修订原片的配音与画质后处理，再审核最终版本')
     from app.services.shot_framing import assert_video_framing_current, video_framing_unchanged
     assert_video_framing_current(session,video)
     if video.review_status == "needs_regeneration":
@@ -1371,6 +1405,8 @@ def reject_video(video_id: str, payload: ReviewRequest, session: Session = Depen
     if not payload.reason:
         raise AppError(422, "rejection_reason_required", "驳回必须填写原因")
     video = required(session, VideoRevision, video_id, "视频版本")
+    from app.services.revision_postprocess import assert_review_ready
+    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video)
     video.review_status = "rejected"
     job = session.get(GenerationJob, video.generation_job_id)
     if job.provider == "comfyui_h3":
@@ -1504,6 +1540,8 @@ def create_dry_run(payload: DryRunRequest, session: Session = Depends(get_db)) -
     preview: list[dict[str, Any]] = []
     for item in payload.items:
         video = required(session, VideoRevision, item.video_revision_id, "视频版本")
+        from app.services.revision_postprocess import assert_complete_revision
+        assert_complete_revision(session, session.get(GenerationJob, video.generation_job_id), video)
         if video.review_status != "approved":
             raise AppError(409, "video_not_approved", "只有人工审核通过的视频可加入发布清单", {"video_revision_id": video.id})
         account = required(session, PublishingAccount, item.account_id, "发布账号")

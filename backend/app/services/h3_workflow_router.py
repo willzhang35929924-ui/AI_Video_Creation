@@ -130,7 +130,7 @@ def _native_frame_count(seconds):
 
 def build_graph(snapshot, *, tray, intent, duration_seconds, aspect_ratio, seed, width, height,
                 reference_groups, required_references, motion_targets, output_prefix,
-                spoken_language='English', silent=True):
+                spoken_language='English', silent=True,production_contract=None):
     """Bind frozen job inputs and leave the real compiler in the sampler path."""
     mode = snapshot.get('quality_mode') if isinstance(snapshot, dict) else None
     if not isinstance(mode, str) or mode not in MODES:
@@ -168,6 +168,10 @@ def build_graph(snapshot, *, tray, intent, duration_seconds, aspect_ratio, seed,
         motion_targets=motion_targets,
     )
     graph['5']['inputs']['noise_seed'] = seed
+    if production_contract is not None:
+        if not isinstance(production_contract,dict) or production_contract.get('version')!=1:
+            raise AppError(422,'h3_production_contract','Context-IR 制作约束快照无效')
+        graph['4']['inputs']['production_contract']=json.dumps(production_contract,ensure_ascii=False,sort_keys=True)
     graph['13']['inputs']['filename_prefix'] = output_prefix
     if expected['workflow_id'] == QUALITY:
         graph['7']['inputs']['steps'] = expected['actual_steps']

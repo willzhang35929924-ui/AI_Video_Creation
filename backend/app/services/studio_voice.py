@@ -21,7 +21,7 @@ from app.services.runtime_registry import REFERENCE_TTS_FAMILIES
 
 AUDIO_SUFFIXES = {'.wav', '.flac', '.mp3', '.m4a', '.aac', '.ogg'}
 ACTIVE_RUNS = {'queued', 'running', 'rendering'}
-ACTIVE_CHILDREN = {'queued', 'running', 'submitting', 'submitted', 'cancelling', 'unknown'}
+ACTIVE_CHILDREN = {'queued', 'running','postprocessing', 'submitting', 'submitted', 'cancelling', 'unknown'}
 
 
 def _current(session, project_id):

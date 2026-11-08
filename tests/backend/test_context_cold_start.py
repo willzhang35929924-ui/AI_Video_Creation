@@ -24,7 +24,9 @@ HEALTH = dict(service='video-factory-h3ir-qwen4b-v1', profile='h3ir-qwen4b-32k',
 
 def nodes():
     graph, _ = _read_template(freeze_workflow('fast')['workflow_id'])
-    return {item['class_type']: {'input': {'required': {}}} for item in graph.values()}
+    result={item['class_type']: {'input': {'required': {}}} for item in graph.values()}
+    result['VideoFactoryLocalH3IRCompile']['input']['optional']={'production_contract':['STRING',{'default':''}]}
+    return result
 
 
 def healthy(request):

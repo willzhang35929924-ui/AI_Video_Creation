@@ -89,6 +89,31 @@ jobs:
         run: python scripts/build_cinematic_contracts.py --check
       - name: Run all backend tests included in the public source tree
         run: python -m pytest -rs tests/backend
+      - name: Install the hash-verified compiler for CPU protocol tests only
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re
+          wheel = json.loads(pathlib.Path('runtime-manifests/upstream-compiler-verification.json').read_text())['compiler_wheel']
+          assert wheel['url'].startswith('https://files.pythonhosted.org/packages/')
+          assert re.fullmatch('[0-9a-f]{64}', wheel['sha256'])
+          requirement = pathlib.Path(os.environ['RUNNER_TEMP']) / 'h3ir-cpu-requirements.txt'
+          requirement.write_text('open-h3-ir @ ' + wheel['url'] + ' --hash=sha256:' + wheel['sha256'] + '\n')
+          PY
+          python -m pip install --require-hashes --only-binary=:all: --no-deps --target "$RUNNER_TEMP/h3ir-cpu" -r "$RUNNER_TEMP/h3ir-cpu-requirements.txt"
+      - name: Verify compiler sources and revision identity contracts without models
+        env:
+          PYTHONPATH: ${{ runner.temp }}/h3ir-cpu:backend
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, h3ir
+          root = pathlib.Path(h3ir.__file__).parent
+          pins = json.loads(pathlib.Path('runtime-manifests/context-ir-native-v1.json').read_text())['compiler_source_pins']
+          for relative, expected in pins.items():
+              assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == expected, relative
+          print('Actual installed compiler matches all pinned source hashes; no models or GPU loaded.')
+          PY
+          python -m unittest discover -s tests -p test_product_reference_validation.py -v
+          python -m unittest discover -s tests -p test_h3_revision_integrity.py -v
       - name: Verify native Context-IR installer and supervisor boundaries without models
         run: python -m unittest discover -s scripts/local_inference -p test_native_runtime.py -v
       - name: Check verified backup and restore helper

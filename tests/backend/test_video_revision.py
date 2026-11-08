@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from app import models as m
+from app.core.errors import AppError
 from app.schemas import RevisionRequest
 from app.services.video_revisions import revision_generation_request
 
@@ -212,7 +213,7 @@ def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revi
         session.commit()
     captured = {}
     async def generate(request, session, shot, payload, *, instruction=None, retry_count=0,
-                       frozen_job=None, frozen_service=None, legacy_production=False):
+                       frozen_job=None, frozen_service=None, legacy_production=False, revision_postprocess=None):
         captured.update(prompt_override=payload.prompt_override, parameters=payload.parameters,
                         instruction=instruction, retry_count=retry_count,
                         frozen_job_id=frozen_job.id if frozen_job else None,
@@ -228,3 +229,54 @@ def test_retry_retains_edited_prompt_but_rebuilds_compiled_metadata(client, revi
     assert captured['frozen_service'] == (None if context_retry else {'service_id':'source-service','model_id':'source-model'})
     assert captured['legacy_production'] is (not context_retry)
     assert not {'prompt_override', 'prompt_override_used', 'compiled_prompt', 'provider_submission'} & captured['parameters'].keys()
+
+
+def test_cloud_revision_scale_is_in_authoritative_detailed_description():
+    from app.services.video_revisions import editable_generation_prompt
+    original='detailed_description:\nP02 is 12.5cm tall and 15cm wide.\nother_details:\nUnchanged room.'
+    revised=editable_generation_prompt(original,'P02玩具尺寸高3.5cm，宽5cm。',structured=True)
+    body=revised.split('detailed_description:\n',1)[1]
+    assert body.index('physical height of P02 is 3.5 cm')<body.index('12.5cm')
+    assert body.index('physical width of P02 is 5 cm')<body.index('15cm')
+    assert 'override conflicting dimensions' in body
+    assert 'Unchanged room.' in revised
+
+
+def test_cloud_editable_override_preserves_full_text_but_current_scale_wins():
+    from app.services.video_revisions import editable_generation_prompt
+    override='Product P02 has height 12.5cm.\n'+'Room details. '*1000
+    revised=editable_generation_prompt('old','P02玩具只有一个手掌大小。',structured=False,prompt_override=override)
+    assert revised.startswith(override)
+    assert 'P02 is the size of one human palm' in revised
+    assert revised.count('P02玩具只有一个手掌大小。')==1
+
+
+def test_unstructured_override_near_cloud_limit_does_not_duplicate_instruction():
+    from app.services.video_revisions import editable_generation_prompt
+    override='景'*6500
+    instruction='缓慢抬起手臂。'+'动作连续。'*60
+    revised=editable_generation_prompt('unused',instruction,structured=False,prompt_override=override)
+    assert revised.startswith(override) and revised.count(instruction)==1
+    assert len(revised)<7000
+    assert len(revised)+len(instruction)>7000
+
+
+def test_cloud_named_product_uses_frozen_target_without_placeholder():
+    from app.services.video_revisions import editable_generation_prompt,cloud_revision_targets
+    targets=cloud_revision_targets(None,None,[{'role':'product','product_id':'product-green','product_name':'圣诞树玩具'}])
+    revised=editable_generation_prompt('detailed_description:\nA green tree toy.',
+        '圣诞树玩具高3.5cm，宽5cm。',structured=True,targets=targets)
+    assert 'physical height of 圣诞树玩具 is 3.5 cm' in revised
+    assert '__unresolved_product__' not in revised and 'product-green' not in revised
+
+
+def test_cloud_multiple_products_require_unambiguous_scale_target():
+    from app.services.video_revisions import editable_generation_prompt,cloud_revision_targets
+    targets=cloud_revision_targets(None,None,[
+        {'role':'product','product_id':'green','product_name':'绿玩具'},
+        {'role':'product','product_id':'blue','product_name':'蓝玩具'}])
+    with pytest.raises(AppError) as error:
+        editable_generation_prompt('Two distinct toys.','产品高3.5cm。',structured=True,targets=targets)
+    assert error.value.code=='revision_scale_target_ambiguous'
+    revised=editable_generation_prompt('Two distinct toys.','绿玩具高3.5cm。',structured=True,targets=targets)
+    assert 'physical height of 绿玩具 is 3.5 cm' in revised

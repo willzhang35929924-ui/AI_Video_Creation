@@ -73,7 +73,7 @@ def motion_live_state(session, values):
 
 
 def active_motion_jobs(session, video_id):
-    active={'submitting','queued','submitted','running','unknown','cancelling','reconciling'}
+    active={'submitting','queued','submitted','running','postprocessing','unknown','cancelling','reconciling'}
     return [job.id for job in session.scalars(select(m.GenerationJob).where(m.GenerationJob.status.in_(active)))
             if any(isinstance(ref,dict) and ref.get('video_id')==video_id for ref in (job.parameters_json or {}).get('motion_references',[]))]
 

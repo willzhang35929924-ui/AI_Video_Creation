@@ -1,4 +1,5 @@
 """Resolve text revisions from native generation inputs, never upscale metadata."""
+import re
 from app.core.errors import AppError
 from app.models import GenerationJob
 from app.schemas import GenerationRequest
@@ -54,6 +55,7 @@ def prepare_context_revision(session, settings, shot, current, payload):
     from app.services.studio_audio_policy import get_audio_policy
     from app.services.task_routing import freeze_route, route_is_explicit, selected_route
     from app.services.video_services import select_video_service
+    from app.services.ai_services import resolve_service
 
     previous = revision_source_job(session, shot, current)
     script = script_for_shot(session, shot)
@@ -64,14 +66,27 @@ def prepare_context_revision(session, settings, shot, current, payload):
     generation = revision_generation_request(session, shot, current, payload)
     service_id, model_id = generation.service_id, generation.model_id
     if payload.use_project_video_service:
-        # Evaluate the real preference order. The Context selector below rejects
-        # a cloud choice before any paid submission could take place.
+        # Evaluate the real preference order. Only an actual Context-enabled
+        # Comfy profile uses the local compiler; cloud stays with its adapter.
         route = freeze_route(session, settings, shot.project_id, shot.id, 'video_generation', allow_cloud_costs=True)
         if route_is_explicit(route):
             selected = selected_route(route)
             service_id, model_id = selected['service_id'], selected['model_id']
     elif previous.provider.startswith('cloud_') and not service_id:
-        raise AppError(409, 'revision_cloud_service_missing', '原视频缺少可用的云端服务快照，请明确改用当前项目的本地视频服务')
+        raise AppError(409, 'revision_cloud_service_missing', '原视频缺少可用的云端服务快照，请选择当前项目视频服务或明确指定云端服务后重试')
+    _, selected_service = resolve_service(session, 'video_generation', service_id, shot.project_id, model_id)
+    from app.services import studio_pipeline
+    portable_selector = getattr(studio_pipeline, 'wants_context_profile', None)
+    context_required = (portable_selector(settings, selected_service) if portable_selector
+                        else selected_service.get('provider') == 'comfyui')
+    if payload.use_project_video_service and not context_required:
+        raise AppError(409, 'context_ir_service_required',
+                       '本次明确选择了项目本地H3，请为项目绑定本地Context-IR H3服务；不会改发云端或其他视频服务')
+    if not context_required:
+        # A cloud or generic provider never goes through the local Qwen/H3
+        # compiler merely because this request originates in the review page.
+        _, service, _ = select_video_service(session, settings, shot.project_id, service_id, model_id)
+        return generation, service, None, None
     quality = quality_for_shot(session, shot)
     _, service, _ = select_video_service(session, settings, shot.project_id, service_id, model_id,
                                         quality_mode=quality['mode'])
@@ -84,26 +99,81 @@ def prepare_context_revision(session, settings, shot, current, payload):
     return generation, service, quality, context
 
 
-def apply_revision_instruction(prompt, instruction, *, structured):
+def apply_revision_instruction(prompt, instruction, *, structured, include_unstructured=False):
     if not instruction:
         return prompt
     if structured:
         heading = 'detailed_description:\n'
         return (prompt.replace(heading, heading+'Reviewed repair direction for this shot: '+instruction+'\n', 1)
                 if heading in prompt else prompt+'\nRevision instruction: '+instruction)
-    return prompt
+    return prompt+'\nRevision instruction: '+instruction if include_unstructured else prompt
 
 
-def editable_generation_prompt(prompt, instruction, *, structured, prompt_override=None):
+def cloud_revision_targets(session, snapshot, references):
+    """Use frozen entity identities/names; never merge distinct products."""
+    from app import models as m
+    targets = []
+    for entity in (snapshot or {}).get('cinematic', {}).get('entities', []):
+        if entity.get('kind') != 'prop':
+            continue
+        target = {key: entity.get(key) for key in ('id', 'logical_id', 'kind')}
+        target['name'] = entity.get('name') or entity.get('spec', {}).get('name')
+        current = session.get(m.ProductionEntity, entity['id']) if entity.get('id') else None
+        if (current and current.kind == entity.get('kind') and current.logical_id == entity.get('logical_id')
+                and current.spec_json == entity.get('spec')):
+            target['name'] = current.name
+        targets.append(target)
+    if targets:
+        return targets
+    products = {}
+    for reference in references:
+        if reference.get('role') != 'product' or not reference.get('product_id'):
+            continue
+        identifier = reference['product_id']
+        products[identifier] = {'id': identifier, 'logical_id': reference.get('logical_id') or reference.get('product_name') or identifier,
+                                'name': reference.get('product_name') or identifier, 'kind': 'prop'}
+    return list(products.values())
+
+
+def editable_generation_prompt(prompt, instruction, *, structured, prompt_override=None, targets=()):
     """Use exactly the edited text while retaining a separately entered revision.
 
     Legacy build_prompt already includes the revision. Structured prompts insert
     it here; an override replaces the compiled body in either path.
     """
+    declared_body = prompt_override if prompt_override is not None else prompt
     if prompt_override is not None:
         if not prompt_override.strip():
             raise AppError(422, 'prompt_override_empty', '自定义提示词不能为空')
         prompt = prompt_override
-        if instruction and not structured:
-            prompt += '\nRevision instruction: ' + instruction
-    return apply_revision_instruction(prompt, instruction, structured=structured)
+    prompt = apply_revision_instruction(prompt, instruction, structured=structured,
+                                        include_unstructured=prompt_override is not None)
+    # Non-Context cloud adapters send this body directly. Give explicit current
+    # scale the same priority as the local compiler, without altering the frozen
+    # Context path (which does not call this legacy/cloud helper).
+    from app.services.revision_constraints import extract_revision_constraints, revision_constraints_text
+    constraints = extract_revision_constraints(instruction, prompt_override=prompt_override, targets=targets)
+    for item in constraints.get('items', []):
+        key = item.get('target_key') or ''
+        declared = [target for target in targets if key in {str(target.get(k)) for k in ('id', 'logical_id', 'name')}]
+        # Without a structured target, an explicit code must also occur in the
+        # original/edited scene body. Placeholder targets never reach a model.
+        explicit = bool(re.fullmatch(r'P\d{1,6}', key, re.I)
+                        and re.search(r'(?<![A-Za-z0-9_])'+re.escape(key)+r'(?![A-Za-z0-9_])', declared_body, re.I))
+        if key.startswith('__') or len(declared) > 1 or (not declared and not explicit):
+            raise AppError(422, 'revision_scale_target_ambiguous', '尺寸修改需要明确唯一商品，请写出该镜头的商品名称或P编号；多个商品不能共用一个尺寸占位符')
+    priority = revision_constraints_text(constraints)
+    if priority:
+        priority += ('\nThese current physical-scale requirements override conflicting dimensions in the original '
+                     'shot, reference captions and bound prop descriptions. Preserve only the unchanged details.\n')
+        heading = 'detailed_description:\n'
+        if structured and heading in prompt:
+            prompt = prompt.replace(heading, heading + priority, 1)
+        elif prompt_override is not None:
+            # The editable prompt is caller-authored and must remain byte-for-
+            # byte at the beginning. The explicit priority still overrides its
+            # superseded dimensions rather than silently truncating that text.
+            prompt += '\n' + priority
+        else:
+            prompt = priority + prompt
+    return prompt

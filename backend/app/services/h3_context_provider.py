@@ -246,6 +246,64 @@ def context_compiler_intent(prompt, negative_prompt, directions, *, silent=False
     return '\n'.join(parts)
 
 
+def frozen_production_contract(images,declarations,context,prompt):
+    """Bind caller constraints to declared products without inferring an identity."""
+    specs=[]
+    for line in prompt.splitlines():
+        if line.startswith('已绑定制作设定：'):
+            try:
+                values=json.loads(line.partition('：')[2])
+            except (TypeError,ValueError):
+                continue
+            if isinstance(values,list):
+                specs=[x for x in values if isinstance(x,dict) and x.get('类别')=='prop']
+    grouped={}
+    for line in declarations.get('reference_groups','').splitlines():
+        match=re.fullmatch(r'product\s+([^:]+):\s*(.+)',line)
+        if match:
+            indices=[int(x.strip().removeprefix('picture'))-1 for x in match[2].split(',')]
+            grouped[match[1]]=[images[i] for i in indices]
+    products={};target_groups={}
+    for name,refs in grouped.items():
+        product_name=refs[0].get('product_name') or 'the product in the first reference'
+        matching=[s for s in specs if s.get('名称')==product_name]
+        if not matching and len(grouped)==len(specs)==1:matching=specs
+        identity_specs=[{'name':s.get('名称'),'identity':{k:v for k,v in (s.get('内容') or {}).items()
+                         if k in {'color','material','immutable_features','appearance','shape','markings','packaging'}}}
+                        for s in matching]
+        description={'name':product_name,'image_notes':list(dict.fromkeys(str(r.get('image_notes') or '') for r in refs)),
+                     'declared_product_specs':identity_specs,
+                     'scope':'Product appearance identity only. Requested scale is governed separately by caller revision constraints; printed measurements do not override them.'}
+        products[name]={'description':json.dumps(description,ensure_ascii=False)}
+        for ref in refs:
+            for key in ref.get('constraint_target_keys',[]):
+                if key in target_groups and target_groups[key]!=name:
+                    raise AppError(422,'revision_target_ambiguous','尺寸修订对应多个商品身份，请明确产品绑定后再提交')
+                target_groups[key]=name
+    constraints=context.get('revision_constraints') or {}
+    # Caller labels that have no picture group still need a unique written
+    # Subject. The compiler gate refuses absent/ambiguous anchors.
+    return {'version':1,'product_groups':products,'revision_constraints':constraints,
+            'constraint_target_groups':target_groups}
+
+
+
+def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,silent=False):
+    prop_states=_declared_prop_states(prompt)
+    tray,declarations,directions=reference_layout(images,motion,prop_states=prop_states)
+    staging=_frozen_product_staging(images,motion,prop_states)
+    contract=frozen_production_contract(images,declarations,context,prompt)
+    for item in (contract['revision_constraints'].get('items') or []):
+        key=item.get('target_key')
+        if key and key not in contract['constraint_target_groups']:
+            directions.append(f'The caller revises target {key}. Define that target with its literal caller label {key} '
+                              'inside exactly one Subject definition, and use that Subject in the numbered shot. '
+                              'Do not apply this target constraint to unrelated subjects.')
+    intent=context_compiler_intent(prompt,negative_prompt,directions,silent=silent,staging=staging)
+    return tray,declarations,intent,contract
+
+
+
 def read_image(settings, ref):
     try:
         source = safe_media_path(settings.media_root, ref['relative_path'], must_exist=True)
@@ -373,6 +431,14 @@ async def require_context_ready(client, origin, *, required_nodes=None, runtime_
         raise AppError(503, 'context_ir_nodes_missing', 'ComfyUI 缺少当前工作流所需节点；视频未提交', {'missing_nodes': missing})
     if busy:
         raise AppError(409, 'local_gpu_busy', 'ComfyUI 队列尚未空闲；等待原任务结束，视频未提交')
+    if 'VideoFactoryLocalH3IRCompile' in required:
+        definition=nodes.get('VideoFactoryLocalH3IRCompile')
+        inputs=definition.get('input',{}) if isinstance(definition,dict) else {}
+        fields=[part.get('production_contract') for key in ('required','optional')
+                if isinstance(part:=inputs.get(key),dict)] if isinstance(inputs,dict) else []
+        if not any(isinstance(field,(list,tuple)) and field and field[0]=='STRING' for field in fields):
+            raise AppError(409,'context_ir_compiler_update_required',
+                'Context-IR 项目编译节点版本过旧或输入不兼容；请更新项目自有节点，并在 ComfyUI 队列空闲后重启服务。视频未提交')
     await require_context_qwen(client, origin, runtime_required=runtime_required)
 
 
@@ -407,14 +473,22 @@ async def probe_context_health(settings, snapshot=None):
             health.connected = True
             response = await client.get(origin + '/object_info/VideoFactoryLocalH3IRCompile')
             response.raise_for_status()
-            if 'VideoFactoryLocalH3IRCompile' not in response.json():
+            nodes=response.json()
+            if not isinstance(nodes,dict) or 'VideoFactoryLocalH3IRCompile' not in nodes:
                 health.error = '本地 ComfyUI 缺少 Context-IR 编译节点'
             elif not busy:
-                await require_context_qwen(client, origin, runtime_required=settings.container_mode
-                                           or not is_loopback_service(origin)
-                                           or profile.get('h3_context_ir') is True
-                                           or profile.get('workflow_profile') == 'context_ir')
-                health.ready = True
+                definition=nodes['VideoFactoryLocalH3IRCompile']
+                inputs=definition.get('input',{}) if isinstance(definition,dict) else {}
+                fields=[part.get('production_contract') for key in ('required','optional')
+                        if isinstance(part:=inputs.get(key),dict)] if isinstance(inputs,dict) else []
+                if not any(isinstance(field,(list,tuple)) and field and field[0]=='STRING' for field in fields):
+                    health.error='Context-IR 项目编译节点版本过旧或输入不兼容；请更新项目自有节点，并在 ComfyUI 队列空闲后重启服务'
+                else:
+                    await require_context_qwen(client, origin, runtime_required=settings.container_mode
+                                               or not is_loopback_service(origin)
+                                               or profile.get('h3_context_ir') is True
+                                               or profile.get('workflow_profile') == 'context_ir')
+                    health.ready = True
             health.reference_to_video_available = health.ready
     except AppError as exc:
         health.error = exc.message
@@ -496,18 +570,17 @@ class ContextIRH3Provider(ComfyUIH3Provider):
             raise AppError(422, 'context_ir_task_id', '任务、镜头或项目 ID 无效')
         if not isinstance(request.prompt, str) or not request.prompt.strip():
             raise AppError(422, 'context_ir_prompt_required', '请填写本镜头的生成要求')
-        prop_states = _declared_prop_states(request.prompt)
-        tray, declarations, directions = reference_layout(request.reference_assets, request.motion_references,
-                                                          prop_states=prop_states)
-        staging = _frozen_product_staging(request.reference_assets, request.motion_references, prop_states)
         silent = request.parameters.get('context_silent', False)
-        intent = context_compiler_intent(request.prompt, request.negative_prompt, directions, silent=silent, staging=staging)
+        context=request.parameters.get('context_inputs') or {}
+        tray,declarations,intent,production_contract=prepare_context_compilation(
+            request.prompt,request.negative_prompt,request.reference_assets,request.motion_references,context,silent=silent)
         folder = f'video_factory/context_ir/{request.job_id}'
         output_prefix = f'projects/{request.project_id}/{request.shot_id}/{request.job_id}'
         args = dict(intent=intent, duration_seconds=request.duration_seconds, aspect_ratio=request.aspect_ratio,
                     seed=request.seed, width=request.parameters['width'], height=request.parameters['height'],
                     output_prefix=output_prefix, silent=silent,
-                    spoken_language=request.parameters.get('context_spoken_language', 'English'), **declarations)
+                    spoken_language=request.parameters.get('context_spoken_language', 'English'),
+                    production_contract=production_contract, **declarations)
         # Validate the frozen recipe and canvas before uploading anything.
         draft_tray = [{**slot, 'file': f'{folder}/pending{index}.' + ('png' if slot['kind'] == 'picture' else 'mp4') + ' [input]'}
                       for index, slot in enumerate(tray, 1)]

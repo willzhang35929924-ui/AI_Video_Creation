@@ -1,6 +1,7 @@
 """Scoped local compatibility wrapper around the actual registered upstream Main."""
 from copy import deepcopy
 import inspect
+import json
 import re
 
 
@@ -16,7 +17,7 @@ def upstream_main():
     return node
 
 
-def reference_contract(upstream,media,groups='',required='',motion=''):
+def reference_contract(upstream,media,groups='',required='',motion='',production_contract=''):
     """Resolve explicit human declarations through the official native ordering.
 
     A group is the caller's statement, never face recognition or a conclusion
@@ -66,6 +67,23 @@ def reference_contract(upstream,media,groups='',required='',motion=''):
         group['appearance_native']=[aliases[x] for x in group['appearance_labels']]
         group['motion_native']=[aliases[x] for x in group['motion_labels']]
         group['native_sources']=group['appearance_native']+group['motion_native']
+    policy=json.loads(production_contract) if production_contract else {}
+    if not isinstance(policy,dict) or (policy and policy.get('version')!=1):
+        raise ValueError('Unsupported production constraint contract')
+    product_groups={g['group']:g for g in result['groups'] if g['category']=='product'}
+    descriptions=policy.get('product_groups',{})
+    if not isinstance(descriptions,dict) or set(descriptions)-product_groups.keys():
+        raise ValueError('Product identity policy names an absent product group')
+    for name,description in descriptions.items():
+        if not isinstance(description,dict) or not isinstance(description.get('description',''),str):
+            raise ValueError('Product identity policy requires a frozen text description')
+        product_groups[name]['target_description']=description.get('description','')
+    targets=policy.get('constraint_target_groups',{})
+    if (not isinstance(targets,dict) or any(not isinstance(k,str) or v not in product_groups for k,v in targets.items())):
+        raise ValueError('Revision constraint target must name a declared product group')
+    result.update(identity_validation_required=bool(product_groups),
+                  revision_constraints=policy.get('revision_constraints') or {},
+                  constraint_target_groups=targets)
     return result
 
 
@@ -77,7 +95,8 @@ class VideoFactoryLocalH3IRCompile:
         for name,tip in (
             ('reference_groups','Optional declared identity groups, one per line: character person-name: front, side or product sku-name: front, side. Use media tray labels; no identity is inferred.'),
             ('required_references','Optional must-use media tray labels separated by commas. The compiled definitions must actually cite them.'),
-            ('motion_targets','Optional explicit motion source for a character group, one per line: person-name: clip-label. This is content reference, with no pure-motion isolation guarantee.')):
+            ('motion_targets','Optional explicit motion source for a character group, one per line: person-name: clip-label. This is content reference, with no pure-motion isolation guarantee.'),
+            ('production_contract','Frozen product identity and caller revision constraints as JSON. Validated before H3 loading.')):
             extra[name]=('STRING',{'default':'','multiline':True,'advanced':True,'tooltip':tip})
         return inputs
 
@@ -90,7 +109,7 @@ class VideoFactoryLocalH3IRCompile:
     @classmethod
     def IS_CHANGED(cls,**kwargs):return float('nan')
 
-    def compile(self,reference_groups='',required_references='',motion_targets='',**kwargs):
+    def compile(self,reference_groups='',required_references='',motion_targets='',production_contract='',**kwargs):
         import folder_paths
         from pathlib import Path
         from .guard import validate_setup
@@ -105,7 +124,7 @@ class VideoFactoryLocalH3IRCompile:
         compiler_function=execute.__globals__.get('compile_here')
         if not callable(compiler_function):
             raise RuntimeError('The actual Main no longer exposes its audited local compiler')
-        contract=reference_contract(upstream,kwargs.get('media'),reference_groups,required_references,motion_targets)
+        contract=reference_contract(upstream,kwargs.get('media'),reference_groups,required_references,motion_targets,production_contract)
         with profile_scope(Path(folder_paths.get_output_directory())/'h3_local_backend_profile_v3',
                            kwargs['setup'],kwargs.get('seed',20261104),
                            compiler_function=compiler_function,main_class=upstream,

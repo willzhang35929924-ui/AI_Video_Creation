@@ -56,9 +56,15 @@ export function ReviewPage() {
   const [revisionPreview, setRevisionPreview] = useState<{ videoId: string; input: VideoRevisionInput; result: VideoRevisionPreview } | null>(null);
   const previewRequest = useRef<AbortController | null>(null);
   const [revisionJobId, setRevisionJobId] = useState("");
+  const [revisionJobPhase, setRevisionJobPhase] = useState("");
   const { notify } = useToast();
 
   const selected = videos.find((video) => video.id === selectedId) ?? null;
+  const selectedVersion = useRef(selected);
+  selectedVersion.current=selected;
+  const processing = (selected?.metadata?.revision_postprocess ?? selected?.metadata_json?.revision_postprocess) as {state?:string;job_id?:string}|undefined;
+  const recovery = (selected?.metadata?.revision_processing_recovery ?? selected?.metadata_json?.revision_processing_recovery) as {available?:boolean;required?:boolean;state?:string;reason?:string;final_video_id?:string}|undefined;
+  const incompleteRevision = Boolean(processing && processing.state !== 'ready') || Boolean(recovery?.required && recovery.state !== 'ready');
   const reviewedRevision = revisionPreview?.videoId === selectedId ? revisionPreview : null;
   const clearRevisionPreview = useCallback(() => {
     previewRequest.current?.abort();
@@ -166,10 +172,55 @@ export function ReviewPage() {
   }
 
   useEffect(() => {
+    setRevisionJobId('');setRevisionJobPhase('');
+  }, [projectId]);
+
+  useEffect(() => {
+    if (processing?.state === 'processing' && processing.job_id) {
+      setRevisionJobId(processing.job_id);setRevisionJobPhase('postprocessing');
+    }
+  }, [processing?.job_id,processing?.state]);
+
+  useEffect(() => {
     if (!revisionJobId) return;
-    const timer = window.setInterval(async () => { const job = await api.getJob(revisionJobId); if (!["queued", "running"].includes(job.status)) { setRevisionJobId(""); await loadVideos(projectId); if (job.status === "failed") notify(job.errorMessage || "真实修订生成失败", "error"); } }, 2500);
-    return () => window.clearInterval(timer);
-  }, [revisionJobId, projectId, loadVideos, notify]);
+    let live=true,pending=false;
+    const timer = window.setInterval(async () => {
+      if (pending) return;
+      pending=true;
+      try {
+        const job=await api.getJob(revisionJobId);
+        if (!live) return;
+        setRevisionJobPhase(job.status);
+        if (!["queued","running","submitting","submitted","postprocessing"].includes(job.status)) {
+          await loadVideos(projectId);
+          if (!live) return;
+          const plan=(job.parameters?.revision_postprocess ?? job.parameters_json?.revision_postprocess) as {state?:string;final_video_id?:string}|undefined;
+          if (plan?.state==='ready' && plan.final_video_id && selectedVersion.current?.shotId===(job.shotId||job.shot_id)) {
+            const finalId=plan.final_video_id;
+            setSelectedId(finalId);
+            setSearchParams(current=>{const next=new URLSearchParams(current);next.set('project',projectId);next.set('video',finalId);return next;});
+          }
+          setRevisionJobId('');
+          if (job.status==='failed'||job.status==='unknown') notify(job.errorMessage || '修订尚未完成，请核对原任务；原片已保留','error');
+          else if (['generated','succeeded','approved','revised'].includes(job.status)) notify('修订任务已完成，请检查最新完整版本的画面与声音','success');
+        }
+      } catch { if(live)setRevisionJobPhase('connection_wait'); }
+      finally {pending=false;}
+    },2500);
+    return () => {live=false;window.clearInterval(timer);};
+  }, [revisionJobId, projectId, loadVideos, notify,setSelectedId,setSearchParams]);
+
+  async function resumeProcessing() {
+    if (!selected) return;
+    setBusy('resume-processing');
+    try {
+      const result=await api.resumeRevisionProcessing(selected.id);
+      setRevisionJobId(result.job.id);setRevisionJobPhase('postprocessing');
+      await loadVideos(projectId);
+      notify('已使用现有原片恢复配音与画质处理，不重新生成视频','success');
+    } catch(cause) {notify(cause instanceof Error?cause.message:'恢复后处理失败','error');}
+    finally {setBusy('');}
+  }
 
   async function revise(confirmed = false) {
     if (!selected || !instruction.trim() || (confirmed && !reviewedRevision)) return;
@@ -390,7 +441,7 @@ export function ReviewPage() {
                   ) : (
                     <div className="human-actions">
                       <button className="button button-secondary" type="button" onClick={() => setRejectOpen(true)} disabled={selected.reviewStatus === "approved"}>驳回并重做</button>
-                      <button className="button button-primary" type="button" onClick={() => setApproveOpen(true)} disabled={selected.reviewStatus === "approved"}>
+                      <button className="button button-primary" type="button" onClick={() => setApproveOpen(true)} disabled={selected.reviewStatus === "approved" || incompleteRevision}>
                         <Check size={16} /> 通过为候选成片
                       </button>
                     </div>
@@ -417,6 +468,9 @@ export function ReviewPage() {
                     基于当前版本重新生成
                   </button>
                 </div>
+                {revisionJobId?<p role="status">{revisionJobPhase==='postprocessing'?'正在补齐修订的配音与画质，完成后可审核最终版本':revisionJobPhase==='connection_wait'?'连接暂时中断，正在等待读取原任务状态；请勿重复提交':'修订任务正在执行，旧版本与原片继续保留'}</p>:null}
+                {recovery?.required && incompleteRevision?<div><p>{recovery.reason || '此历史修订仅保存了原片，尚未补齐原来的配音与画质。'}</p>{recovery.available?<button type="button" className="button button-secondary" disabled={Boolean(busy)||Boolean(revisionJobId)} onClick={()=>void resumeProcessing()}>恢复此修订的配音与画质</button>:null}</div>:null}
+                {recovery?.state==='ready'&&recovery.final_video_id&&recovery.final_video_id!==selectedId?<button type="button" className="button button-secondary" onClick={()=>setSelectedId(recovery.final_video_id!)}>查看配音与画质已完成版本</button>:null}
                 {shotVersions.length > 1 ? (
                   <div className="version-comparison" aria-label="旧版与新版对比">{shotVersions.slice(0, 2).map(video => <figure key={video.id}><video controls preload="metadata" src={api.mediaUrl(video.mediaUrl || video.relativePath)} /><figcaption>v{video.revision} · {video.instruction || "原始版本"}</figcaption></figure>)}</div>
                 ) : null}

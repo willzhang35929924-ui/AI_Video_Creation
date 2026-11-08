@@ -74,6 +74,9 @@ def create_composition(project_id: str, payload: CompositionRequest, session: Se
         video = required(session, VideoRevision, identifier, "视频版本")
         if video.project_id != project_id or video.review_status != "approved":
             raise AppError(409, "approved_clip_required", "成片只能使用本项目已批准的片段")
+        from app.models import GenerationJob
+        from app.services.revision_postprocess import assert_complete_revision
+        assert_complete_revision(session,session.get(GenerationJob,video.generation_job_id),video)
     item = FinalComposition(project_id=project_id, video_ids_json=payload.video_ids, status="queued")
     session.add(item)
     session.flush()
@@ -88,29 +91,44 @@ def revision_preview(video_id: str, payload: RevisionRequest, request: Request, 
     shot = required(session, StoryboardShot, video.shot_id, "分镜")
     settings = request.app.state.settings
     if not settings.h3_demo_mode:
-        from app.services.h3_context_provider import context_compiler_intent, reference_layout
+        from app.services.h3_context_provider import prepare_context_compilation
         from app.services.video_revisions import prepare_context_revision
-        _, service, _, context = prepare_context_revision(session, settings, shot, video, payload)
-        people = context['screenplay_snapshot']['participants']
-        person = people[0] if people else {}
-        _, _, directions = reference_layout(context['references'], context['motion_references'])
-        intent = context_compiler_intent(context['prompt'], context['negative_prompt'], directions, silent=context['silent'])
-        return {'prompt': intent, 'negative_prompt': context['negative_prompt'], 'preview_stage': 'context_ir_input',
-                'character_id': person.get('character_id'), 'character_version_id': person.get('character_version_id'),
-                'asset_ids': [ref['asset_id'] for ref in context['references']],
-                'instruction': payload.instruction, 'based_on': video.id, 'h3_workflow': service['h3_workflow']}
+        generation, service, _, context = prepare_context_revision(session, settings, shot, video, payload)
+        if service.get('h3_workflow'):
+            people = context['screenplay_snapshot']['participants']
+            person = people[0] if people else {}
+            _,_,intent,production_contract=prepare_context_compilation(context['prompt'],context['negative_prompt'],
+                context['references'],context['motion_references'],context,silent=context['silent'])
+            return {'prompt': intent, 'negative_prompt': context['negative_prompt'], 'preview_stage': 'context_ir_input',
+                    'character_id': person.get('character_id'), 'character_version_id': person.get('character_version_id'),
+                    'asset_ids': [ref['asset_id'] for ref in context['references']],
+                    'instruction': payload.instruction, 'based_on': video.id, 'h3_workflow': service['h3_workflow'],
+                    'production_contract':production_contract}
+        from app.api.routes import _legacy_generation_inputs
+        from app.services.model_lab import frozen_generation_inputs
+        version, references, _, prompt, negative, _ = _legacy_generation_inputs(session, settings, shot,
+            generation, payload.instruction, frozen_generation_inputs(session, settings, shot, generation))
+        return {'prompt': prompt, 'negative_prompt': negative, 'preview_stage': 'provider_request',
+                'character_id': version.character_id if version else None,
+                'character_version_id': version.id if version else None,
+                'asset_ids': [ref['asset_id'] for ref in references],
+                'instruction': payload.instruction, 'based_on': video.id,
+                'provider': service.get('provider'), 'model_id': service.get('model_id')}
     from app.services.screenplay import uses_structured_screenplay, generation_inputs
-    from app.services.video_revisions import editable_generation_prompt
+    from app.services.video_revisions import editable_generation_prompt, cloud_revision_targets
     structured = uses_structured_screenplay(session, shot)
     if structured:
         version, references, prompt, snapshot = generation_inputs(session, shot, request.app.state.settings)
         negative = snapshot.get('model_lab_negative_prompt', '')
         asset_ids = [ref['asset_id'] for ref in references]
+        targets = cloud_revision_targets(session, snapshot, references)
     else:
         version = required(session, CharacterVersion, shot.character_asset_version_id, "角色版本")
         prompt, negative = build_prompt(shot, version, payload.instruction)
         asset_ids = shot.reference_asset_ids_json
-    prompt = editable_generation_prompt(prompt, payload.instruction, structured=structured, prompt_override=payload.prompt_override)
+        targets = []
+    prompt = editable_generation_prompt(prompt, payload.instruction, structured=structured,
+                                        prompt_override=payload.prompt_override, targets=targets)
     return {"prompt": prompt, "negative_prompt": negative,
             "character_id": version.character_id if version else None,
             "character_version_id": version.id if version else None,

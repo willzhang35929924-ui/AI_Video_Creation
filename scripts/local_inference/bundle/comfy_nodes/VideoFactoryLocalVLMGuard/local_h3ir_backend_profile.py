@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 import uuid
 
 VERSION='local-h3ir-qwen4b-v3'
+POLICY_REVISION='revision-integrity-20261107-v1'
 MODEL='Qwen/Qwen3-VL-4B-Instruct'
 MAX_OUTPUT=4096
 CARD_OUTPUT=3072
@@ -53,6 +54,19 @@ class LocalProfileBlocked(LocalProfileFailure):
 
 def source_hash(function):
     return hashlib.sha256(inspect.getsource(function).encode('utf-8')).hexdigest()
+
+
+def _product_subject_labels(doc,contract,sources):
+    """Use model-verified object identities, never every object in a product photo."""
+    verified=contract.get('verified_product_descriptors_by_native')
+    if verified is None:return None  # Historical, explicitly recorded contracts.
+    labels=set()
+    for subject in doc.plan.subjects:
+        descriptor=_normal(subject.descriptor).casefold()
+        for source in set(subject.sources).intersection(sources):
+            if descriptor in {_normal(value).casefold() for value in verified.get(source,[])}:
+                labels.add(subject.label)
+    return labels
 
 
 def reference_binding(doc,contract):
@@ -84,7 +98,9 @@ def reference_binding(doc,contract):
     results=[];targets={}
     for group in contract.get('groups',[]):
         wanted=set(group['native_sources'])
-        matching=[label for label,refs in actual.items() if wanted.intersection(refs)]
+        eligible=_product_subject_labels(doc,contract,wanted) if group['category']=='product' else None
+        matching=[label for label,refs in actual.items() if wanted.intersection(refs)
+                  and (eligible is None or label in eligible)]
         target=matching[0] if len(matching)==1 else None
         complete=bool(target and wanted.issubset(actual[target]))
         cited=bool(target and target in detail)
@@ -152,13 +168,18 @@ def project_declared_bindings(doc,contract,brief):
         kind='person' if group['category']=='character' else 'object' if group['category']=='product' else None
         if not kind or not group['appearance_native']:raise LocalProfileBlocked('Declared group has no supported appearance anchor')
         wanted=set(group['native_sources']);first=group['appearance_native'][0]
-        candidates=[label for label,item in records.items() if first in item['refs'] and kinds.get(label)==kind]
+        eligible=_product_subject_labels(doc,contract,wanted) if group['category']=='product' else None
+        def qualified(label):
+            return label in eligible if eligible is not None else kinds.get(label)==kind
+        candidates=[label for label,item in records.items() if first in item['refs'] and qualified(label)]
         if len(candidates)!=1:
             raise LocalProfileBlocked('The first appearance source must select one existing written '+kind+' definition: '+first+'; candidates='+repr(candidates))
         canonical=candidates[0]
         members=[]
         for source in group['native_sources']:
-            selected=[label for label,item in records.items() if source in item['refs'] and kinds.get(label)==kind]
+            source_eligible=_product_subject_labels(doc,contract,{source}) if group['category']=='product' else None
+            selected=[label for label,item in records.items() if source in item['refs'] and
+                      (label in source_eligible if source_eligible is not None else kinds.get(label)==kind)]
             if len(selected)>1:raise LocalProfileBlocked('Declared source has several written target candidates: '+source)
             members.extend(selected)
         members=list(dict.fromkeys(members))
@@ -222,6 +243,14 @@ def project_declared_bindings(doc,contract,brief):
         if match.start() in retention_removed or match.start() in retention_replacements:
             retention=retention[:match.start()]+retention_replacements.get(match.start(),'')+retention[match.end():]
     result['retention_analysis']=_redirect(retention,aliases)
+    for assignment in assignments:
+        if assignment['category']!='product':continue
+        tag=re.escape(assignment['canonical_subject'])
+        # This checks an invalid relation introduced by alias projection, not
+        # inferred visual identity or a general ban on self-directed actions.
+        if re.search(tag+r'\s+(?:is\s+)?(?:being\s+)?(?:squeezed|held|carried|picked up)\s+by\s+'+tag,
+                     result.get('detailed_description',''),re.I):
+            raise LocalProfileBlocked('商品与操作者被合并为同一主体，已停止采样；请分开商品身份图与人物／动作参考。')
     prompt='\n\n'.join(key+':\n'+value.strip() for key,value in result.items())+'\n'
     components={'definitions':[{'label':label,'text':_redirect(item['body'],aliases)} for label,item in records.items()],
         'retention':[{'label':match[1],'scope':parsed[1] or '', 'marker':parsed[2],
@@ -262,7 +291,13 @@ def projection_invariants(prompt,evidence):
 
 
 def _audit_or_project(doc,brief,scope,folder):
-    contract=scope.get('reference_contract') or {};before=reference_binding(doc,contract)
+    contract=scope.get('reference_contract') or {}
+    if contract.get('identity_validation_required') and any(g['category']=='product' for g in contract.get('groups',[])):
+        proof=scope.get('product_identity_verification') or {}
+        if proof.get('status')!='PASS':
+            raise LocalProfileBlocked('商品参考身份尚未通过本地实图一致性校验，未加载H3模型。')
+        contract={**contract,'verified_product_descriptors_by_native':proof['approved_product_descriptors_by_native']}
+    before=reference_binding(doc,contract)
     write_json(folder/'reference-binding.before.json',before)
     final=before;result=doc
     if contract.get('groups'):
@@ -313,7 +348,60 @@ def _audit_or_project(doc,brief,scope,folder):
     write_json(folder/'reference-binding.final.json',final)
     if final['status']!='PASS':
         raise LocalProfileBlocked('Reference binding BLOCKED before H3 loading; no additional model rewrite was attempted; evidence: '+str(folder))
+    scope['final_reference_binding']=final
     return result
+
+
+def _apply_revision_constraints(doc,brief,scope,folder):
+    contract=scope.get('reference_contract') or {}
+    constraints=contract.get('revision_constraints') or {}
+    if not constraints.get('items'):return doc
+    from .revision_constraints import enforce_revision_constraints
+    from h3ir.compile import _split_written,_written_context,token_count,validate,wiring_findings
+    from h3ir.licence import resolve_licence
+    from h3ir.style import resolve_style
+    sections=_split_written(doc.prompt)
+    bindings={row['group']:row['subject'] for row in scope.get('final_reference_binding',{}).get('group_results',[])
+              if row.get('status')=='PASS'}
+    subjects={};receipt={'status':'BLOCKED','source':'caller_revision_constraints'}
+    try:
+        for item in constraints['items']:
+            key=item['target_key'];group=contract.get('constraint_target_groups',{}).get(key)
+            if group:
+                subject=bindings.get(group)
+                if not subject:raise ValueError('The revised product has no validated written Subject: '+key)
+            else:
+                # A text-only caller label must occur in exactly one real
+                # definition. Never apply a size to every visible object.
+                names=[str(key),str(item.get('target_name') or '')]
+                matching=[m[1] for m in _DEFINITION_PATTERN.finditer(sections.get('subject_definitions',''))
+                          if any(name and re.search(r'(?<![\w])'+re.escape(name)+r'(?![\w])',m[2],re.I) for name in names)]
+                if len(matching)!=1:raise ValueError('Cannot uniquely bind revised target '+key+' to a written Subject')
+                subject=matching[0]
+            subjects[key]=subject
+        prompt,receipt=enforce_revision_constraints(doc.prompt,constraints,subjects)
+        result=deepcopy(doc);result.prompt=prompt;result.sections=_split_written(prompt);result.prompt_tokens=token_count(prompt)
+        cards=scope['cards'];licence=resolve_licence(brief,cards);style=resolve_style(brief,cards,licence)
+        result.findings=list(wiring_findings(result.plan,brief))+validate(prompt,
+            _written_context(brief,result.mode,result.plan,cards,result.prompt_tokens,style,licence))
+        errors=[{'rule':f.rule,'message':f.msg} for f in result.findings if f.severity=='ERROR']
+        if errors:raise ValueError('Caller constraints failed native document validation: '+str(errors))
+        # A second application must be byte-identical: retries do not accrue
+        # conflicting or repeated scale clauses in the written shot body.
+        if enforce_revision_constraints(prompt,constraints,subjects)[0]!=prompt:
+            raise ValueError('Revision constraint application is not idempotent')
+        receipt.update(status='PASS',plan_unchanged=digest(asdict(doc.plan))==digest(asdict(result.plan)),
+                       visual_facts_added=False,caller_authored_constraints_added=True)
+        result.provenance.update(factory_revision_constraints=receipt,caller_constraints_source='explicit_revision',
+                                 creative_text_source='model_written',caller_authored_constraints_added=True)
+        write_json(folder/'document.constrained.json',_document_evidence(result))
+        (folder/'constraints.before.txt').write_text(doc.prompt,encoding='utf-8')
+        (folder/'constraints.after.txt').write_text(prompt,encoding='utf-8')
+        return result
+    except Exception as error:
+        receipt.update(status='BLOCKED',error=str(error))
+        raise LocalProfileBlocked('本次产品尺寸约束未能唯一绑定并写入最终镜头，未加载H3模型：'+str(error)) from error
+    finally:write_json(folder/'revision-constraints.json',receipt)
 
 
 def _document_evidence(doc):
@@ -364,6 +452,7 @@ def _install_document_gate(namespace):
                                 'correction_error_type':type(error).__name__,'correction_error':str(error)})
                         raise LocalProfileBlocked('Declared reference projection BLOCKED before H3 loading: '
                             +type(error).__name__+': '+str(error)+'; evidence: '+str(folder)) from error
+                doc=_apply_revision_constraints(doc,brief,scope,folder)
                 body=original(doc,brief)
                 write_json(folder/'body.json',body)
                 if not isinstance(body,dict) or body.get('degraded') is not False or body.get('fallback_reason'):
@@ -372,7 +461,8 @@ def _install_document_gate(namespace):
                 provenance=getattr(doc,'provenance',{}) or {}
                 record.update(creative_text_source='model_written',
                     binding_source=provenance.get('binding_source','model_written'),
-                    visual_facts_added=False)
+                    visual_facts_added=False,
+                    caller_authored_constraints_added=bool(provenance.get('caller_authored_constraints_added')))
                 binding_path=folder/'reference-binding.final.json'
                 if binding_path.exists():
                     binding=json.loads(binding_path.read_text(encoding='utf-8'))
@@ -420,6 +510,17 @@ def _install_analysis_capture():
                     scope['cards']=cards
                     write_json(scope['directory']/'analysis-cards.json',
                                {key:asdict(card) for key,card in cards.items()})
+                    contract=scope.get('reference_contract') or {}
+                    if contract.get('identity_validation_required'):
+                        from .product_reference_validation import verify_product_references,ProductReferenceConflict
+                        bound=inspect.signature(original).bind(*args,**kwargs)
+                        try:
+                            scope['product_identity_verification']=verify_product_references(
+                                bound.arguments['backend'],bound.arguments['refs'],cards,contract,
+                                scope['directory'].parent/'product-identity-cache',scope['seed'],
+                                receipt_root=scope['directory'])
+                        except ProductReferenceConflict as error:
+                            raise LocalProfileBlocked(str(error)) from error
                 return cards
             captured._factory_card_capture_version=VERSION
             compiler.analyse_all=captured
@@ -763,7 +864,7 @@ def profile_scope(receipt_root,setup,seed=20261104,backend_class=None,compiler_f
     directory=Path(receipt_root)/(stamp+'-'+uuid.uuid4().hex[:8]);directory.mkdir(parents=True)
     scope={'directory':directory,'seed':seed,'requests':0,'compiler_documents':0,
            'reference_corrections':0,'binding_projections':0,'reference_contract':reference_contract,'setup':deepcopy(setup),'sizing':sizing}
-    receipt={'profile':VERSION,'model':MODEL,'base_url':setup['llm_url'],'environment':environment,
+    receipt={'profile':VERSION,'policy_revision':POLICY_REVISION,'model':MODEL,'base_url':setup['llm_url'],'environment':environment,
              'max_output_tokens':MAX_OUTPUT,'card_max_output_tokens':CARD_OUTPUT,'seed':seed,
              'temperature':0.2,'retries':0,'status':'FAIL','semantic_status':'NOT_REVIEWED',
              'source_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

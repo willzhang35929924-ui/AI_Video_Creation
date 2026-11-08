@@ -135,6 +135,8 @@ def validate_timeline(session, settings, project_id, payload: TimelineRequest, *
         video = session.get(VideoRevision, item.video_id)
         if not video or video.project_id != project_id or (video.review_status != 'approved' and not (allow_unreviewed_draft and video.review_status == 'pending')):
             raise AppError(422, 'unapproved_input', '请选择当前项目内已批准的真实视频版本')
+        from app.services.revision_postprocess import assert_complete_revision
+        assert_complete_revision(session,session.get(GenerationJob,video.generation_job_id),video)
         path = safe_media_path(settings.media_root, video.relative_path, must_exist=True)
         source_hash=hashlib.sha256(path.read_bytes()).hexdigest()
         if video.metadata_json.get('sha256') and video.metadata_json['sha256']!=source_hash:
@@ -305,6 +307,17 @@ def run_render(settings, session_factory, identifier):
         session.commit()
     process = None
     try:
+        # Recheck at execution, including timelines saved before the recovery
+        # feature. A later audio/quality recovery can invalidate approval.
+        from app.services.revision_postprocess import assert_complete_revision
+        with session_factory() as session:
+            for clip in snapshot['clips']:
+                video=session.get(VideoRevision,clip['video_id'])
+                permitted={'pending','approved'} if snapshot.get('automatic_draft') else {'approved'}
+                if (not video or video.project_id!=snapshot['project_id'] or video.shot_id!=clip['shot_id']
+                        or video.review_status not in permitted):
+                    raise AppError(409,'assembly_input_changed','合成片段审核或归属已变化，请重新选择完整版本后渲染')
+                assert_complete_revision(session,session.get(GenerationJob,video.generation_job_id),video)
         if snapshot.get('automatic_draft'):
             from app.services.studio_pipeline import _valid_video
             from app.services.cinematic_quality import generation_inputs_hash

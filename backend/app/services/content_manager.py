@@ -62,7 +62,7 @@ TABLE_RESOURCE={value[0].__tablename__:key for key,value in RESOURCES.items()}
 TABLE_RESOURCE.update({'shot_details':'_shot_details','character_aliases':'_aliases','quality_checks':'_quality'})
 TABLE_RESOURCE['screenplay_project_name_claims']='_screenplay_name_claims'
 MODELS={c.__table__.name:c for c in Base.registry.mappers for c in [c.class_]}
-ACTIVE={'queued','running','submitted','submitting','cancelling','unknown','reconciling','importing','parsing','waiting_review','waiting_design_review','waiting_visual_review','waiting_video_review','waiting_service_verification','rendering','ready'}
+ACTIVE={'queued','running','postprocessing','submitted','submitting','cancelling','unknown','reconciling','importing','parsing','waiting_review','waiting_design_review','waiting_visual_review','waiting_video_review','waiting_service_verification','rendering','ready'}
 JOB_TABLES={'generation_jobs','character_generation_jobs','assembly_renders','word_imports','production_visuals','production_runs','studio_runs'}
 JOB_TABLES.add('screenplay_generation_jobs')
 JOB_TABLES.add('video_analyses')

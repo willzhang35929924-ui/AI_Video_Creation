@@ -1210,8 +1210,15 @@ def _overview_video(session, shot, leaf):
                     m.GenerationJob.shot_id == shot.id,
                     m.VideoRevision.relative_path != '')
              .order_by(m.VideoRevision.revision.desc(), m.VideoRevision.created_at.desc(), m.VideoRevision.id.desc()))
+    def processing_ready(video):
+        from app.services.revision_postprocess import assert_complete_revision
+        job=session.get(m.GenerationJob,video.generation_job_id)
+        try:assert_complete_revision(session,job,video)
+        except AppError:return False
+        return True
     if not leaf:
-        return session.scalar(query.where(m.VideoRevision.review_status.in_(['pending', 'approved'])).limit(1))
+        return next((v for v in session.scalars(query.where(m.VideoRevision.review_status.in_(['pending','approved'])))
+                     if processing_ready(v)),None)
     if leaf.get('status') != 'succeeded' or not leaf.get('video_id'):
         return None
     baseline = session.scalar(query.where(m.VideoRevision.id == leaf['video_id']))
@@ -1225,9 +1232,9 @@ def _overview_video(session, shot, leaf):
             job = session.get(m.GenerationJob, candidate.generation_job_id)
             expected = (job.parameters_json.get('screenplay_snapshot', {}).get('cinematic', {})
                         .get('preflight', {}).get('generation_inputs_hash'))
-            if expected and expected == current_hash:
+            if expected and expected == current_hash and processing_ready(candidate):
                 return candidate
-    return baseline if baseline.review_status in {'pending', 'approved'} else None
+    return baseline if baseline.review_status in {'pending', 'approved'} and processing_ready(baseline) else None
 
 
 def overview(session, project_id):

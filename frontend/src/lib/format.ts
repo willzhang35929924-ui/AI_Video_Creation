@@ -7,6 +7,7 @@ const statusLabels: Record<string, string> = {
   pending_review: "待审核",
   queued: "排队中",
   running: "生成中",
+  postprocessing: "修订后处理",
   succeeded: "已完成",
   generated: "已生成 · 待审核",
   reviewing: "审核中",
