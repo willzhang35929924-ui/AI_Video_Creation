@@ -448,3 +448,76 @@ def test_real_ffmpeg_mix_and_quality_finish_once_with_original_audio_and_frames(
         assert len(actual['audio'])==1
         assert source.audio.read_bytes()==_wav()
         assert len(list(s.scalars(select(m.QualityRender).where(m.QualityRender.source_video_id!=source.mixed))))==1
+        final_id=final.id
+    # A later user-requested render peels the completed upscale but retains its
+    # mix. Its registered requested source proves it derives from the complete
+    # version, despite the encoded input being that version's mixed ancestor.
+    response=client.post('/api/quality/renders',json={'video_id':final_id,
+        'settings':{'resolution':'1080p','processing':'lanczos','mode':'fast','aspect_ratio':'16:9'}})
+    assert response.status_code==202,response.text
+    next_render=response.json()['id']
+    video_quality.run_render(settings,client.app.state.session_factory,next_render)
+    with client.app.state.session_factory() as s:
+        render=s.get(m.QualityRender,next_render)
+        assert render.status=='generated',render.error_message
+        assert render.snapshot_json['requested_source_video_id']==final_id
+        assert render.source_video_id!=final_id
+        derived=s.get(m.VideoRevision,render.video_id)
+        rp.assert_complete_revision(s,s.get(m.GenerationJob,identifier),derived)
+        derived_id=derived.id
+        actual,_=video_quality.measured(settings.media_root/derived.relative_path,settings)
+        assert (actual['width'],actual['height'],actual['frames'])==(1920,1080,24)
+        assert len(actual['audio'])==1
+    response=client.post(f'/api/videos/{derived_id}/approve',json={'operator':'synthetic contract test'})
+    assert response.status_code==200,response.text
+    with client.app.state.session_factory() as s:
+        from app.services.composition import _sources
+        assert _sources(s,SimpleNamespace(project_id=source.project,video_ids_json=[derived_id]))[0].id==derived_id
+
+
+@pytest.mark.parametrize('change',[None,'raw_input','unfinished','receipt_sha','metadata_only','cycle','wrong_scope'])
+def test_complete_derivatives_require_registered_receipts_not_copied_ready_metadata(client,settings,source,change,monkeypatch):
+    """Labelled database contracts, no inference and no real media claims."""
+    def forbidden(*args,**kwargs):raise AssertionError('completion gates must not hash files')
+    with client.app.state.session_factory() as s:
+        identifier,raw_id=_new_job(s,settings,source)
+        job=s.get(m.GenerationJob,identifier);raw=s.get(m.VideoRevision,raw_id)
+        final=m.VideoRevision(project_id=source.project,shot_id=source.shot,generation_job_id=identifier,
+            revision=6,relative_path='labelled-complete.mp4',metadata_json={'sha256':'complete-fixture',
+                'source_video_id':raw.id,'processing_kind':'video_upscale',rp.KEY:{'state':'ready'}})
+        s.add(final);s.flush()
+        plan=copy.deepcopy(job.parameters_json[rp.KEY]);plan.update(state='ready',final_video_id=final.id)
+        job.parameters_json={rp.KEY:plan};job.status='generated'
+        render=m.QualityRender(source_video_id=raw.id,status='generated',relative_path='labelled-derived.mp4',
+            snapshot_json={'source_sha256':raw.metadata_json['sha256'],'requested_source_video_id':final.id},
+            result_json={'sha256':'derived-fixture'})
+        s.add(render);s.flush()
+        derived=m.VideoRevision(project_id=source.project,shot_id=source.shot,generation_job_id=identifier,
+            revision=7,relative_path=render.relative_path,metadata_json={'sha256':'derived-fixture',
+                'source_video_id':raw.id,'processing_kind':'video_upscale','quality_render_id':render.id,rp.KEY:{'state':'ready'}})
+        s.add(derived);s.flush();render.video_id=derived.id
+        if change=='raw_input':render.snapshot_json={**render.snapshot_json,'requested_source_video_id':raw.id}
+        elif change=='unfinished':render.status='running'
+        elif change=='receipt_sha':render.result_json={'sha256':'other-output'}
+        elif change=='metadata_only':derived.metadata_json={**derived.metadata_json,'quality_render_id':'no-real-receipt'}
+        elif change=='cycle':render.snapshot_json={**render.snapshot_json,'requested_source_video_id':derived.id}
+        elif change=='wrong_scope':derived.generation_job_id=s.get(m.VideoRevision,source.video).generation_job_id
+        s.flush()
+        monkeypatch.setattr(rp,'_sha',forbidden)
+        if change is None:
+            rp.assert_complete_revision(s,job,derived)
+            # A separately completed mix of that complete quality derivative is
+            # also eligible; copying the ready marker alone is never enough.
+            mix=m.MediaProcessTask(project_id=source.project,shot_id=source.shot,kind='audio_mix',
+                slot='dialogue_generation',status='succeeded',snapshot_json={'sources':{'video_path':{
+                    'id':derived.id,'sha256':'derived-fixture'}}},
+                result_json={'sha256':'remixed-fixture','relative_path':'labelled-remixed.mp4'})
+            s.add(mix);s.flush()
+            remixed=m.VideoRevision(project_id=source.project,shot_id=source.shot,generation_job_id=identifier,
+                revision=8,relative_path='labelled-remixed.mp4',metadata_json={'sha256':'remixed-fixture',
+                    'source_video_id':derived.id,'processing_kind':'audio_mix','processing_task_id':mix.id})
+            s.add(remixed);s.flush();mix.result_json={**mix.result_json,'video_id':remixed.id}
+            rp.assert_complete_revision(s,job,remixed)
+        else:
+            with pytest.raises(AppError):rp.assert_complete_revision(s,job,derived)
+        with pytest.raises(AppError):rp.assert_complete_revision(s,job,raw)

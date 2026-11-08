@@ -438,9 +438,69 @@ async def process_tick(settings, factory):
             session.commit()
 
 
-def assert_review_ready(job, video):
+def _completed_derivative(session, job, video, final_id):
+    """Accept registered postprocessing of a complete version, never a raw.
+
+    Quality renders deliberately peel old scaling layers. Follow their frozen
+    requested source only after verifying the actual input against that source's
+    lineage; following metadata alone would let a raw bypass the completion gate.
+    This is a database-only check; media hashes are checked at review/export.
+    """
+    seen = set()
+    current = video
+    while current and len(seen) < 100 and current.id not in seen:
+        if (current.project_id, current.shot_id, current.generation_job_id) != (job.project_id, job.shot_id, job.id):
+            return False
+        if current.id == final_id:
+            return True
+        seen.add(current.id)
+        metadata = current.metadata_json or {}
+        digest = metadata.get('sha256')
+        if not digest:
+            return False
+        kind = metadata.get('processing_kind')
+        if kind in {'video_upscale', 'quality_upscale'}:
+            render = session.get(m.QualityRender, metadata.get('quality_render_id')) if metadata.get('quality_render_id') else None
+            if (not render or render.status != 'generated' or render.video_id != current.id
+                    or render.source_video_id != metadata.get('source_video_id')
+                    or render.relative_path != current.relative_path or render.result_json.get('sha256') != digest):
+                return False
+            snapshot = render.snapshot_json or {}
+            parent = session.get(m.VideoRevision, snapshot.get('requested_source_video_id') or render.source_video_id)
+            if not parent:
+                return False
+            from app.services.video_quality import _source_lineage
+            try:
+                actual, _, _ = _source_lineage(session, parent)
+            except AppError:
+                return False
+            if (actual.id != render.source_video_id
+                    or not snapshot.get('source_sha256')
+                    or snapshot['source_sha256'] != (actual.metadata_json or {}).get('sha256')):
+                return False
+        elif kind in {'audio_mix', 'lip_sync'}:
+            task = session.get(m.MediaProcessTask, metadata.get('processing_task_id')) if metadata.get('processing_task_id') else None
+            if (not task or task.kind != kind or task.status != 'succeeded'
+                    or (task.project_id, task.shot_id) != (job.project_id, job.shot_id)
+                    or task.result_json.get('video_id') != current.id
+                    or task.result_json.get('sha256') != digest
+                    or task.result_json.get('relative_path') != current.relative_path):
+                return False
+            source = (task.snapshot_json or {}).get('sources', {}).get('video_path') or {}
+            parent = session.get(m.VideoRevision, source.get('id')) if source.get('id') else None
+            if (not parent or parent.id != metadata.get('source_video_id') or not source.get('sha256')
+                    or source['sha256'] != (parent.metadata_json or {}).get('sha256')):
+                return False
+        else:
+            return False
+        current = parent
+    return False
+
+
+def assert_review_ready(job, video, session=None):
     plan = (job.parameters_json or {}).get(KEY) if job else None
-    if plan and (plan.get('state') != 'ready' or plan.get('final_video_id') != video.id):
+    if plan and (plan.get('state') != 'ready' or (plan.get('final_video_id') != video.id
+            and not (session is not None and _completed_derivative(session, job, video, plan.get('final_video_id'))))):
         raise AppError(409, 'revision_postprocess_required', '这是修订原片或处理中间版本，请等待配音／画质后处理完成后审核最终版本；原文件保留')
 
 
@@ -448,7 +508,7 @@ def assert_complete_revision(session, job, video):
     """Cheap read-only gate for lists, composition and publishing; no media hash."""
     if not job or job.project_id != video.project_id or job.shot_id != video.shot_id:
         raise AppError(409, 'revision_processing_scope', '视频与生成任务归属不匹配，不能选择为完整修订')
-    assert_review_ready(job, video)
+    assert_review_ready(job, video, session)
     if ((job.parameters_json or {}).get(KEY) or not job.parameters_json.get('based_on_video_id')
             or (video.metadata_json or {}).get('source_video_id')
             or (video.metadata_json or {}).get('processing_kind')):

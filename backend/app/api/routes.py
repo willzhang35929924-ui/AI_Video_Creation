@@ -1331,7 +1331,7 @@ async def revise_video(request: Request, video_id: str, payload: RevisionRequest
 def approve_video(video_id: str, payload: ReviewRequest, request: Request, session: Session = Depends(get_db)) -> dict[str, Any]:
     video = required(session, VideoRevision, video_id, "视频版本")
     from app.services.revision_postprocess import assert_review_ready
-    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video)
+    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video, session)
     from app.services.revision_postprocess import recovery_status
     recovery = recovery_status(session, settings_from(request), video)
     if recovery.get('required') and recovery.get('state') not in {'ready'}:
@@ -1406,7 +1406,7 @@ def reject_video(video_id: str, payload: ReviewRequest, session: Session = Depen
         raise AppError(422, "rejection_reason_required", "驳回必须填写原因")
     video = required(session, VideoRevision, video_id, "视频版本")
     from app.services.revision_postprocess import assert_review_ready
-    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video)
+    assert_review_ready(session.get(GenerationJob, video.generation_job_id), video, session)
     video.review_status = "rejected"
     job = session.get(GenerationJob, video.generation_job_id)
     if job.provider == "comfyui_h3":
