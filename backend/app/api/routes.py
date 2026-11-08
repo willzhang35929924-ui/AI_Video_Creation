@@ -1029,7 +1029,8 @@ async def generate_for_shot(
         source = original if frozen_job else overrides
         effective_parameters.update(width=source.get('width', native['width']), height=source.get('height', native['height']),
             steps=h3_workflow['actual_steps'], quality_request=quality, h3_workflow=h3_workflow,
-            context_silent=context_snapshot['silent'], context_spoken_language=context_snapshot.get('spoken_language', 'English'))
+            context_silent=context_snapshot['silent'], context_spoken_language=context_snapshot.get('spoken_language', 'English'),
+            context_inputs=context_snapshot)
     elif 'quality_request' in payload.parameters:
         # Historical explicit controls continue to describe their saved jobs.
         effective_parameters['quality_request']=payload.parameters['quality_request']

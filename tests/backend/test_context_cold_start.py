@@ -177,9 +177,22 @@ def test_explicit_retry_clears_stale_wait_timestamp(context_case):
 
 
 def provider_request(tmp_path):
-    return VideoGenerationRequest(job_id='isolated_job',project_id='isolated_project',shot_id='isolated_shot',
+    request = VideoGenerationRequest(job_id='isolated_job',project_id='isolated_project',shot_id='isolated_shot',
         prompt='Ocean waves.',negative_prompt='',duration_seconds=3,aspect_ratio='16:9',seed=17,
         parameters={'width':1024,'height':576},reference_assets=[],output_dir=tmp_path)
+    freeze_provider_request(request)
+    return request
+
+
+def freeze_provider_request(request):
+    from app.services.cinematic_rules import fingerprint
+    context={'version':1,'project_id':request.project_id,'shot_id':request.shot_id,
+        'prompt':request.prompt,'negative_prompt':request.negative_prompt,'instruction':request.instruction,
+        'duration_seconds':request.duration_seconds,'aspect_ratio':request.aspect_ratio,
+        'references':request.reference_assets,'motion_references':request.motion_references,
+        'revision_constraints':{'version':1,'items':[]}}
+    context['fingerprint']=fingerprint(context)
+    request.parameters['context_inputs']=context
 
 
 @pytest.mark.parametrize('result',['timeout',503,'missing_id','bad_json'])
@@ -223,6 +236,7 @@ def test_upload_failure_is_definitively_before_prompt_with_correct_retry_class(s
     image=BytesIO();Image.new('RGB',(16,16),'gray').save(image,'PNG')
     monkeypatch.setattr(provider,'read_image',lambda *_:(image.getvalue(),('png','image/png')))
     request=provider_request(tmp_path);request.reference_assets=[{'asset_id':'test','sha256':'a'*64,'role':'product','product_id':'test'}]
+    freeze_provider_request(request)
     async def exercise():
         with pytest.raises(AppError) as error:
             await provider.ContextIRH3Provider(settings,freeze_workflow('fast')).submit(request)

@@ -28,6 +28,121 @@ const response = (body: unknown) => new Response(JSON.stringify(body), { headers
 const video = { id: 'v1', project_id: 'p1', shot_id: 's1', revision: 1, relative_path: 'original.mp4',
   review_status: 'pending', metadata_json: { mode: 'cloud', provider: 'cloud_lk888_h3_v2' } };
 
+function captureToastExpiry() {
+  const callbacks: Array<() => void> = [];
+  const setTimeout = window.setTimeout.bind(window);
+  vi.spyOn(window, 'setTimeout').mockImplementation(((handler: TimerHandler, delay?: number, ...args: unknown[]) => {
+    if (delay === 4500 && typeof handler === 'function') {
+      callbacks.push(() => handler(...args));
+      return 4500;
+    }
+    return setTimeout(handler, delay, ...args);
+  }) as typeof window.setTimeout);
+  return async () => { await act(async () => { callbacks.splice(0).forEach(callback => callback()); }); };
+}
+
+it('keeps preview validation errors beside the retained instruction after the toast expires and clears them on edit', async () => {
+  const expireToasts = captureToastExpiry();
+  const message = '此镜头参考与修改约束冲突，请核对原图';
+  const fetcher = vi.fn(async (url: string) => {
+    const path = new URL(url, 'http://localhost').pathname;
+    if (path === '/api/projects') return response([{ id: 'p1', name: '项目' }]);
+    if (path === '/api/projects/p1/videos') return response([video]);
+    if (path === '/api/videos/v1') return response(video);
+    if (path.endsWith('/revision-preview')) return new Response(JSON.stringify({ error: { message, code: 'revision_product_identity_conflict' } }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+    throw new Error(path);
+  });
+  vi.stubGlobal('fetch', fetcher);
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage /></ToastProvider></MemoryRouter>);
+  const instruction = await screen.findByLabelText('本次修改要求');
+  await user.clear(instruction);
+  await user.type(instruction, '保持绿色产品，镜头缓慢向前');
+  await user.click(screen.getByRole('button', { name: '基于当前版本重新生成' }));
+  const failure = await screen.findByRole('alert', { name: '修订未完成' });
+  await expireToasts();
+  expect(screen.getByRole('region', { name: '操作通知' })).toBeEmptyDOMElement();
+  expect(failure).toHaveTextContent(message);
+  expect(failure).toHaveTextContent('尚未提交生成任务');
+  expect(instruction).toHaveValue('保持绿色产品，镜头缓慢向前');
+  expect(instruction).toHaveAttribute('aria-describedby', 'revision-error');
+  expect(screen.getByRole('link', { name: '检查项目人物与产品参考设置' })).toHaveAttribute('href', '/?project=p1&shot=s1');
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/revise'))).toBe(false);
+  expect(screen.queryByText('修订任务正在执行，旧版本与原片继续保留')).not.toBeInTheDocument();
+  await user.type(instruction, '，不改变产品颜色');
+  expect(screen.queryByRole('alert', { name: '修订未完成' })).not.toBeInTheDocument();
+});
+
+it('shows a persistent submission error outside the preview dialog and allows a fresh two-step retry', async () => {
+  const expireToasts = captureToastExpiry();
+  const message = '本地生成服务暂时不可用';
+  let previews = 0, submissions = 0;
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const path = new URL(url, 'http://localhost').pathname;
+    if (path === '/api/projects') return response([{ id: 'p1', name: '项目' }]);
+    if (path === '/api/projects/p1/videos') return response([video]);
+    if (path === '/api/videos/v1') return response(video);
+    if (path.endsWith('/revision-preview')) { previews++; return response({ prompt: '完整真实预览' }); }
+    if (path.endsWith('/revise')) { submissions++; return new Response(JSON.stringify({ error: { message } }), { status: 503, headers: { 'Content-Type': 'application/json' } }); }
+    throw new Error(path);
+  }));
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage /></ToastProvider></MemoryRouter>);
+  const instruction = await screen.findByLabelText('本次修改要求');
+  await user.clear(instruction);
+  await user.type(instruction, '保持产品原色');
+  await user.click(screen.getByRole('button', { name: '基于当前版本重新生成' }));
+  await user.click(await screen.findByRole('button', { name: '提交真实修订' }));
+  const failure = await screen.findByRole('alert', { name: '修订未完成' });
+  await expireToasts();
+  expect(failure).toHaveTextContent(message);
+  expect(failure).toHaveTextContent('修订提交未成功确认');
+  expect(screen.queryByRole('dialog', { name: '修订完整提示词' })).not.toBeInTheDocument();
+  expect(instruction).toHaveValue('保持产品原色');
+  expect(screen.queryByText('修订生成已提交；旧视频仍保留在版本历史中')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '基于当前版本重新生成' }));
+  await screen.findByRole('dialog', { name: '修订完整提示词' });
+  expect(screen.queryByRole('alert', { name: '修订未完成' })).not.toBeInTheDocument();
+  expect({ previews, submissions }).toEqual({ previews: 2, submissions: 1 });
+});
+
+it.each([
+  ['model', { error_message: 'H3 模型执行失败：显存不足' }, 'H3 模型执行失败：显存不足'],
+  ['postprocessing', { parameters_json: { revision_postprocess: { state: 'failed', error: { message: '修订原片已保存；SeedVR 处理失败' } } } }, '修订原片已保存；SeedVR 处理失败'],
+] as const)('retains a terminal %s failure after polling and toast expiry without claiming a complete revision', async (_stage, failureFields, message) => {
+  const expireToasts = captureToastExpiry();
+  let tick: (() => Promise<void>) | undefined;
+  vi.spyOn(window, 'setInterval').mockImplementation(((fn: () => Promise<void>, delay: number) => {
+    if (delay === 2500) tick = fn;
+    return 123;
+  }) as typeof window.setInterval);
+  vi.spyOn(window, 'clearInterval').mockImplementation(() => {});
+  const raw = { ...video, metadata_json: { ...video.metadata_json, revision_postprocess: { job_id: 'j1', state: 'processing' } } };
+  const fetcher = vi.fn(async (url: string) => {
+    const path = new URL(url, 'http://localhost').pathname;
+    if (path === '/api/projects') return response([{ id: 'p1', name: '项目' }]);
+    if (path === '/api/projects/p1/videos') return response([raw]);
+    if (path === '/api/videos/v1') return response(raw);
+    if (path === '/api/jobs/j1') return response({ id: 'j1', shot_id: 's1', status: 'failed', provider: 'local', ...failureFields });
+    throw new Error(path);
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage /></ToastProvider></MemoryRouter>);
+  const instruction = await screen.findByLabelText('本次修改要求');
+  await waitFor(() => expect(tick).toBeDefined());
+  const retainedInstruction = (instruction as HTMLTextAreaElement).value;
+  await act(async () => { await tick?.(); });
+  const failure = await screen.findByRole('alert', { name: '修订未完成' });
+  await expireToasts();
+  expect(screen.getByRole('region', { name: '操作通知' })).toBeEmptyDOMElement();
+  expect(failure).toHaveTextContent(message);
+  expect(instruction).toHaveValue(retainedInstruction);
+  expect(screen.getByRole('button', { name: '基于当前版本重新生成' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '通过为候选成片' })).toBeDisabled();
+  expect(screen.queryByText('修订任务已完成，请检查最新完整版本的画面与声音')).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([url]) => String(url).endsWith('/revise'))).toBe(false);
+});
+
 it('loads the legacy recovery diagnosis from selected-video details and resumes only postprocessing',async()=>{
   const recovery={available:true,required:true,state:'available',reason:'旧配音和高清尚未接回'};
   const calls:string[]=[];

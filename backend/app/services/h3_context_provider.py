@@ -555,6 +555,35 @@ async def preserve_context_receipts(origin, evidence, logdir):
     return records
 
 
+def require_request_context(request):
+    """The actual provider envelope must carry the same frozen input as the job.
+
+    Never silently replace a missing dispatch contract with an empty dictionary:
+    that used to lose explicit scale constraints after the preview was correct.
+    Validate before any model upload or Comfy submission.
+    """
+    from app.services.cinematic_rules import fingerprint
+    context = request.parameters.get('context_inputs')
+    if (not isinstance(context, dict) or context.get('version') != 1 or not context.get('fingerprint')
+            or not isinstance(context.get('revision_constraints'), dict)
+            or context['revision_constraints'].get('version') != 1
+            or not isinstance(context['revision_constraints'].get('items'), list)):
+        raise AppError(409, 'context_ir_context_snapshot_required',
+                       '实际派发缺少完整的Context-IR输入快照，未上传素材或提交模型；请更新应用后重新预览修订')
+    data = {key: value for key, value in context.items() if key != 'fingerprint'}
+    clean = lambda refs: [{key: value for key, value in ref.items() if key != 'absolute_path'} for ref in refs]
+    if (fingerprint(data) != context['fingerprint']
+            or context.get('project_id') != request.project_id or context.get('shot_id') != request.shot_id
+            or context.get('prompt') != request.prompt or context.get('negative_prompt') != request.negative_prompt
+            or context.get('instruction') != request.instruction
+            or context.get('duration_seconds') != request.duration_seconds or context.get('aspect_ratio') != request.aspect_ratio
+            or context.get('references') != clean(request.reference_assets)
+            or context.get('motion_references') != clean(request.motion_references)):
+        raise AppError(409, 'context_ir_context_snapshot_mismatch',
+                       '实际派发与冻结的提示词、约束或参考素材不一致，未上传素材或提交模型；请重新预览本次修订')
+    return context
+
+
 class ContextIRH3Provider(ComfyUIH3Provider):
     def __init__(self, settings, workflow, legacy_origin=None, *, profile_settings=None):
         super().__init__(settings)
@@ -571,7 +600,7 @@ class ContextIRH3Provider(ComfyUIH3Provider):
         if not isinstance(request.prompt, str) or not request.prompt.strip():
             raise AppError(422, 'context_ir_prompt_required', '请填写本镜头的生成要求')
         silent = request.parameters.get('context_silent', False)
-        context=request.parameters.get('context_inputs') or {}
+        context=require_request_context(request)
         tray,declarations,intent,production_contract=prepare_context_compilation(
             request.prompt,request.negative_prompt,request.reference_assets,request.motion_references,context,silent=silent)
         folder = f'video_factory/context_ir/{request.job_id}'
