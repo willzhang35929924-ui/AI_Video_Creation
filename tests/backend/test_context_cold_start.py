@@ -27,7 +27,7 @@ def nodes():
     result={item['class_type']: {'input': {'required': {}}} for item in graph.values()}
     result['VideoFactoryLocalH3IRCompile']['input']['optional']={
         'production_contract':['STRING',{'default':''}],
-        'caller_contract_policy':['STRING',{'default':'revision_semantics_v1'}]}
+        'caller_contract_policy':['STRING',{'default':'revision_semantics_v2'}]}
     return result
 
 

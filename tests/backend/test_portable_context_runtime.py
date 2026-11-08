@@ -82,7 +82,7 @@ def test_cold_start_preflight_preserves_remote_runtime_ownership_requirement(wat
         if request.url.path=='/queue':return httpx.Response(200,json={'queue_running':[],'queue_pending':[]})
         if request.url.path=='/object_info':return httpx.Response(200,json={'VideoFactoryLocalH3IRCompile':{
             'input':{'optional':{'production_contract':['STRING',{'default':''}],
-                                 'caller_contract_policy':['STRING',{'default':'revision_semantics_v1'}]}}}})
+                                 'caller_contract_policy':['STRING',{'default':'revision_semantics_v2'}]}}}})
         assert request.url.path=='/video_factory/runtime'
         return httpx.Response(200,json={**runtime_receipt(),'watcher_running':watcher})
     async def exercise():

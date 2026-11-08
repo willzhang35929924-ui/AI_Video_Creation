@@ -39,6 +39,23 @@ _RELATIVE = (
 )
 _RELATIVE_ENGLISH = {'two_palms': 'the size of two human palms', 'one_palm': 'the size of one human palm',
                      'drinking_cup': 'the size of a drinking cup'}
+_FACE_HALF = (
+    re.compile(r'(?<![身长宽深])(?:整体|总)?高(?:度)?\s*(?:约为|约|为|是|等于)\s*'
+               r'(?:(?:人物(?:甲|乙|丙|丁)?|该人物|成人|儿童|人)(?:的)?)?'
+               r'(?:脸部|面部|脸|人脸)(?:的)?高度(?:的)?'
+               r'(?:一半|二分之一|1\s*/\s*2|0\.5\s*倍)(?![\d.])', re.I),
+    re.compile(r'\b(?:(?:overall|total|full|complete)\s+)?height\s*'
+               r'(?:is|equals?|=|:)\s*(?:(?:about|approximately)\s+)?'
+               r'(?:one[ -]half|half|1\s*/\s*2|0\.5)\s+(?:of\s+)?'
+               r'(?:the\s+height\s+of\s+(?:(?:the|a)\s+)?'
+               r'(?:(?:person|woman|man|actor|human)(?:[\x27’]s)?\s+)?face|'
+               r'(?:(?:the|a)\s+)?(?:(?:person|woman|man|actor|human)(?:[\x27’]s)?\s+)?'
+               r'face(?:[\x27’]s)?\s+height)\b', re.I),
+    re.compile(r'\b(?:is|should\s+be)\s*(?:(?:about|approximately)\s+)?'
+               r'(?:one[ -]half|half|1\s*/\s*2|0\.5)\s+(?:of\s+)?'
+               r'the\s+height\s+of\s+(?:(?:the|a)\s+)?'
+               r'(?:(?:person|woman|man|actor|human)(?:[\x27’]s)?\s+)?face\b', re.I),
+)
 
 
 def _affirmative(segment, match):
@@ -57,6 +74,35 @@ def _product_measurement(segment, match):
     # A later explicit product-size phrase can restore the target relationship.
     return bool(re.search(r'产品尺寸|商品尺寸|玩具尺寸|product\s+(?:size|dimensions)|toy\s+size',
                           prefix[other[-1].end():], re.I))
+
+
+def _face_height_comparison(text, segment, targets):
+    """Recognize only an explicit product-to-face half-height comparison.
+
+    A face comparison is independent of cup/palm wording. In particular, no
+    centimetre value, face size, or relation is guessed from those words.
+    """
+    if re.search(r'或|还是|\bor\b|[?？]', segment, re.I):
+        return None
+    matches=[match for pattern in _FACE_HALF for match in pattern.finditer(segment)
+             if _affirmative(segment,match)]
+    if not matches:return None
+    match=matches[-1]
+    prefix=re.split(r'[,，;；。]',segment[:match.start()])[-1]
+    if re.search(r'人物|人脸|脸部|面部|手掌|掌心|桌|台面|展台|机位|镜头|相机|身高|'
+                 r'\b(?:person|actor|face|palm|hand|table|camera|frame|shot)\b',prefix,re.I):
+        return None
+    aliases=sorted({a for row in targets for a in _aliases(row)},key=len,reverse=True)
+    boundary='|'.join([_alias_pattern(a) for a in aliases]+[_CODE.pattern])
+    # _segments assigns independent comma-separated products, but a joined
+    # "P02 and P03 height ..." is ambiguous and must not become just P03.
+    for sentence in re.split(r'[\n。！？;；!?]+',text):
+        offset=sentence.find(segment)
+        if offset<0:continue
+        before=re.split(r'[,，]',sentence[:offset+match.start()])[-1]
+        names={m[0].casefold() for m in re.finditer(boundary,before,re.I)}
+        if len(names)>1:return None
+    return '0.5'
 
 
 def _unit(unit):
@@ -135,7 +181,8 @@ def extract_revision_constraints(instruction=None, *, prompt_override=None, targ
             relatives = [(match.start(), value) for pattern, value in _RELATIVE
                          for match in pattern.finditer(segment) if _affirmative(segment, match)]
             relative = max(relatives)[1] if relatives else None
-            if not measurements and not relative:
+            face_fraction=_face_height_comparison(text,segment,targets)
+            if not measurements and not relative and not face_fraction:
                 if mention:
                     current = next((row for row in targets if mention in _aliases(row)), None)
                     owner = (current.get('logical_id') or current.get('id') or current.get('name')) if current else mention
@@ -161,15 +208,22 @@ def extract_revision_constraints(instruction=None, *, prompt_override=None, targ
             active_key = key
             item = items.setdefault(key, {'target_key': key, 'kind': 'physical_scale', 'measurements': []})
             supersedes_prompt = source == 'instruction' and item.get('source') == 'prompt_override'
-            by_axis = {} if relative and supersedes_prompt else {entry['axis']: entry for entry in item['measurements']}
+            by_axis = {} if (relative or face_fraction) and supersedes_prompt else {entry['axis']: entry for entry in item['measurements']}
             if supersedes_prompt:
                 item.pop('deformation_depth', None)
+                item.pop('face_height_fraction',None)
+                item.pop('face_height_fraction_source_text',None)
+                item.pop('face_height_fraction_source',None)
+                if face_fraction and not relative:item.pop('relative_scale',None)
             by_axis.update({entry['axis']: entry for entry in measurements})
             item.update(source=source, source_text=segment.strip(), measurements=list(by_axis.values()))
             if relative:
                 item['relative_scale'] = relative
             elif measurements and source == 'instruction':
                 item.pop('relative_scale', None)  # Old prompt scale must not contradict new dimensions.
+            if face_fraction:
+                item.update(face_height_fraction=face_fraction,face_height_fraction_source=source,
+                            face_height_fraction_source_text=segment.strip())
             depth = _DEPTH.search(segment)
             if depth:
                 item['deformation_depth'] = {'value': _number(depth['value']), 'unit': _unit(depth['unit'])}
@@ -187,6 +241,10 @@ def _description(item, subject):
                for entry in item.get('measurements', [])]
     if item.get('relative_scale'):
         clauses.append(f"{subject} is {_RELATIVE_ENGLISH[item['relative_scale']]}")
+    if item.get('face_height_fraction'):
+        if str(item['face_height_fraction'])!='0.5':
+            raise ValueError('Unsupported caller face-height comparison')
+        clauses.append(f"the total height of {subject} is half the height of the person's face")
     if item.get('deformation_depth'):
         depth = item['deformation_depth']
         clauses.append(f"the pressing action indents {subject} by {depth['value']} {depth['unit']}")
@@ -201,7 +259,7 @@ def revision_constraints_text(constraints):
 
 
 def _overlay_dimensions(before, item):
-    if item.get('relative_scale') or not isinstance(before, str):
+    if item.get('relative_scale') or item.get('face_height_fraction') or not isinstance(before, str):
         return _description(item, item['target_key'])
     values = {entry['axis']: entry for entry in item.get('measurements', [])}
     seen = set()
@@ -247,7 +305,7 @@ def apply_revision_overrides(action, entity_specs, constraints):
                     audit['entity_fields'].append({'target_key': key, 'entity_id': row.get('id'),
                                                   'field': field, 'before': spec[field]})
                     spec[field] = _overlay_dimensions(spec[field], item)
-            if item.get('relative_scale'):
+            if item.get('relative_scale') or item.get('face_height_fraction'):
                 for axis in ('height','width','length','depth'):
                     for field in (axis,axis+'_cm',axis+'_mm',axis+'_m'):
                         if field in spec:
@@ -274,7 +332,7 @@ def apply_revision_overrides(action, entity_specs, constraints):
                 dimensions = {entry['axis']:entry for entry in item.get('measurements', [])}
                 def replace_dimension(match):
                     axis = _AXES[match['axis'].lower()]
-                    if item.get('relative_scale'):
+                    if item.get('relative_scale') or item.get('face_height_fraction'):
                         return ''
                     if axis not in dimensions:
                         return match[0]

@@ -29,7 +29,7 @@ from urllib.parse import urlsplit
 import uuid
 
 VERSION='local-h3ir-qwen4b-v3'
-POLICY_REVISION='revision-semantics-20261107-v2'
+POLICY_REVISION='revision-framing-20261108-v3'
 MODEL='Qwen/Qwen3-VL-4B-Instruct'
 MAX_OUTPUT=4096
 CARD_OUTPUT=3072

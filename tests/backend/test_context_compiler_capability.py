@@ -11,7 +11,7 @@ from test_context_cold_start import HEALTH
 
 
 COMPILER='VideoFactoryLocalH3IRCompile'
-POLICY=['STRING',{'default':'revision_semantics_v1'}]
+POLICY=['STRING',{'default':'revision_semantics_v2'}]
 
 
 def inventory(definition):
@@ -27,11 +27,13 @@ def inventory(definition):
     {'input':{'optional':{'production_contract':['STRING',{}],
                           'caller_contract_policy':['STRING',{'default':'legacy'}]}}},
     {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':['STRING',{'default':'revision_semantics_v1'}]}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
                           'caller_contract_policy':['STRING',{}]}}},
     {'input':{'optional':{'production_contract':['STRING',{}],
-                          'caller_contract_policy':['INT',{'default':'revision_semantics_v1'}]}}},
+                          'caller_contract_policy':['INT',{'default':'revision_semantics_v2'}]}}},
     {'input':{'optional':{'production_contract':['STRING',{}],
-                          'caller_contract_policy':'revision_semantics_v1'}}},
+                          'caller_contract_policy':'revision_semantics_v2'}}},
     {'input':{'optional':{'production_contract':['STRING',{}],
                           'caller_contract_policy':[]}}},
 ])

@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 import re
 
 
-CALLER_CONTRACT_POLICY = 'revision_semantics_v1'
+CALLER_CONTRACT_POLICY = 'revision_semantics_v2'
 
 _TAG = re.compile(r'<(Subject|Picture)\s*(\d+)>', re.I)
 _DEFINITION = re.compile(r'^\s*(<(?:Subject|Picture)\s*\d+>)\s*(?:is\b|shows?\b|:)', re.I | re.M)
@@ -102,7 +102,7 @@ def _scale_items(constraints):
     return [item for item in items if isinstance(item, dict)
             and isinstance(item.get('target_key'), str) and item['target_key'].strip()
             and not item['target_key'].startswith('__')
-            and (item.get('measurements') or item.get('relative_scale'))]
+            and (item.get('measurements') or item.get('relative_scale') or item.get('face_height_fraction'))]
 
 
 def extract_scene_requirements(instruction, constraints):

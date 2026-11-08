@@ -56,7 +56,8 @@ def dispatch_case(settings):
                     'dimensions': '高12.5cm，宽15cm', 'color': 'green',
                     'material': 'plush', 'immutable_features': 'yellow star'})
             session.add(prop); session.flush()
-            session.add(m.ShotDetail(shot_id=shot.id, source_json={'production': {
+            session.add(m.ShotDetail(shot_id=shot.id,
+                photography_json={'shot_size':'微距超级特写（Macro Shot）','camera_position':'正面固定近景。'}, source_json={'production': {
                 'prop_states': [{'entity_id': prop.id, 'prop_key': 'P02',
                                  'holder': '展台', 'state': '静置于展台'}]}}))
             settings.media_root.mkdir(parents=True, exist_ok=True)
@@ -143,13 +144,14 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
     forged = {'version': 1, 'fingerprint': 'caller-forged',
         'revision_constraints': {'items': [{'target_key': 'POISON', 'relative_scale': 'two_palms'}]},
         'references': [{'asset_id': 'unselected-foreign-reference'}]}
-    payload = RevisionRequest(instruction='P02高10cm、宽8cm，只有水杯大小。第一帧起P02由左手掌心托住。固定中近景，手掌、完整P02与人物脸部同时入镜。再将P02靠近脸颊。保持绿色和黄色星星不变。',
+    payload = RevisionRequest(instruction='P02高10cm、宽8cm，只有水杯大小。第一帧起P02由左手掌心托住。固定中近景，手掌、完整P02与人物脸部同时入镜。P02整体高度为脸部高度的一半。再将P02靠近脸颊。保持绿色和黄色星星不变。',
         use_project_video_service=True, parameters={'context_inputs': forged})
     preview = revision_preview(case.video.id, payload, case.request, case.db)
     expected_contract = preview['production_contract']
     item = expected_contract['revision_constraints']['items'][0]
     assert item['target_key'] == 'P02' and item['target_entity_id'] == case.prop.id
     assert item['relative_scale'] == 'drinking_cup'
+    assert item['face_height_fraction']=='0.5'
     assert expected_contract['constraint_target_groups'] == {'P02': 'product-1'}
     assert {r['rule'] for r in expected_contract['scene_requirements']} == {
         'target_first_frame_palm_support','target_hand_face_same_frame','target_raise_to_cheek'}
@@ -173,13 +175,17 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
             for ref in envelope.reference_assets]
         graph = submitted_graphs[index]
         assert graph['4']['class_type'] == 'VideoFactoryLocalH3IRCompile'
-        assert graph['4']['inputs']['caller_contract_policy'] == 'revision_semantics_v1'
+        assert graph['4']['inputs']['caller_contract_policy'] == 'revision_semantics_v2'
         assert json.loads(graph['4']['inputs']['production_contract']) == expected_contract
         assert graph['4']['inputs']['intent'] == preview['prompt']
         assert 'Current explicit caller scene requirements' in graph['4']['inputs']['intent']
         assert 'the supporting hand' in graph['4']['inputs']['intent']
         assert 'The camera holds static throughout this numbered shot.' in graph['4']['inputs']['intent']
         assert 'Current caller reference-use policy for <Picture 1>, <Picture 2>: appearance ONLY.' in graph['4']['inputs']['intent']
+        assert 'Macro Shot' not in graph['4']['inputs']['intent']
+        assert 'Current explicit caller cinematography: 中近景（Medium Close-Up）' in graph['4']['inputs']['intent']
+        assert "half the height of the person's face" in graph['4']['inputs']['intent']
+        assert frozen['effective_cinematography']['photography']['shot_size']=='中近景（Medium Close-Up）'
         tray = json.loads(graph['2']['inputs']['tray'])
         assert [slot['label'] for slot in tray] == ['picture1', 'picture2']
         assert [entry['sha256'] for entry in uploads[index * 2:index * 2 + 2]] == expected_hashes
@@ -211,6 +217,7 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
     assert list(case.db.scalars(select(m.VideoRevision.id))) == [case.video.id]
     assert case.source.status == 'generated'
     assert case.prop.spec_json['dimensions'] == '高12.5cm，宽15cm'
+    assert case.db.scalar(select(m.ShotDetail).where(m.ShotDetail.shot_id==case.shot.id)).photography_json['shot_size']=='微距超级特写（Macro Shot）'
 
 
 def test_reference_scale_use_policy_only_changes_the_explicitly_revised_product_group():

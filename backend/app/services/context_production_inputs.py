@@ -16,6 +16,7 @@ from app.services.product_library import shot_product_snapshot, shot_references
 from app.services.revision_constraints import (
     apply_revision_overrides, extract_revision_constraints, revision_constraints_text,
 )
+from app.services.revision_cinematography import apply_cinematography_override
 from app.services.screenplay import shot_bundle
 
 
@@ -145,6 +146,10 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
                      'kind': e.kind, 'spec': e.spec_json} for e in entities if e]
     constraints = extract_revision_constraints(instruction, prompt_override=prompt_override, targets=entity_specs)
     effective_action, effective_specs, override_audit = apply_revision_overrides(shot.action, entity_specs, constraints)
+    effective_camera_move, effective_photography, camera_audit = apply_cinematography_override(
+        shot.camera_move, detail.photography_json if detail else None, instruction)
+    if camera_audit['applied']:
+        override_audit['cinematography'] = camera_audit
     prop_targets = [row for row in entity_specs if row['kind'] == 'prop']
     product_refs = [ref for ref in references if ref.get('role') == 'product' and ref.get('product_id')]
     product_groups = {ref['product_id'] for ref in product_refs}
@@ -180,7 +185,7 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
     if prompt_override is not None:
         parts.append('首段是本次明确的镜头制作要求。与下列原分镜的一般描述发生冲突时，以首段为准，并保留独立绑定素材的角色和使用范围。')
     for label, value in (
-        ('镜头', shot.scene_title), ('叙述', shot.narration), ('动作', effective_action), ('机位与运镜', shot.camera_move),
+        ('镜头', shot.scene_title), ('叙述', shot.narration), ('动作', effective_action), ('机位与运镜', effective_camera_move),
         ('地点', shot.location), ('光线', shot.lighting), ('声音', shot.audio_direction),
         ('本次修订指令', instruction if not constraints['items'] else None),
     ):
@@ -217,7 +222,7 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
     spoken_language = 'Chinese' if any(re.search(r'[\u3400-\u9fff]', line['台词']) for line in lines) else 'English'
     for label, value in (
         ('场景与材质', scene.environment_json if scene else None),
-        ('摄影', detail.photography_json if detail else None), ('人物', people), ('商品', product_directions),
+        ('摄影', effective_photography), ('人物', people), ('商品', product_directions),
         ('道具镜头状态', prop_states),
         ('对白', lines if audio_policy != 'skip' else None),
         ('声音事件', [{key: event.get(key) for key in ('kind','description','start_seconds','end_seconds','volume')}
@@ -241,6 +246,7 @@ def collect_context_inputs(session, settings, shot, *, prompt_override=None, ins
         'generation_inputs_hash': generation_inputs_hash(session, shot), 'prompt_override': prompt_override,
         'instruction': instruction, 'prompt': '\n'.join(parts), 'negative_prompt': shot.negative_prompt or '',
         'revision_constraints': constraints, 'revision_overrides_audit': override_audit,
+        'effective_cinematography': {'camera_move': effective_camera_move, 'photography': effective_photography},
         'constraint_target_bindings': target_bindings,
         'explicit_visual_ids': image_ids, 'explicit_motion': motion_values, 'audio_policy': audio_policy,
         'silent': audio_policy == 'skip', 'spoken_language': spoken_language,

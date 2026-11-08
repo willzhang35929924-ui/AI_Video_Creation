@@ -23,6 +23,7 @@ from app.core.trusted_service_origins import is_loopback_service, is_trusted_loc
 from app.services.gpu_gate import _connection_refused, gpu_submission
 from app.services.h3_workflow_router import build_graph
 from app.services.revision_semantics import CALLER_CONTRACT_POLICY, extract_scene_requirements
+from app.services.revision_cinematography import explicit_cinematography
 from app.services.motion_references import prepare_motion_reference
 from app.services.providers import ComfyUIH3Provider, JobAccepted, ProviderHealth
 
@@ -291,11 +292,7 @@ def frozen_production_contract(images,declarations,context,prompt):
 
 
 def _caller_static_camera(instruction):
-    pattern=r'固定(?:机位|镜头|中近景|近景|全景|拍摄)|(?:摄像机|相机|机位|镜头).{0,6}固定|\bcamera\s+(?:holds?\s+static|is\s+static)\b|\bstatic\s+camera\b'
-    for match in re.finditer(pattern,instruction or '',re.I):
-        clause=re.split(r'[，,。；;.!?\n]',(instruction or '')[:match.start()])[-1][-45:]+match[0]
-        if not re.search(r'不要|不许|不能|禁止|避免|无需|不用|\b(?:not|never|without|avoid)\b|don[’\x27]t',clause,re.I):return True
-    return False
+    return bool(explicit_cinematography(instruction).get('camera_move'))
 
 
 def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,silent=False):
@@ -327,7 +324,7 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
         intent+='\nThese requirements govern only the physical target product, not its package. In the numbered shot replace each target name with its actual bound Subject tag; write these visible actions in the shot body.'
     scaled_groups={contract['constraint_target_groups'].get(item.get('target_key'))
                    for item in contract['revision_constraints'].get('items',[])
-                   if item.get('measurements') or item.get('relative_scale')}
+                   if item.get('measurements') or item.get('relative_scale') or item.get('face_height_fraction')}
     for declaration in declarations.get('reference_groups','').splitlines():
         match=re.fullmatch(r'product\s+([^:]+):\s*(.+)',declaration)
         if not match or match[1] not in scaled_groups:continue
@@ -336,6 +333,9 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
             'physical dimensions and photographed scale do NOT govern this product. In retention_analysis describe '
             'these pictures as "weak_reference - product appearance only; physical size follows the current caller requirements". '
             'Do not write that reference dimensions are retained or used. Keep the actual product size defined by the caller in the numbered shot.')
+    framing=(context.get('revision_overrides_audit') or {}).get('cinematography') or {}
+    if framing.get('applied') and framing.get('shot_size_text'):
+        intent+='\nCurrent explicit caller cinematography: '+framing['shot_size_text']+'. Write this exact framing in the numbered shot; it supersedes older framing descriptions.'
     return tray,declarations,intent,contract
 
 
