@@ -89,7 +89,7 @@
         "__init__.py": "c370a05a4818652bb47e77563953fafac0253cb32c0a96e6760349045f9ac24c",
         "revision_constraints.py": "eee6fa10dc17279f398c135184b913a23e8f31a8db946b27dd9ab73c0f550b92",
         "product_reference_validation.py": "443b70743c276caa012a22fdec4de85acee457b53cb4cbd3b55cb5f39c9f7179",
-        "revision_semantics.py": "1790a2b10de2131f0cd51c634fbd0484a07de2201a53477d57a0d81f0fee0d98"
+        "revision_semantics.py": "0c3488c83fa2386657b87f70bcac591763a76b5762b315da707fa9fd1a6136b7"
       }
     },
     {

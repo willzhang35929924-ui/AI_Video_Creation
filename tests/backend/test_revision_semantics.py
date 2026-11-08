@@ -335,6 +335,85 @@ def test_printed_label_can_be_retained_without_using_it_as_physical_scale():
     assert revision_semantic_findings(text, contract()) == []
 
 
+def test_printed_packaging_measurements_explicitly_overridden_by_current_caller_are_not_scale_use():
+    text = prompt('<Subject 1> is 10cm tall and 8cm wide.', definitions=(
+        '<Subject 1> is the green plush Christmas tree in <Picture 1>.\n'
+        '<Picture 2> is the packaging reference for <Subject 1>, showing the product next to its '
+        'gift box with dimensions labeled as 15cm/5.91in wide and 12.5cm/4.92in tall '
+        '— these measurements are overridden by current caller requirements.'),
+        retention='<Picture 2> weak_reference - product appearance only; physical size follows current caller requirements.')
+    assert revision_semantic_findings(text, contract()) == []
+
+
+@pytest.mark.parametrize('unrelated_override', [
+    'the camera measurements are overridden by current caller requirements',
+    'these lighting measurements are overridden by current caller requirements',
+    'the background dimensions are not used for physical scale',
+])
+def test_unrelated_override_cannot_hide_positive_product_reference_scale_use(unrelated_override):
+    text = prompt('<Subject 1> is 10cm tall and 8cm wide.',
+        retention=('<Picture 2> printed dimensions are used to establish the physical scale '
+                   'of <Subject 1>, while ' + unrelated_override + '.'))
+    findings = revision_semantic_findings(text, contract())
+    assert 'revision_reference_scale_used' in rules(findings)
+    assert any('printed dimensions are used' in row['message'] for row in findings)
+
+
+def test_real_rejected_writer_prose_keeps_only_the_missing_explicit_hand_face_composition():
+    # The real writer's first sentence establishes present palm support, while
+    # waist-up framing and a later cheek reference do not prove all three
+    # requested objects are visible together in the numbered shot body.
+    text = prompt(
+        'A static medium shot frames人物甲 from waist up, holding <Subject 1> in her open left palm at chest level. '
+        'The product sits centered in the frame, fully visible with its round body, embroidered eyes, pink cheeks, '
+        'yellow star topper, and colorful circular ornaments. Her right thumb and index finger lightly pinch '
+        "the product's abdomen, compressing it slightly before releasing — the material visibly flattens under "
+        'pressure then smoothly rebounds. She lifts <Subject 1> gently toward her cheek, keeping the product\'s '
+        'size unchanged relative to her face. The background features a cozy American middle-class living room: '
+        'beige sheepskin rug, glowing string lights on a Christmas tree behind her, and a crackling fireplace '
+        'casting 2800K warm light across the scene. Foreground ring light adds soft illumination to the subject '
+        'and product.',
+        definitions=(
+            '<Subject 1> is the green plush Christmas tree in <Picture 1>, with soft plush fabric, green color, '
+            'round base, furry texture, embroidered eyes, pink cheeks, yellow star topper, colorful circular ornaments. '
+            "The product's physical height is 10 cm and width 8 cm; it is the size of a drinking cup; its total "
+            "height is half the person's face.\n"
+            '<Picture 2> is the packaging reference for <Subject 1>, showing the product next to its gift box '
+            'with dimensions labeled as 15cm/5.91in wide and 12.5cm/4.92in tall — these measurements are '
+            'overridden by current caller requirements.'),
+        retention=(
+            '<Subject 1> (appears in [Shot 1]): weak_reference - product appearance only; physical size follows '
+            'current caller requirements.\n<Picture 2> (packaging reference): weak_reference - used only for '
+            'visual style anchor; does not govern product scale or placement.'))
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    assert rules(revision_semantic_findings(text, value)) == {'target_hand_face_same_frame'}
+
+
+def test_first_sentence_static_medium_shot_holding_establishes_initial_palm_only():
+    text = prompt('A static medium shot frames人物甲 from waist up, holding <Subject 1> '
+                  'in her open left palm at chest level. She then lifts <Subject 1> to her cheek.')
+    assert rules(revision_semantic_findings(text, contract(instruction=INSTRUCTION))) == {
+        'target_hand_face_same_frame'}
+
+
+@pytest.mark.parametrize('opening', [
+    'A static medium shot frames人物甲 from waist up, who will later be holding <Subject 1> in her open left palm at chest level.',
+    'The room is shown. A static medium shot frames人物甲 from waist up, holding <Subject 1> in her open left palm at chest level.',
+    'A static medium shot frames人物甲 from waist up, not holding <Subject 1> in her open left palm at chest level.',
+    'A static medium shot frames人物甲 from waist up, holding <Subject 2> in her open left palm at chest level while <Subject 1> stays on a stand.',
+])
+def test_medium_shot_holding_does_not_borrow_later_future_negated_or_other_target_initial_state(opening):
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    text = prompt(opening + ' She lifts <Subject 1> to her cheek.', definitions=(
+        '<Subject 1> is the green plush from <Picture 1> and <Picture 2>.\n'
+        '<Subject 2> is a separate gift box from <Picture 3>.'))
+    found = rules(revision_semantic_findings(text, value))
+    assert 'target_first_frame_palm_support' in found
+    assert 'target_hand_face_same_frame' in found
+
+
 def test_other_product_actions_in_the_same_sentence_do_not_satisfy_target_requirements():
     value = contract(instruction=INSTRUCTION)
     value['groups'].append({'category': 'product', 'group': 'product-2',

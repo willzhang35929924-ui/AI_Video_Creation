@@ -180,6 +180,8 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
         assert graph['4']['inputs']['intent'] == preview['prompt']
         assert 'Current explicit caller scene requirements' in graph['4']['inputs']['intent']
         assert 'the supporting hand' in graph['4']['inputs']['intent']
+        assert "The whole P02, the supporting hand and the person's complete face are visible together in the same frame." in graph['4']['inputs']['intent']
+        assert 'explicitly inside detailed_description after [Shot 1]' in graph['4']['inputs']['intent']
         assert 'The camera holds static throughout this numbered shot.' in graph['4']['inputs']['intent']
         assert 'Current caller reference-use policy for <Picture 1>, <Picture 2>: appearance ONLY.' in graph['4']['inputs']['intent']
         assert 'Macro Shot' not in graph['4']['inputs']['intent']
@@ -236,6 +238,16 @@ def test_reference_scale_use_policy_only_changes_the_explicitly_revised_product_
     context['revision_constraints']={'version':1,'items':[]}
     assert 'Current caller reference-use policy' not in provider.prepare_context_compilation(
         'Show two separate products.','',images,[],context)[2]
+
+
+def test_first_frame_palm_request_does_not_invent_unrequested_face_composition():
+    images=[{'role':'product','product_id':'green','constraint_target_keys':['P02']}]
+    context={'instruction':'P02只有水杯大小。首帧P02由左手掌心托住。',
+        'revision_constraints':{'version':1,'items':[{'target_key':'P02','relative_scale':'drinking_cup'}]}}
+    _,_,intent,contract=provider.prepare_context_compilation('A hand supports the toy.','',images,[],context)
+    assert [row['rule'] for row in contract['scene_requirements']]==['target_first_frame_palm_support']
+    assert 'At the first frame P02 is supported by the open left palm' in intent
+    assert 'complete face' not in intent and 'visible-composition requirement' not in intent
 
 
 @pytest.mark.parametrize('instruction,expected',[

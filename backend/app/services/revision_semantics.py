@@ -52,13 +52,16 @@ _NEGATIVE = re.compile(r'不要|不许|不能|禁止|避免|无需|不用|\b(?:n
 _REFERENCE = re.compile(r'\b(?:printed|print|reference|picture|photo|ocr|label|caption|ruler|annotation)\b|印刷|标注|参考图|照片', re.I)
 _REFERENCE_SCALE = re.compile(
     r'\b(?:used?|using|retained?|preserved?|referenc(?:es?|ed|ing)|establish(?:es|ed)?|determine(?:s|d)?|govern(?:s|ed)?|follow(?:s|ed)?)\b'
-    r'.{0,85}\b(?:physical\s+scale|scale|physical\s+size|actual\s+size|dimensions?)\b|'
-    r'\b(?:dimensions?|measurements?)\b.{0,90}\b(?:as|for)\b.{0,25}\b(?:physical\s+)?scale\b|'
-    r'(?:用于|作为|决定|确定|保留).{0,20}(?:实体尺度|实际大小|物理尺寸|尺度|比例)', re.I)
+    r'.{0,85}?\b(?:physical\s+scale|scale|physical\s+size|actual\s+size|dimensions?)\b|'
+    r'\b(?:dimensions?|measurements?)\b.{0,90}?\b(?:as|for)\b.{0,25}?\b(?:physical\s+)?scale\b|'
+    r'(?:用于|作为|决定|确定|保留).{0,20}?(?:实体尺度|实际大小|物理尺寸|尺度|比例)', re.I)
 _NON_SCALE = re.compile(
     r'\b(?:not|never)\b.{0,45}\b(?:used?|using|retained?|preserved?|scale|size|dimensions?)\b|'
     r'\b(?:do\s+not|don[’\x27]t|ignore|disregard)\b.{0,65}\b(?:dimensions?|measurements?|scale|size)\b|'
     r'(?:不|不得|不要|忽略).{0,20}(?:用于|作为|尺度|尺寸|比例|测量)', re.I)
+_MEASUREMENT_OVERRIDE = re.compile(
+    r'\bthese\s+(?:measurements|dimensions)\s+are\s+(?:overridden|superseded)\s+by\s+'
+    r'(?:the\s+)?current\s+caller\s+requirements\b', re.I)
 
 
 def _canonical(value):
@@ -91,6 +94,31 @@ def _positive(pattern, text):
         if not _NEGATIVE.search(prefix) and not _NEGATIVE.search(match[0]):
             return match
     return None
+
+
+def _reference_scale_used(text):
+    """Keep scale-use decisions local to the actual reference-use statement.
+
+    A packaging reference may describe its printed numbers and explicitly say
+    those numbers are overridden. That descriptive noun is not an instruction
+    to apply them. A separate positive scale-use statement still wins; an
+    unrelated disclaimer later in the sentence cannot suppress it.
+    """
+    # The pattern ends at the first scale object, before a later unrelated
+    # disclaimer; greedily swallowing its second "scale" would erase a real
+    # positive use in the preceding clause.
+    boundaries = list(re.finditer(r'[,，;；]|\b(?:while|whereas|but)\b', text, re.I))
+    for match in _REFERENCE_SCALE.finditer(text):
+        start = max((edge.end() for edge in boundaries if edge.end() <= match.start()), default=0)
+        end = min((edge.start() for edge in boundaries if edge.start() >= match.end()), default=len(text))
+        if _NON_SCALE.search(text[start:end]):
+            continue
+        descriptive = (re.match(r'reference\b', match[0], re.I)
+            and re.search(r'\b(?:packaging|appearance|image|picture)\s+$', text[:match.start()], re.I))
+        if descriptive and _MEASUREMENT_OVERRIDE.search(text[match.end():end]):
+            continue
+        return True
+    return False
 
 
 def _scale_items(constraints):
@@ -256,7 +284,7 @@ def _physical_measurement(text, match):
     # text the product's physical size. Quoted/explicitly printed measurements
     # are checked separately only when the writer says to use them for scale.
     if re.search(r'\b(?:printed|label|text|ocr|annotation|ruler)\b|印刷|标注', local_prefix, re.I):
-        return bool(_REFERENCE_SCALE.search(text)) and not _NON_SCALE.search(text)
+        return _reference_scale_used(text)
     return True
 
 
@@ -316,6 +344,12 @@ def _opening_palm_state(body, subjects, scale_prefix=''):
     state = re.search(r'\b(?:being\s+|(?:is|remains|stays)\s+(?:already\s+)?)'
         r'(?:held|supported|cradled)\b|\b(?:rests?|resting)\b.{0,35}\bpalm\b|'
         r'\bpalm\b.{0,35}\b(?:support(?:s|ing)?|hold(?:s|ing)?|cradl(?:es?|ing))\b', opening, re.I)
+    # The camera sentence can establish the actor's current held state with a
+    # participle: "frames [person] from waist up, holding <Subject 1> ...".
+    # Requiring the framing clause and immediate present participle avoids
+    # turning a later pickup or a negated/future action into an opening state.
+    state = state or re.search(r'\b(?:frames?|captures?|shows?)(?=\s|[^A-Za-z])'
+        r'[^.;]{0,100},\s*holding\b', opening, re.I)
     return opening if state and _target_action(_PALM, opening, subjects) else ''
 
 
@@ -441,7 +475,7 @@ def revision_semantic_findings(prompt, contract):
                     + '; '.join(conflicts) + f'. Conflicting written fragment: «{sentence}». '
                     'Keep appearance identity and replace only the conflicting physical scale with the caller requirements.')
             linked = implicit in allowed or any(tag in allowed for _, tag in _tags(sentence))
-            if linked and _REFERENCE.search(sentence) and _REFERENCE_SCALE.search(sentence) and not _NON_SCALE.search(sentence):
+            if linked and _REFERENCE.search(sentence) and _reference_scale_used(sentence):
                 report('revision_reference_scale_used', f'Target {label}. Caller: «{caller}». '
                     f'Printed/reference measurements must not govern physical scale. Conflicting written fragment: «{sentence}». '
                     'Retain product appearance and use only the current caller scale.')
@@ -475,7 +509,8 @@ def revision_semantic_findings(prompt, contract):
                 valid = any((_HAND.search(text) and _FACE.search(text) and _target_action(_SAME_FRAME, text, subjects))
                     or _listed_frame_scope(text, subjects) or _supported_frame_scope(text, subjects) for text in scoped)
                 evidence = 'No recognized target-scoped hand-and-face same-frame statement. Existing target prose: ' + written
-                action = f'Keep the supporting hand and the face visible in the same frame with the target {", ".join(sorted(subjects))}.'
+                action = f'Keep the supporting hand and the face visible in the same frame with the target {", ".join(sorted(subjects))}. '
+                action += 'Write this visible composition in detailed_description [Shot 1]; a summary statement alone does not establish it.'
             elif rule == 'target_raise_to_cheek':
                 valid = any(_target_action(_CHEEK, text, subjects) for text in scoped)
                 evidence = 'No recognized target-scoped lift-to-cheek action. Existing target prose: ' + written

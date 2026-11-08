@@ -85,3 +85,27 @@ def test_h3_failure_does_not_use_unbound_or_untrusted_receipt(native_failure, un
     assert '本镜 Context-IR 编译未通过' in message
     assert 'P5-camera-no-motion-type' not in message
     assert 'private' not in message and 'compiler-001' not in message
+
+
+def test_revision_failures_show_actionable_known_rules_from_bound_native_evidence(native_failure):
+    args, _, receipt = native_failure
+    content = json.loads(receipt.read_text(encoding='utf-8'))
+    content['fallback_reason'] = ('the written brief still failed after 2 correction pass(es): '
+        'revision_reference_scale_used; target_first_frame_palm_support; target_hand_face_same_frame')
+    receipt.write_text(json.dumps(content), encoding='utf-8')
+    message = _h3_source_gate_message(*args, read_local_receipt=True)
+    assert '参考图的标注尺寸' in message and '首帧' in message and '脸部同框' in message
+    assert '视频尚未开始生成' in message and '运镜说明' not in message
+    assert '原版本、配音和本次输入已保留' in message
+    assert 'compiler-001' not in message and str(receipt) not in message
+
+
+def test_unknown_custom_rule_text_is_not_reflected_as_trusted_diagnostic(native_failure):
+    args, _, receipt = native_failure
+    content = json.loads(receipt.read_text(encoding='utf-8'))
+    content['fallback_reason'] = ('the written brief still failed after 2 correction pass(es): '
+        'target_hand_face_same_frame; arbitrary_private_secret')
+    receipt.write_text(json.dumps(content), encoding='utf-8')
+    message = _h3_source_gate_message(*args, read_local_receipt=True)
+    assert '本镜 Context-IR 编译未通过' in message
+    assert 'arbitrary_private_secret' not in message and '校验项' not in message

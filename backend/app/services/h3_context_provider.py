@@ -314,7 +314,7 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
             hand=(requirement.get('hand')+' ') if requirement.get('hand') else ''
             scene.append(f'At the first frame {key} is supported by the open {hand}palm, not placed on the floor or carpet.')
         elif rule=='target_hand_face_same_frame':
-            scene.append(f'Keep the whole {key}, the supporting hand and the person\'s face visible together in the same frame.')
+            scene.append(f'The whole {key}, the supporting hand and the person\'s complete face are visible together in the same frame.')
         elif rule=='target_raise_to_cheek':
             scene.append(f'Then the person raises {key} to the cheek while maintaining the requested product size.')
     if scene:
@@ -322,6 +322,8 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
             scene.append('The camera holds static throughout this numbered shot.')
         intent+='\nCurrent explicit caller scene requirements (override older framing or placement):\n'+'\n'.join(scene)
         intent+='\nThese requirements govern only the physical target product, not its package. In the numbered shot replace each target name with its actual bound Subject tag; write these visible actions in the shot body.'
+        if any(row['rule']=='target_hand_face_same_frame' for row in contract['scene_requirements']):
+            intent+='\nThe visible-composition requirement must be stated explicitly inside detailed_description after [Shot 1]. A statement only in summary or subject_definitions does not satisfy it. Include the full product, supporting palm and complete face as the visible composition; waist-up framing alone is not an explicit visibility statement.'
     scaled_groups={contract['constraint_target_groups'].get(item.get('target_key'))
                    for item in contract['revision_constraints'].get('items',[])
                    if item.get('measurements') or item.get('relative_scale') or item.get('face_height_fraction')}

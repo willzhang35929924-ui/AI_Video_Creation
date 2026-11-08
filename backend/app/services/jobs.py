@@ -32,7 +32,15 @@ _REFERENCE_GATE_ERROR = 'Declared reference projection BLOCKED before H3 loading
 _REFERENCE_GATE_MESSAGE = ('本镜 Context-IR 参考素材绑定未通过，视频尚未开始生成。'
                            '请核对已选商品或人物素材，在镜头动作中明确引用对应的主体标签，再重试此镜。')
 _COMPILER_SCOPE = re.compile(r'([0-9]{8}-[0-9]{6}-[0-9]{6}Z)-[0-9a-f]{8}')
-_VALIDATION_RULE = r'[A-Z][0-9]{1,2}[a-z]?-[a-z0-9]+(?:-[a-z0-9]+)*'
+_REVISION_RULE_HELP = {
+    'revision_target_scale_conflict': '模型正文仍保留与本次要求冲突的商品尺寸',
+    'revision_reference_scale_used': '模型正文仍把参考图的标注尺寸用于实际商品比例',
+    'target_first_frame_palm_support': '模型正文未明确满足首帧由指定手掌托住商品',
+    'target_hand_face_same_frame': '模型镜头正文未明确写出完整商品、手掌和脸部同框',
+    'target_raise_to_cheek': '模型镜头正文未明确写出将商品抬至脸颊的动作',
+}
+_VALIDATION_RULE = (r'(?:[A-Z][0-9]{1,2}[a-z]?-[a-z0-9]+(?:-[a-z0-9]+)*|'
+                    + '|'.join(re.escape(rule) for rule in _REVISION_RULE_HELP) + ')')
 _VALIDATION_REASON = re.compile(
     rf'the written brief still failed after [0-9]{{1,2}} correction pass\(es\): '
     rf'({_VALIDATION_RULE}(?:(?:; |, ){_VALIDATION_RULE}){{0,19}})'
@@ -96,6 +104,12 @@ def _h3_source_gate_message(result, job_id, prompt_id, graph_sha, profile, *, re
     if not reason:
         return generic
     rules = re.split(r'[;,] ', reason[1])
+    revision_help = [_REVISION_RULE_HELP[rule] for rule in rules if rule in _REVISION_RULE_HELP]
+    if revision_help:
+        return ('本次修改尚未通过 Context-IR 正文核验，视频尚未开始生成：'
+                + '；'.join(revision_help) + '。原版本、配音和本次输入已保留。'
+                + '请核对修改要求和参考图后重试。'
+                + f'校验项为 {reason[1]}。')
     if 'P5-camera-no-motion-type' in rules:
         return ('本镜 Context-IR 编译缺少可识别的运镜类型，视频尚未开始生成。'
                 '请在本镜说明中明确运镜，例如轻推（Push In）、手持微晃（Shake Slightly）或固定机位（Static Shot），再重试此镜。'
