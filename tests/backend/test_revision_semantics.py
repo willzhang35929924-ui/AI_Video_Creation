@@ -188,6 +188,50 @@ def test_future_or_later_palm_support_is_not_an_initial_present_state(opening):
     assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(text, contract(instruction=INSTRUCTION)))
 
 
+def test_actual_writer_initial_palm_holding_and_camera_composition_list_are_accepted():
+    text = prompt("The camera holds static, framing the person's face, their left palm holding "
+                  "<Subject 1>, and the plush tree's full body. "
+                  "The person then lifts <Subject 1> to their cheek.")
+    assert revision_semantic_findings(text, contract(instruction=INSTRUCTION)) == []
+
+
+@pytest.mark.parametrize('composition', [
+    "The camera holds static, framing the person's face and a hand. <Subject 1> is beside the chair.",
+    "The camera holds static, framing the person's face, their left palm holding <Subject 1>, "
+        "but the product's full body is outside the frame.",
+    "The camera holds static, framing the person's face, their left palm holding <Subject 1>, "
+        "with the full body hidden.",
+])
+def test_camera_framing_without_all_visible_requested_items_is_not_same_frame(composition):
+    assert 'target_hand_face_same_frame' in rules(revision_semantic_findings(prompt(composition), contract(instruction=INSTRUCTION)))
+
+
+def test_palm_holding_camera_composition_does_not_borrow_other_product_or_future_state():
+    text = prompt("The camera holds static, framing the person's face, their left palm holding "
+                  "<Subject 2>, and the plush tree's full body. "
+                  "<Subject 1> will later be held in the left palm. "
+                  "The person then lifts <Subject 2> to their cheek.", definitions=(
+                      '<Subject 1> is the green plush from <Picture 1> and <Picture 2>.\n'
+                      '<Subject 2> is a cylindrical gift box also visible in <Picture 2>.'))
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    assert {'target_first_frame_palm_support', 'target_hand_face_same_frame',
+            'target_raise_to_cheek'} <= rules(revision_semantic_findings(text, value))
+
+
+@pytest.mark.parametrize('owner', ["the product's", 'the product’s', 'the target product’s', '<Subject 1>’s'])
+def test_referenced_for_product_physical_dimensions_is_a_scale_conflict(owner):
+    text = prompt('<Subject 1> is 10cm tall and 8cm wide.',
+        retention=f'<Picture 2> weak_reference - product packaging and green plush tree are referenced for {owner} physical dimensions and appearance.')
+    assert 'revision_reference_scale_used' in rules(revision_semantic_findings(text, contract()))
+
+
+def test_referenced_for_appearance_but_not_physical_dimensions_is_allowed():
+    text = prompt('<Subject 1> is 10cm tall and 8cm wide.',
+        retention='<Picture 2> weak_reference - the green plush tree is referenced for appearance but not for the product’s physical dimensions.')
+    assert revision_semantic_findings(text, contract()) == []
+
+
 @pytest.mark.parametrize('measurement', [
     '<Subject 1> is 100mm tall and 80mm wide.',
     '<Subject 1> is 0.10m high and 0.08m wide.',

@@ -33,10 +33,13 @@ _FRAME = re.compile(r'第一帧|首帧|开场画面|初始画面|\bfirst\s+frame
 _PALM = re.compile(
     r'(?:掌心|手掌).{0,15}(?:托|承托|捧|支撑)|(?:托住|承托|捧住|托着).{0,15}(?:掌心|手掌)|'
     r'\b(?:support(?:ed|s|ing)?|held|hold(?:s|ing)?|cradl(?:ed|es|ing)|rests?|resting)\b.{0,65}\bpalm\b|'
-    r'\bpalm\b.{0,40}\b(?:supports?|holds?|cradles?)\b|\b(?:on|in|across)\b.{0,35}\bpalm\b', re.I)
+    r'\bpalm\b.{0,40}\b(?:support(?:s|ing)?|hold(?:s|ing)?|cradl(?:es?|ing))\b|\b(?:on|in|across)\b.{0,35}\bpalm\b', re.I)
 _HAND = re.compile(r'手|掌|\bhands?\b|\bpalm\b', re.I)
 _FACE = re.compile(r'脸|面部|面颊|\bface\b', re.I)
 _SAME_FRAME = re.compile(r'同框|同一画面|同一个画面|同时.{0,8}(?:可见|入镜)|\bsame\s+frame\b|\bboth\b.{0,40}\b(?:visible|in\s+frame)\b|\bshown\s+together\b|\bvisible\s+together\s+(?:in|within)\s+(?:(?:the|same)\s+)?frame\b', re.I)
+_FRAMING = re.compile(r'\b(?:fram(?:es?|ing)|captur(?:es?|ing)|show(?:s|ing)?)\b', re.I)
+_FULL_BODY = re.compile(r'\bfull\s+body\b|\b(?:entire|complete|whole)\b.{0,45}(?:<Subject\s*\d+>|\b(?:product|plush|toy|body)\b)|\bfully\s+visible\b', re.I)
+_FRAME_EXCLUSION = re.compile(r'\b(?:outside|off[- ]screen|hidden|excluded|cropped)\b|\bout\s+of\b.{0,20}\b(?:frame|view)\b|\bnot\b.{0,20}\b(?:visible|in\s+frame|shown)\b', re.I)
 _CHEEK = re.compile(
     r'(?:抬|举|提|拿|移|贴近|靠近|贴).{0,28}(?:脸颊|面颊|脸侧|脸旁|脸)|'
     r'\b(?:rais(?:e|es|ed|ing)|lift(?:s|ed|ing)?|bring(?:s|ing)?|brought|mov(?:e|es|ed|ing))\b'
@@ -44,7 +47,7 @@ _CHEEK = re.compile(
 _NEGATIVE = re.compile(r'不要|不许|不能|禁止|避免|无需|不用|\b(?:not|never|without|avoid)\b|\bdon[’\x27]t\b', re.I)
 _REFERENCE = re.compile(r'\b(?:printed|print|reference|picture|photo|ocr|label|caption|ruler|annotation)\b|印刷|标注|参考图|照片', re.I)
 _REFERENCE_SCALE = re.compile(
-    r'\b(?:used?|using|retained?|preserved?|establish(?:es|ed)?|determine(?:s|d)?|govern(?:s|ed)?|follow(?:s|ed)?)\b'
+    r'\b(?:used?|using|retained?|preserved?|referenc(?:es?|ed|ing)|establish(?:es|ed)?|determine(?:s|d)?|govern(?:s|ed)?|follow(?:s|ed)?)\b'
     r'.{0,85}\b(?:physical\s+scale|scale|physical\s+size|actual\s+size|dimensions?)\b|'
     r'\b(?:dimensions?|measurements?)\b.{0,90}\b(?:as|for)\b.{0,25}\b(?:physical\s+)?scale\b|'
     r'(?:用于|作为|决定|确定|保留).{0,20}(?:实体尺度|实际大小|物理尺寸|尺度|比例)', re.I)
@@ -282,7 +285,7 @@ def _opening_palm_state(body, subjects):
         return ''
     state = re.search(r'\b(?:being\s+|(?:is|remains|stays)\s+(?:already\s+)?)'
         r'(?:held|supported|cradled)\b|\b(?:rests?|resting)\b.{0,35}\bpalm\b|'
-        r'\bpalm\b.{0,35}\b(?:supports?|holds?|cradles?)\b', opening, re.I)
+        r'\bpalm\b.{0,35}\b(?:support(?:s|ing)?|hold(?:s|ing)?|cradl(?:es?|ing))\b', opening, re.I)
     return opening if state and _target_action(_PALM, opening, subjects) else ''
 
 
@@ -315,6 +318,22 @@ def _target_action(pattern, clause, subjects):
         return False
     closest = min(tags, key=lambda entry: min(abs(entry[0] - match.start()), abs(entry[0] - match.end())))
     return closest[1] in subjects
+
+
+def _listed_frame_scope(text, subjects):
+    """A camera composition explicitly lists face, hand and complete target.
+
+    Merely mentioning a framing verb is insufficient. The visible composition
+    must include all requested items without an exclusion or another subject
+    owning the adjacent clause.
+    """
+    match = _positive(_FRAMING, text)
+    if not match:
+        return False
+    composition = text[match.end():]
+    return bool(_HAND.search(composition) and _FACE.search(composition)
+        and _FULL_BODY.search(composition) and not _FRAME_EXCLUSION.search(composition)
+        and any(tag in subjects for _, tag in _tags(composition)))
 
 
 def revision_semantic_findings(prompt, contract):
@@ -413,7 +432,8 @@ def revision_semantic_findings(prompt, contract):
                 evidence = '; '.join(floor) or 'No recognized first-frame palm support. Existing target prose: ' + written
                 action = f'At the first frame, the target {", ".join(sorted(subjects))} is supported by the open {hand + " " if hand else ""}palm; do not place that target on the floor, rug, or carpet.'
             elif rule == 'target_hand_face_same_frame':
-                valid = any(_HAND.search(text) and _FACE.search(text) and _target_action(_SAME_FRAME, text, subjects) for text in scoped)
+                valid = any((_HAND.search(text) and _FACE.search(text) and _target_action(_SAME_FRAME, text, subjects))
+                    or _listed_frame_scope(text, subjects) for text in scoped)
                 evidence = 'No recognized target-scoped hand-and-face same-frame statement. Existing target prose: ' + written
                 action = f'Keep the supporting hand and the face visible in the same frame with the target {", ".join(sorted(subjects))}.'
             elif rule == 'target_raise_to_cheek':
