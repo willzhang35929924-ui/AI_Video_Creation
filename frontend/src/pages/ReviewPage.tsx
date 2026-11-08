@@ -182,10 +182,13 @@ export function ReviewPage() {
   }, [projectId]);
 
   useEffect(() => {
-    if (processing?.state === 'processing' && processing.job_id) {
+    // A project reset must restore its selected raw revision even if the
+    // processing metadata has not changed. Old-project details may arrive
+    // while the next project's list is loading, so check ownership first.
+    if (projectId && (selected?.projectId ?? selected?.project_id) === projectId && processing?.state === 'processing' && processing.job_id) {
       setRevisionJobId(processing.job_id);setRevisionJobPhase('postprocessing');
     }
-  }, [processing?.job_id,processing?.state]);
+  }, [projectId,selected?.projectId,selected?.project_id,processing?.job_id,processing?.state]);
 
   useEffect(() => {
     if (!revisionJobId) return;

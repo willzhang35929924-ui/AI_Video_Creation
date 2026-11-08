@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ToastProvider';
 import { ReviewPage } from './ReviewPage';
@@ -39,6 +39,29 @@ function captureToastExpiry() {
     return setTimeout(handler, delay, ...args);
   }) as typeof window.setTimeout);
   return async () => { await act(async () => { callbacks.splice(0).forEach(callback => callback()); }); };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(finish => { resolve = finish; });
+  return { promise, resolve };
+}
+
+function trackRevisionIntervals() {
+  const active = new Map<number, () => Promise<void>>();
+  const setInterval = window.setInterval.bind(window), clearInterval = window.clearInterval.bind(window);
+  let nextId = 0;
+  vi.spyOn(window, 'setInterval').mockImplementation(((callback: () => Promise<void>, delay: number) => {
+    if (delay !== 2500) return setInterval(callback, delay);
+    const id = --nextId;
+    active.set(id, callback);
+    return id;
+  }) as typeof window.setInterval);
+  vi.spyOn(window, 'clearInterval').mockImplementation(id => {
+    if (id !== undefined && active.delete(id)) return;
+    clearInterval(id);
+  });
+  return active;
 }
 
 it('keeps preview validation errors beside the retained instruction after the toast expires and clears them on edit', async () => {
@@ -167,12 +190,100 @@ it('loads the legacy recovery diagnosis from selected-video details and resumes 
   expect(fetcher.mock.calls.some(([url])=>String(url).endsWith('/revise'))).toBe(false);
 });
 
+it('restores unchanged postprocessing when the selected project becomes current again before its list resolves', async () => {
+  const active = trackRevisionIntervals();
+  const projects = [{ id: 'p1', name: '项目一' }, { id: 'p2', name: '项目二' }];
+  const projectLoads = [deferred<Response>(), deferred<Response>(), deferred<Response>()];
+  const detail = deferred<Response>(), otherList = deferred<Response>(), returnedList = deferred<Response>();
+  const raw = { ...video, metadata_json: { ...video.metadata_json,
+    revision_postprocess: { job_id: 'j1', state: 'processing' } } };
+  let projectReads = 0, currentLists = 0;
+  const polled: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const path = new URL(url, 'http://localhost').pathname;
+    if (path === '/api/projects') return projectLoads[projectReads++].promise;
+    if (path === '/api/projects/p1/videos') return ++currentLists === 1 ? response([video]) : returnedList.promise;
+    if (path === '/api/projects/p2/videos') return otherList.promise;
+    if (path === '/api/videos/v1') return detail.promise;
+    if (path === '/api/jobs/j1') { polled.push('j1'); return response({ id: 'j1', shot_id: 's1', status: 'postprocessing', provider: 'local' }); }
+    throw new Error(path);
+  }));
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider>
+    <Link to="/review?project=p2">切换到项目二</Link><Link to="/review?project=p1">返回项目一</Link><ReviewPage />
+  </ToastProvider></MemoryRouter>);
+  await act(async () => { projectLoads[0].resolve(response(projects)); });
+  await screen.findByLabelText('本次修改要求');
+  await act(async () => { detail.resolve(response(raw)); });
+  expect(active.size).toBe(1);
+
+  await user.click(screen.getByRole('link', { name: '切换到项目二' }));
+  expect(projectReads).toBe(2);
+  await act(async () => { projectLoads[1].resolve(response(projects)); });
+  expect(active.size).toBe(0);
+
+  await user.click(screen.getByRole('link', { name: '返回项目一' }));
+  expect(projectReads).toBe(3);
+  await act(async () => { projectLoads[2].resolve(response(projects)); });
+  // No list or detail response changes the selected raw revision here. Only
+  // project ownership changed, so restoration must depend on projectId.
+  expect(currentLists).toBe(2);
+  expect(active.size).toBe(1);
+  await act(async () => { await [...active.values()][0](); });
+  expect(polled).toEqual(['j1']);
+
+  await act(async () => {
+    otherList.resolve(response([]));
+    returnedList.resolve(response([raw]));
+  });
+  expect(screen.getByRole('button', { name: '基于当前版本重新生成' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '通过为候选成片' })).toBeDisabled();
+  expect(screen.getByText('正在补齐修订的配音与画质，完成后可审核最终版本')).toBeInTheDocument();
+});
+
+it('ignores an old project detail that reports processing after the next project becomes current', async () => {
+  const active = trackRevisionIntervals();
+  const projects = [{ id: 'p1', name: '项目一' }, { id: 'p2', name: '项目二' }];
+  const nextProjects = deferred<Response>(), oldDetail = deferred<Response>(), nextList = deferred<Response>();
+  const oldRaw = { ...video, metadata_json: { revision_postprocess: { job_id: 'j1', state: 'processing' } } };
+  const nextRaw = { ...video, id: 'v2', project_id: 'p2', shot_id: 's2',
+    metadata_json: { revision_postprocess: { job_id: 'j2', state: 'processing' } } };
+  let projectReads = 0;
+  const polled: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const path = new URL(url, 'http://localhost').pathname;
+    if (path === '/api/projects') return ++projectReads === 1 ? response(projects) : nextProjects.promise;
+    if (path === '/api/projects/p1/videos') return response([video]);
+    if (path === '/api/projects/p2/videos') return nextList.promise;
+    if (path === '/api/videos/v1') return oldDetail.promise;
+    if (path === '/api/videos/v2') return response(nextRaw);
+    if (path.startsWith('/api/jobs/')) {
+      polled.push(path); return response({ id: 'j2', shot_id: 's2', status: 'postprocessing', provider: 'local' });
+    }
+    throw new Error(path);
+  }));
+  const user = userEvent.setup();
+  render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider>
+    <Link to="/review?project=p2">切换到项目二</Link><ReviewPage />
+  </ToastProvider></MemoryRouter>);
+  await screen.findByLabelText('本次修改要求');
+  await user.click(screen.getByRole('link', { name: '切换到项目二' }));
+  await act(async () => { nextProjects.resolve(response(projects)); });
+  // The next list is still loading, so the old selection can receive a late
+  // detail response. Its processing job belongs to p1 and must stay stopped.
+  await act(async () => { oldDetail.resolve(response(oldRaw)); });
+  expect(active.size).toBe(0);
+  expect(polled).toEqual([]);
+
+  await act(async () => { nextList.resolve(response([nextRaw])); });
+  expect(active.size).toBe(1);
+  await act(async () => { await [...active.values()][0](); });
+  expect(polled).toEqual(['/api/jobs/j2']);
+  expect(screen.getByRole('button', { name: '基于当前版本重新生成' })).toBeDisabled();
+});
+
 it('continues polling postprocessing after refresh and does not unlock another generation',async()=>{
-  let tick:(()=>Promise<void>)|undefined;
-  vi.spyOn(window,'setInterval').mockImplementation(((fn:()=>Promise<void>,delay:number)=>{
-    if(delay===2500)tick=fn;return 123;
-  }) as typeof window.setInterval);
-  vi.spyOn(window,'clearInterval').mockImplementation(()=>{});
+  const active=trackRevisionIntervals();
   const raw={...video,metadata_json:{...video.metadata_json,revision_postprocess:{job_id:'j1',state:'processing'},
     revision_processing_recovery:{required:true,available:false,state:'processing',reason:'配音画质处理中'}}};
   let polls=0,done=false;
@@ -188,16 +299,17 @@ it('continues polling postprocessing after refresh and does not unlock another g
     throw new Error(path);
   }));
   render(<MemoryRouter initialEntries={['/review?project=p1']}><ToastProvider><ReviewPage/></ToastProvider></MemoryRouter>);
-  await waitFor(()=>expect(tick).toBeDefined());
-  await act(async()=>{await tick?.();});
+  await waitFor(()=>expect(active.size).toBe(1));
+  await act(async()=>{await [...active.values()][0]();});
   expect(polls).toBe(1);
   expect(screen.getByRole('button',{name:'基于当前版本重新生成'})).toBeDisabled();
   expect(screen.getByRole('button',{name:'通过为候选成片'})).toBeDisabled();
   expect(screen.getByText('正在补齐修订的配音与画质，完成后可审核最终版本')).toBeInTheDocument();
   done=true;
-  await act(async()=>{await tick?.();});
+  await act(async()=>{await [...active.values()][0]();});
   expect(await screen.findByLabelText('镜头版本 2 视频播放器')).toHaveAttribute('src',expect.stringContaining('complete.mp4'));
   expect(screen.getByRole('button',{name:'通过为候选成片'})).toBeEnabled();
+  expect(active.size).toBe(0);
 });
 
 it.each([
