@@ -40,6 +40,10 @@ _SAME_FRAME = re.compile(r'同框|同一画面|同一个画面|同时.{0,8}(?:�
 _FRAMING = re.compile(r'\b(?:fram(?:es?|ing)|captur(?:es?|ing)|show(?:s|ing)?)\b', re.I)
 _FULL_BODY = re.compile(r'\bfull\s+body\b|\b(?:entire|complete|whole)\b.{0,45}(?:<Subject\s*\d+>|\b(?:product|plush|toy|body)\b)|\bfully\s+visible\b', re.I)
 _FRAME_EXCLUSION = re.compile(r'\b(?:outside|off[- ]screen|hidden|excluded|cropped)\b|\bout\s+of\b.{0,20}\b(?:frame|view)\b|\bnot\b.{0,20}\b(?:visible|in\s+frame|shown)\b', re.I)
+_FRAME_LOCATION = re.compile(r'<Subject\s*\d+>\s+(?:(?:is|remains)\s+)?'
+    r'(?:(?:being\s+)?(?:held|shown|positioned|placed)\s+)?(?:in|at)\s+'
+    r'(?:(?:the|a)\s+)?(?:(?:center|centre|middle|left|right)\s+(?:of\s+)?)?(?:the\s+)?frame\b', re.I)
+_FACE_VISIBLE = re.compile(r'\bface\b.{0,35}\b(?:visible|shown|in\s+(?:the\s+)?frame)\b|\bvisible\b.{0,20}\bface\b', re.I)
 _CHEEK = re.compile(
     r'(?:抬|举|提|拿|移|贴近|靠近|贴).{0,28}(?:脸颊|面颊|脸侧|脸旁|脸)|'
     r'\b(?:rais(?:e|es|ed|ing)|lift(?:s|ed|ing)?|bring(?:s|ing)?|brought|mov(?:e|es|ed|ing))\b'
@@ -271,7 +275,30 @@ def _floor_conflicts(body, subjects):
     return found
 
 
-def _opening_palm_state(body, subjects):
+def _caller_scale_prefix(contract, definitions):
+    """Return only the exact metadata prefix emitted by the scale producer.
+
+    Reuse its pure renderer so a creative sentence cannot be mistaken for
+    metadata just because it starts with a similar heading.
+    """
+    from .revision_constraints import _description
+
+    constraints = contract.get('revision_constraints') or {}
+    if constraints.get('version') != 1 or not constraints.get('items'):
+        return ''
+    clauses = []
+    try:
+        for item in constraints['items']:
+            subjects, _ = _scope(contract, definitions, item)
+            if len(subjects) != 1:
+                return ''
+            clauses.append(_description(item, next(iter(subjects))))
+    except (KeyError, TypeError, ValueError):
+        return ''
+    return 'Current caller-authored product scale: ' + ' '.join(clauses) + ' '
+
+
+def _opening_palm_state(body, subjects, scale_prefix=''):
     """Recognize a present held state in the first numbered shot sentence.
 
     An initial composition can settle the opening without the literal words
@@ -280,7 +307,10 @@ def _opening_palm_state(body, subjects):
     shot = re.search(r'\[Shot\s*1\]\s*', body, re.I)
     if not shot:
         return ''
-    opening = next(_sentences(body[shot.end():]), '')
+    beginning = body[shot.end():]
+    if scale_prefix and beginning.startswith(scale_prefix):
+        beginning = beginning[len(scale_prefix):]
+    opening = next(_sentences(beginning), '')
     if re.search(r'\b(?:will|later|after(?:ward)?s?|eventually|then|subsequently|soon|next)\b|随后|稍后|之后|将会|再将', opening, re.I):
         return ''
     state = re.search(r'\b(?:being\s+|(?:is|remains|stays)\s+(?:already\s+)?)'
@@ -336,6 +366,15 @@ def _listed_frame_scope(text, subjects):
         and any(tag in subjects for _, tag in _tags(composition)))
 
 
+def _supported_frame_scope(text, subjects):
+    # A target explicitly located in-frame and supported by the person's palm,
+    # with their face visibly beside it in that same sentence, establishes a
+    # common composition without requiring an exact "same frame" phrase.
+    return bool(not _FRAME_EXCLUSION.search(text) and _positive(_FACE_VISIBLE, text)
+        and _target_action(_FRAME_LOCATION, text, subjects)
+        and _target_action(_PALM, text, subjects))
+
+
 def revision_semantic_findings(prompt, contract):
     """Return explicit, target-scoped written contradictions and missing rules.
 
@@ -350,6 +389,7 @@ def revision_semantic_findings(prompt, contract):
         return []
     sections = _sections(prompt)
     definitions = _definitions(sections.get('subject_definitions', prompt))
+    scale_prefix = _caller_scale_prefix(contract, definitions)
     body = sections.get('detailed_description', '')
     retention = sections.get('retention_analysis', '')
     findings, seen = [], set()
@@ -424,7 +464,7 @@ def revision_semantic_findings(prompt, contract):
                 hand = requirement.get('hand')
                 matches = [text for text in scoped if _positive(_FRAME, text) and _target_action(_PALM, text, subjects)
                     and (not hand or re.search(r'左|\bleft\b' if hand == 'left' else r'右|\bright\b', text, re.I))]
-                opening = _opening_palm_state(body, subjects)
+                opening = _opening_palm_state(body, subjects, scale_prefix)
                 if opening and (not hand or re.search(r'左|\bleft\b' if hand == 'left' else r'右|\bright\b', opening, re.I)):
                     matches.append(opening)
                 floor = _floor_conflicts(body, subjects)
@@ -433,7 +473,7 @@ def revision_semantic_findings(prompt, contract):
                 action = f'At the first frame, the target {", ".join(sorted(subjects))} is supported by the open {hand + " " if hand else ""}palm; do not place that target on the floor, rug, or carpet.'
             elif rule == 'target_hand_face_same_frame':
                 valid = any((_HAND.search(text) and _FACE.search(text) and _target_action(_SAME_FRAME, text, subjects))
-                    or _listed_frame_scope(text, subjects) for text in scoped)
+                    or _listed_frame_scope(text, subjects) or _supported_frame_scope(text, subjects) for text in scoped)
                 evidence = 'No recognized target-scoped hand-and-face same-frame statement. Existing target prose: ' + written
                 action = f'Keep the supporting hand and the face visible in the same frame with the target {", ".join(sorted(subjects))}.'
             elif rule == 'target_raise_to_cheek':

@@ -4,6 +4,7 @@ from copy import deepcopy
 import pytest
 
 from app.services.revision_semantics import extract_scene_requirements, revision_semantic_findings
+from app.services.revision_constraints import enforce_revision_constraints
 
 
 INSTRUCTION = 'P02只有水杯大小。第一帧P02由左手掌心托住，手与脸在同一画面；随后把P02抬起贴近脸颊。'
@@ -193,6 +194,67 @@ def test_actual_writer_initial_palm_holding_and_camera_composition_list_are_acce
                   "<Subject 1>, and the plush tree's full body. "
                   "The person then lifts <Subject 1> to their cheek.")
     assert revision_semantic_findings(text, contract(instruction=INSTRUCTION)) == []
+
+
+def test_actual_writer_center_frame_palm_and_visible_face_form_one_composition():
+    text = prompt("A fixed close-up shot establishes 人物甲's left palm holding <Subject 1> "
+                  "in the center of the frame, with the person's face visible to the right. "
+                  "The person then lifts <Subject 1> to their cheek. "
+                  "The product's texture, the person's hand, and the face are all clearly visible "
+                  "in the same frame, establishing a proportional reference.")
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    assert revision_semantic_findings(text, value) == []
+
+
+def test_real_scale_overlay_preserves_actual_initial_palm_state_for_final_validation():
+    text = prompt("A fixed close-up shot establishes 人物甲's left palm holding <Subject 1> "
+                  "in the center of the frame, with the person's face visible to the right. "
+                  "The person then lifts <Subject 1> to their cheek.")
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    final, receipt = enforce_revision_constraints(text, value['revision_constraints'], {'P02': '<Subject 1>'})
+    assert final != text and '[Shot 1] Current caller-authored product scale:' in final
+    assert receipt['clauses'][0]['subject'] == '<Subject 1>'
+    assert revision_semantic_findings(final, value) == []
+
+
+def test_exact_scale_metadata_never_skips_a_floor_first_scene_before_later_palm():
+    text = prompt('<Subject 1> rests on the carpet. '
+                  '<Subject 1> is then held in the open left palm, with the face visible in the same frame. '
+                  'The person lifts <Subject 1> to their cheek.')
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    final, _ = enforce_revision_constraints(text, value['revision_constraints'], {'P02': '<Subject 1>'})
+    assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(final, value))
+
+
+def test_an_arbitrary_sentence_after_the_size_heading_is_not_accepted_as_metadata():
+    text = prompt('Current caller-authored product scale: The camera pans left. '
+                  '<Subject 1> is held in the open left palm, with the face visible in the same frame. '
+                  'The person lifts <Subject 1> to their cheek.')
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(text, value))
+
+
+@pytest.mark.parametrize('composition', [
+    "A shot establishes the left palm holding <Subject 1> in the center of the frame, "
+        "with the person's face visible outside the frame to the right.",
+    "A shot establishes the left palm holding <Subject 1> in the center of the frame, "
+        "with the person's face outside the frame to the right.",
+    "A shot establishes the left palm holding <Subject 1> in the center of the frame, "
+        "with the person's face not visible to the right.",
+    "A shot establishes the left palm holding <Subject 2> in the center of the frame, "
+        "with the person's face visible to the right. <Subject 1> rests on a chair.",
+])
+def test_frame_placement_does_not_hide_face_exclusion_or_borrow_another_product(composition):
+    value = contract(instruction=INSTRUCTION)
+    value['verified_target_subjects'] = {'P02': ['<Subject 1>']}
+    text = prompt(composition, definitions=(
+        '<Subject 1> is the green plush from <Picture 1> and <Picture 2>.\n'
+        '<Subject 2> is a cylindrical box from <Picture 2>.'))
+    assert 'target_hand_face_same_frame' in rules(revision_semantic_findings(text, value))
 
 
 @pytest.mark.parametrize('composition', [

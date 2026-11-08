@@ -179,6 +179,7 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
         assert 'Current explicit caller scene requirements' in graph['4']['inputs']['intent']
         assert 'the supporting hand' in graph['4']['inputs']['intent']
         assert 'The camera holds static throughout this numbered shot.' in graph['4']['inputs']['intent']
+        assert 'Current caller reference-use policy for <Picture 1>, <Picture 2>: appearance ONLY.' in graph['4']['inputs']['intent']
         tray = json.loads(graph['2']['inputs']['tray'])
         assert [slot['label'] for slot in tray] == ['picture1', 'picture2']
         assert [entry['sha256'] for entry in uploads[index * 2:index * 2 + 2]] == expected_hashes
@@ -210,6 +211,32 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
     assert list(case.db.scalars(select(m.VideoRevision.id))) == [case.video.id]
     assert case.source.status == 'generated'
     assert case.prop.spec_json['dimensions'] == '高12.5cm，宽15cm'
+
+
+def test_reference_scale_use_policy_only_changes_the_explicitly_revised_product_group():
+    images=[{'role':'product','product_id':'green','product_name':'Green tree','constraint_target_keys':['P02']},
+            {'role':'product','product_id':'other','product_name':'Other product','constraint_target_keys':['P03']},
+            {'role':'character','actor_id':'operator'}]
+    context={'instruction':'P02只有水杯大小。','revision_constraints':{'version':1,'items':[
+        {'target_key':'P02','relative_scale':'drinking_cup'}]}}
+    before=deepcopy((images,context))
+    _,_,intent,contract=provider.prepare_context_compilation('Show two separate products.','',images,[],context)
+    policy=[line for line in intent.splitlines() if line.startswith('Current caller reference-use policy')]
+    assert len(policy)==1 and policy[0].startswith('Current caller reference-use policy for <Picture 1>:')
+    assert '<Picture 2>' not in policy[0] and '<Picture 3>' not in policy[0]
+    assert contract['constraint_target_groups']=={'P02':'product-1','P03':'product-2'}
+    assert (images,context)==before
+    context['revision_constraints']={'version':1,'items':[]}
+    assert 'Current caller reference-use policy' not in provider.prepare_context_compilation(
+        'Show two separate products.','',images,[],context)[2]
+
+
+@pytest.mark.parametrize('instruction,expected',[
+    ('固定中近景，P02与手脸同框。',True),('镜头保持固定。',True),('The camera holds static.',True),
+    ('不要固定机位，跟随产品。',False),('避免固定镜头。',False),
+    ('Do not use a static camera.',False),('Keep the product static; the camera moves.',False)])
+def test_caller_camera_direction_never_reverses_an_explicit_exclusion(instruction,expected):
+    assert provider._caller_static_camera(instruction) is expected
 
 
 @pytest.mark.parametrize('snapshot', [None, {}, {'version': 2, 'fingerprint': 'untrusted'}])

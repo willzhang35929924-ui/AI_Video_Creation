@@ -167,10 +167,13 @@ def project_declared_bindings(doc,contract,brief):
         raise LocalProfileBlocked('Declared binding projection requires the actual six-section Ref2VA document')
     definitions=sections['subject_definitions'];records={};matches=list(_DEFINITION_PATTERN.finditer(definitions))
     for match in matches:
-        if match[1] in records:raise LocalProfileBlocked('Duplicate written definition prevents a unique canonical anchor: '+match[1])
-        records[match[1]]={'label':match[1],'body':match[2].strip(),
-            'refs':set(re.findall(r'<(?:Picture|Video|Audio)\s+\d+>',match[2])),
-            'start':match.start(),'end':match.end()}
+        body=match[2].strip();refs=set(re.findall(r'<(?:Picture|Video|Audio)\s+\d+>',match[2]))
+        if match[1] in records:
+            records[match[1]]['bodies'].append({'body':body,'refs':refs})
+            records[match[1]]['refs'].update(refs)
+        else:
+            records[match[1]]={'label':match[1],'body':body,'bodies':[{'body':body,'refs':refs}],
+                'refs':refs.copy(),'start':match.start(),'end':match.end()}
     kinds={}
     for subject in doc.plan.subjects:
         if subject.label in kinds:raise LocalProfileBlocked('Plan repeats a Subject label')
@@ -180,6 +183,33 @@ def project_declared_bindings(doc,contract,brief):
         for source in group['native_sources']:
             if source in source_owner:raise LocalProfileBlocked('A native reference crosses declared groups: '+source)
             source_owner[source]=group['group']
+    duplicate_merges=[]
+    for label,item in records.items():
+        if len(item['bodies'])<2:continue
+        verified=contract.get('verified_product_descriptors_by_native')
+        owners={source_owner.get(source) for source in item['refs']}
+        candidates=[group for group in groups if group['category']=='product' and owners=={group['group']}]
+        if not isinstance(verified,dict) or len(candidates)!=1 or None in owners:
+            raise LocalProfileBlocked('Duplicate written definition lacks one verified product group: '+label)
+        group=candidates[0];wanted=set(group['native_sources'])
+        approved={_normal(value).casefold() for source in group['appearance_native']
+                  for value in verified.get(source,[]) if isinstance(value,str) and value.strip()}
+        observed={_normal(subject.descriptor).casefold() for subject in doc.plan.subjects
+                  if subject.kind=='object' and set(subject.sources).intersection(wanted)}
+        anchors=[]
+        for part in item['bodies']:
+            # Match the complete leading noun phrase, not a descriptor occurring
+            # later in a box/operator definition. Unknown wording stays blocked.
+            anchor=re.match(r'(.+?)\s+(?:(?:shown|depicted|appearing)\s+in|from|in|based\s+on)\s+<(?:Picture|Video|Audio)\s+\d+>',
+                            part['body'],re.I|re.S)
+            name=_normal(anchor[1].rstrip(' ,;:')).casefold() if anchor else ''
+            if (not part['refs'] or not part['refs'].issubset(wanted)
+                    or not part['refs'].issubset(source_owner) or name not in approved.intersection(observed)):
+                raise LocalProfileBlocked('Duplicate written definition has an unverified or conflicting leading product anchor: '+label)
+            anchors.append({'leading_noun_anchor':anchor[1],'native_sources':sorted(part['refs']),
+                            'original_body_sha256':hashlib.sha256(part['body'].encode('utf-8')).hexdigest()})
+        duplicate_merges.append({'subject':label,'group':group['group'],'original_definition_count':len(anchors),
+            'verified_leading_anchors':anchors,'operation':'merge repeated same-label verified product definitions; preserve every original model body'})
     for group in groups:
         kind='person' if group['category']=='character' else 'object' if group['category']=='product' else None
         if not kind or not group['appearance_native']:raise LocalProfileBlocked('Declared group has no supported appearance anchor')
@@ -220,14 +250,16 @@ def project_declared_bindings(doc,contract,brief):
         clause='Declared reference binding (caller): appearance sources '+', '.join(assignment['appearance_sources'])
         if assignment['motion_sources']:clause+='; motion content sources '+', '.join(assignment['motion_sources'])
         clause+='.'
-        additions=['Additional original model description: '+records[label]['body']
-                   for label in assignment['existing_group_subjects'] if label!=canonical]
+        additions=['Additional original model description: '+part['body']
+                   for label in assignment['existing_group_subjects'] for index,part in enumerate(records[label]['bodies'])
+                   if label!=canonical or index>0]
         replacements[canonical]=canonical+' is '+body+' '+clause+(' '+' '.join(additions) if additions else '')+'\n'
     projected_definitions=definitions
     for match in reversed(matches):
         label=match[1]
         if label in replacements or label in removed:
-            projected_definitions=projected_definitions[:match.start()]+replacements.get(label,'')+projected_definitions[match.end():]
+            replacement=replacements.get(label,'') if match.start()==records[label]['start'] else ''
+            projected_definitions=projected_definitions[:match.start()]+replacement+projected_definitions[match.end():]
     result={key:_redirect(value,aliases) for key,value in sections.items()}
     result['subject_definitions']=_redirect(projected_definitions,aliases)
     # Only the colliding retention entries need structural normalization. Every
@@ -268,7 +300,8 @@ def project_declared_bindings(doc,contract,brief):
                      result.get('detailed_description',''),re.I):
             raise LocalProfileBlocked('商品与操作者被合并为同一主体，已停止采样；请分开商品身份图与人物／动作参考。')
     prompt='\n\n'.join(key+':\n'+value.strip() for key,value in result.items())+'\n'
-    components={'definitions':[{'label':label,'text':_redirect(item['body'],aliases)} for label,item in records.items()],
+    components={'definitions':[{'label':label,'text':_redirect(part['body'],aliases)}
+                               for label,item in records.items() for part in item['bodies']],
         'retention':[{'label':match[1],'scope':parsed[1] or '', 'marker':parsed[2],
                       'text':_redirect(parsed[3],aliases)} for match,parsed in entries if parsed is not None],
         'creative_sections':{key:_redirect(value,aliases) for key,value in sections.items()
@@ -281,7 +314,8 @@ def project_declared_bindings(doc,contract,brief):
     components['retention_residual']=_redirect(residual,aliases)
     evidence={'status':'PROJECTED_PENDING_VALIDATION','creative_text_source':'model_written',
         'binding_source':'declared_contract_projection','visual_facts_added':False,
-        'alias_map':aliases,'group_assignments':assignments,'preserved_model_components':components,
+        'alias_map':aliases,'group_assignments':assignments,'same_label_definition_merges':duplicate_merges,
+        'preserved_model_components':components,
         'plan_before_sha256':digest(asdict(doc.plan)),
         'input_prompt_sha256':hashlib.sha256(doc.prompt.encode('utf-8')).hexdigest()}
     return prompt,evidence

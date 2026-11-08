@@ -74,6 +74,61 @@ N/A
 
 
 class BindingIntegrityTests(unittest.TestCase):
+    @staticmethod
+    def repeated_product():
+        doc,brief,contract=example()
+        first='the green plush Christmas tree in <Picture 1>, with soft plush fabric, green color and a yellow star.'
+        second='the green plush Christmas tree in <Picture 2>, with round body, embroidered eyes and small colored dots.'
+        doc.prompt=doc.prompt.replace('the green tree toy in <Picture 1>.',first).replace(
+            '<Subject 2> is the same green toy in <Picture 2>.','<Subject 1> is '+second)
+        doc.prompt=doc.prompt.replace('<Subject 2>: fully_preserved - second product appearance\n','')
+        doc.plan.subjects[0].descriptor='the green plush Christmas tree'
+        doc.plan.subjects[1].descriptor='the green plush tree'
+        contract['verified_product_descriptors_by_native']={
+            '<Picture 1>':['the green plush Christmas tree'], '<Picture 2>':['the green plush tree']}
+        return doc,brief,contract,first,second
+
+    def test_repeated_same_label_verified_product_keeps_both_exact_bodies_and_plan(self):
+        doc,brief,contract,first,second=self.repeated_product();before=deepcopy(doc)
+        prompt,proof=profile.project_declared_bindings(doc,contract,brief)
+        self.assertEqual(prompt.split('summary:')[0].count('<Subject 1> is '),1)
+        self.assertIn(first,prompt);self.assertIn(second,prompt)
+        self.assertIn('<Subject 3> is the operator',prompt)
+        self.assertEqual(doc.prompt,before.prompt);self.assertEqual(doc.plan,before.plan)
+        self.assertEqual(proof['alias_map'],{})
+        self.assertEqual(proof['same_label_definition_merges'][0]['original_definition_count'],2)
+        self.assertEqual(proof['same_label_definition_merges'][0]['group'],'product-1')
+        self.assertTrue(all(profile.projection_invariants(prompt,proof).values()))
+
+    def test_repeated_same_label_box_or_operator_cannot_borrow_verified_product_words(self):
+        for replacement in ['the gift box in <Picture 2>, containing the green plush Christmas tree.',
+                            'the operator in <Picture 2>, holding the green plush Christmas tree.']:
+            with self.subTest(anchor=replacement):
+                doc,brief,contract,_,second=self.repeated_product()
+                doc.prompt=doc.prompt.replace(second,replacement)
+                with self.assertRaisesRegex(profile.LocalProfileBlocked,'leading product anchor'):
+                    profile.project_declared_bindings(doc,contract,brief)
+
+    def test_repeated_same_label_cross_group_source_is_not_merged(self):
+        doc,brief,contract,_,_=self.repeated_product()
+        contract['groups'][0].update(appearance_native=['<Picture 1>'],native_sources=['<Picture 1>'])
+        contract['groups'].append({'category':'product','group':'product-2',
+            'appearance_native':['<Picture 2>'],'motion_native':[],'native_sources':['<Picture 2>']})
+        with self.assertRaisesRegex(profile.LocalProfileBlocked,'one verified product group'):
+            profile.project_declared_bindings(doc,contract,brief)
+
+    def test_repeated_same_label_requires_verified_anchors_and_owned_sources(self):
+        for change in ['missing_proof','unknown_anchor','unowned_source','unobserved_anchor']:
+            with self.subTest(change=change):
+                doc,brief,contract,_,second=self.repeated_product()
+                if change=='missing_proof':contract.pop('verified_product_descriptors_by_native')
+                elif change=='unknown_anchor':doc.prompt=doc.prompt.replace(second,'an unidentified green object in <Picture 2>.')
+                elif change=='unowned_source':doc.prompt=doc.prompt.replace(second,second+' Also from <Picture 9>.')
+                else:contract['verified_product_descriptors_by_native']={
+                    '<Picture 1>':['the green plush Christmas tree'], '<Picture 2>':['the green plush Christmas tree']};doc.plan.subjects[0].descriptor='unverified package'
+                with self.assertRaises(profile.LocalProfileBlocked):
+                    profile.project_declared_bindings(doc,contract,brief)
+
     def test_only_verified_product_is_merged_and_operator_stays_independent_even_if_kind_is_object(self):
         doc,brief,contract=example();before=deepcopy(doc)
         prompt,proof=profile.project_declared_bindings(doc,contract,brief)

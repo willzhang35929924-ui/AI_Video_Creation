@@ -290,6 +290,14 @@ def frozen_production_contract(images,declarations,context,prompt):
 
 
 
+def _caller_static_camera(instruction):
+    pattern=r'固定(?:机位|镜头|中近景|近景|全景|拍摄)|(?:摄像机|相机|机位|镜头).{0,6}固定|\bcamera\s+(?:holds?\s+static|is\s+static)\b|\bstatic\s+camera\b'
+    for match in re.finditer(pattern,instruction or '',re.I):
+        clause=re.split(r'[，,。；;.!?\n]',(instruction or '')[:match.start()])[-1][-45:]+match[0]
+        if not re.search(r'不要|不许|不能|禁止|避免|无需|不用|\b(?:not|never|without|avoid)\b|don[’\x27]t',clause,re.I):return True
+    return False
+
+
 def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,silent=False):
     prop_states=_declared_prop_states(prompt)
     tray,declarations,directions=reference_layout(images,motion,prop_states=prop_states)
@@ -313,10 +321,21 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
         elif rule=='target_raise_to_cheek':
             scene.append(f'Then the person raises {key} to the cheek while maintaining the requested product size.')
     if scene:
-        if re.search(r'固定|\b(?:static|holds static)\b',context.get('instruction') or '',re.I):
+        if _caller_static_camera(context.get('instruction')):
             scene.append('The camera holds static throughout this numbered shot.')
         intent+='\nCurrent explicit caller scene requirements (override older framing or placement):\n'+'\n'.join(scene)
         intent+='\nThese requirements govern only the physical target product, not its package. In the numbered shot replace each target name with its actual bound Subject tag; write these visible actions in the shot body.'
+    scaled_groups={contract['constraint_target_groups'].get(item.get('target_key'))
+                   for item in contract['revision_constraints'].get('items',[])
+                   if item.get('measurements') or item.get('relative_scale')}
+    for declaration in declarations.get('reference_groups','').splitlines():
+        match=re.fullmatch(r'product\s+([^:]+):\s*(.+)',declaration)
+        if not match or match[1] not in scaled_groups:continue
+        pictures=', '.join('<Picture '+label.strip().removeprefix('picture')+'>' for label in match[2].split(','))
+        intent+=(f'\nCurrent caller reference-use policy for {pictures}: appearance ONLY. Their printed measurements, '
+            'physical dimensions and photographed scale do NOT govern this product. In retention_analysis describe '
+            'these pictures as "weak_reference - product appearance only; physical size follows the current caller requirements". '
+            'Do not write that reference dimensions are retained or used. Keep the actual product size defined by the caller in the numbered shot.')
     return tray,declarations,intent,contract
 
 
