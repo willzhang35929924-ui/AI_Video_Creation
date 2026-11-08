@@ -29,6 +29,13 @@ MIN_VISION_PIXELS=64*32*32
 MAX_VISION_PIXELS=128*32*32
 VRAM_PREFLIGHT=False
 SAFE_TEXT_SDPA=False
+# Enabled only by the fixed H3-IR wrapper, never by the screenplay/JSON paths.
+H3IR_PROSE_REPEAT_GUARD=False
+PROSE_OUTPUT_REPETITION_PENALTY=1.1
+PROSE_REPEAT_MIN_PERIOD=32
+PROSE_REPEAT_MAX_PERIOD=256
+PROSE_REPEAT_OCCURRENCES=3
+PROSE_REPEAT_CHECK_EVERY=8
 GPU_LEASE_PATH=ROOT/'cache/qwen/gpu-inference.lock'
 SCRIPT_SHA=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 SOURCE_COMPONENTS={'base_script_sha256':SCRIPT_SHA}
@@ -123,7 +130,12 @@ def health():
             'script_sha256':SCRIPT_SHA,'source_components':SOURCE_COMPONENTS,'pid':os.getpid(),
             'loaded':loaded,'busy':lock.locked() or retained_gpu_lease is not None or loaded,'offline':True,
             'inference_phase':inference_phase,'gpu_release_status':gpu_release_status,
-            'gpu_memory':cuda_memory_snapshot(),'last_gpu_cleanup':last_gpu_cleanup,'max_model_len':MAX_CONTEXT_TOKENS}
+            'gpu_memory':cuda_memory_snapshot(),'last_gpu_cleanup':last_gpu_cleanup,'max_model_len':MAX_CONTEXT_TOKENS,
+            'prose_repetition_policy':{'enabled':H3IR_PROSE_REPEAT_GUARD,'policy':'h3ir-output-repetition-v1',
+                'scope':'generated_tokens_only','output_repetition_penalty':PROSE_OUTPUT_REPETITION_PENALTY,
+                'eos_logits_exempt':True,'min_period_tokens':PROSE_REPEAT_MIN_PERIOD,
+                'max_period_tokens':PROSE_REPEAT_MAX_PERIOD,'required_adjacent_repetitions':PROSE_REPEAT_OCCURRENCES,
+                'check_every_tokens':PROSE_REPEAT_CHECK_EVERY}}
 
 @app.get('/v1/models')
 def models():
@@ -400,6 +412,97 @@ def generation_sampling_controls(body,model):
             'top_p':getattr(model.generation_config,'top_p',1.0),
             'top_k':getattr(model.generation_config,'top_k',50)}
 
+class OutputOnlyRepetitionPenalty:
+    """Use the official HF penalty only on emitted tokens; leave EOS untouched."""
+    def __init__(self,prompt_tokens,penalty=1.1,eos_ids=(),processor=None):
+        if type(prompt_tokens) is not int or prompt_tokens<0 or not 1.0<float(penalty)<=1.2:
+            raise ValueError('Invalid output repetition penalty policy')
+        self.prompt_tokens=prompt_tokens;self.penalty=float(penalty)
+        self.eos_ids=tuple(sorted(set(int(token) for token in eos_ids if token is not None)))
+        self.uses_prompt_ignore_length=False
+        if processor is None:
+            import inspect
+            from transformers import RepetitionPenaltyLogitsProcessor
+            self.uses_prompt_ignore_length='prompt_ignore_length' in inspect.signature(RepetitionPenaltyLogitsProcessor).parameters
+            options={'prompt_ignore_length':prompt_tokens} if self.uses_prompt_ignore_length else {}
+            processor=RepetitionPenaltyLogitsProcessor(penalty=self.penalty,**options)
+        self.processor=processor
+
+    def __call__(self,input_ids,scores):
+        if input_ids.shape[-1]<=self.prompt_tokens:return scores
+        eos=[token for token in self.eos_ids if 0<=token<scores.shape[-1]]
+        original_eos=scores[:,eos].clone() if eos else None
+        emitted=input_ids if self.uses_prompt_ignore_length else input_ids[:,self.prompt_tokens:]
+        result=self.processor(emitted,scores)
+        if eos:result[:,eos]=original_eos
+        return result
+
+
+class RepeatedOutputGuard:
+    """Stop an adjacent long token-block loop, without counting the prompt.
+
+    This does not finish, repair or trim a brief. A trigger remains an explicit
+    incomplete-generation failure. Short chants and non-adjacent repetitions
+    (for example a name in several required sections) do not qualify.
+    """
+    def __init__(self,prompt_tokens,eos_ids=(),*,min_period=32,max_period=256,repetitions=3,check_every=8):
+        if (type(prompt_tokens) is not int or prompt_tokens<0 or not 16<=min_period<=max_period<=512
+                or not 3<=repetitions<=4 or not 1<=check_every<=32):
+            raise ValueError('Invalid bounded prose repetition guard')
+        self.prompt_tokens=prompt_tokens;self.eos_ids=set(eos_ids)
+        self.min_period=min_period;self.max_period=max_period
+        self.repetitions=repetitions;self.check_every=check_every
+        self.triggered=False;self.checked_tokens=0;self.period_tokens=None
+
+    def __call__(self,input_ids,scores=None,**kwargs):
+        shape=getattr(input_ids,'shape',None)
+        length=(int(shape[-1]) if shape is not None else len(input_ids[0]))-self.prompt_tokens
+        if self.triggered:return True
+        if length<self.min_period*self.repetitions or length%self.check_every or length==self.checked_tokens:return False
+        if (int(shape[0]) if shape is not None else len(input_ids))!=1:
+            raise ValueError('The fixed prose guard requires a single generated sequence')
+        row=input_ids[0];tail=row[-min(length,self.max_period*self.repetitions):]
+        tail=tail.tolist() if hasattr(tail,'tolist') else list(tail)
+        self.checked_tokens=length
+        if tail and tail[-1] in self.eos_ids:return False
+        for period in range(self.min_period,min(self.max_period,length//self.repetitions)+1):
+            block=tail[-period:]
+            if block*self.repetitions!=tail[-period*self.repetitions:]:continue
+            # A long composite of a short chant is still a short chant.
+            if any(period%unit==0 and block==block[:unit]*(period//unit) for unit in range(1,self.min_period)):continue
+            self.triggered=True;self.period_tokens=period
+            return True
+        return False
+
+    def receipt(self):
+        return {'scope':'generated_tokens_only','triggered':self.triggered,
+                'min_period_tokens':self.min_period,'max_period_tokens':self.max_period,
+                'required_adjacent_repetitions':self.repetitions,'check_every_tokens':self.check_every,
+                'checked_generated_tokens':self.checked_tokens,'matched_period_tokens':self.period_tokens,
+                'completion_rewritten':False,'incomplete_finish_reason':'repetition_limit'}
+
+
+def generation_prose_controls(body,model,prompt_tokens,*,existing_stopping=None):
+    enabled=H3IR_PROSE_REPEAT_GUARD and body.response_format is None
+    receipt={'enabled':bool(enabled),'policy':'h3ir-output-repetition-v1','scope':'generated_tokens_only'}
+    if not enabled:return {},receipt,None
+    from transformers import LogitsProcessorList,StoppingCriteriaList
+    eos=model.generation_config.eos_token_id
+    eos_ids=eos if isinstance(eos,(list,tuple)) else [eos]
+    penalty=OutputOnlyRepetitionPenalty(prompt_tokens,PROSE_OUTPUT_REPETITION_PENALTY,eos_ids)
+    guard=RepeatedOutputGuard(prompt_tokens,eos_ids,min_period=PROSE_REPEAT_MIN_PERIOD,
+        max_period=PROSE_REPEAT_MAX_PERIOD,repetitions=PROSE_REPEAT_OCCURRENCES,check_every=PROSE_REPEAT_CHECK_EVERY)
+    receipt.update(output_repetition_penalty=penalty.penalty,eos_logits_exempt=True,
+                   hf_prompt_ignore_length=penalty.uses_prompt_ignore_length,
+                   inherited_prompt_penalty_disabled=True)
+    return {'repetition_penalty':1.0,'logits_processor':LogitsProcessorList([penalty]),
+            'stopping_criteria':StoppingCriteriaList([*(existing_stopping or []),guard])},receipt,guard
+
+
+def generation_finish_reason(ended,matched_stop,generated_tokens,max_tokens,guard=None):
+    if guard is not None and guard.triggered:return 'repetition_limit'
+    return 'stop' if ended or matched_stop is not None else 'length' if generated_tokens>=max_tokens else 'time_limit'
+
 def trim_stop_output(result,raw_result,stops):
     matches=[(raw_result.find(stop),index,stop) for index,stop in enumerate(stops) if stop in raw_result]
     if not matches:return result,None
@@ -541,6 +644,7 @@ def infer(body):
     if not torch.cuda.is_available():raise RuntimeError('CUDA unavailable; no silent CPU or cloud fallback')
     if not lock.acquire(blocking=False):raise HTTPException(409,'Local model is busy; no duplicate inference started')
     model=processor=inputs=outputs=generated=None;lease=None;started=time.monotonic()
+    generation_kwargs=prose_kwargs=repeat_guard=None
     failure=None;response=None;baseline={'state':'not_initialized','allocated_bytes':0,'reserved_bytes':0}
     inference_phase='preparing';gpu_release_status='in_use'
     try:
@@ -570,9 +674,13 @@ def infer(body):
         stop_kwargs,stops=generation_stop_controls(body,processor)
         sampling_kwargs=generation_sampling_controls(body,model)
         guided_kwargs,guided_stats=guided_generation_controls(prepared_format,processor,model,prompt_tokens)
+        generation_kwargs={**sampling_kwargs,**stop_kwargs,**guided_kwargs}
+        prose_kwargs,prose_receipt,repeat_guard=generation_prose_controls(body,model,prompt_tokens,
+            existing_stopping=generation_kwargs.get('stopping_criteria'))
+        generation_kwargs.update(prose_kwargs)
         inference_phase='generating'
         with torch.inference_mode():
-            outputs=model.generate(**inputs,max_new_tokens=body.max_tokens,max_time=480,**sampling_kwargs,**stop_kwargs,**guided_kwargs)
+            outputs=model.generate(**inputs,max_new_tokens=body.max_tokens,max_time=480,**generation_kwargs)
         generated=outputs[:,prompt_tokens:]
         result=processor.batch_decode(generated,skip_special_tokens=True,clean_up_tokenization_spaces=False)[0]
         raw_result=processor.batch_decode(generated,skip_special_tokens=False,clean_up_tokenization_spaces=False)[0] if stops else result
@@ -580,7 +688,8 @@ def infer(body):
         eos=model.generation_config.eos_token_id
         eos_ids=set(eos if isinstance(eos,list) else [eos])
         ended=bool(generated.shape[-1] and int(generated[0,-1]) in eos_ids)
-        finish='stop' if ended or matched_stop is not None else 'length' if generated.shape[-1]>=body.max_tokens else 'time_limit'
+        finish=generation_finish_reason(ended,matched_stop,int(generated.shape[-1]),body.max_tokens,repeat_guard)
+        if repeat_guard is not None:prose_receipt.update(guard=repeat_guard.receipt())
         format_receipt=validate_guided_output(result,prepared_format,guided_stats,ended,finish,int(generated.shape[-1]))
         response={'id':'localchat_'+uuid.uuid4().hex,'object':'chat.completion','model':MODEL_ID,
           'choices':[{'index':0,'message':{'role':'assistant','content':result},'finish_reason':finish}],
@@ -595,6 +704,7 @@ def infer(body):
             'chat_template_control':thinking_receipt,'stop_sequences':stops,'matched_stop':matched_stop,
             'decoding':'sampling' if sampling_kwargs['do_sample'] else 'greedy',
             'sampling_parameters':sampling_kwargs,'requested_temperature':body.temperature,
+            'prose_repetition_control':prose_receipt,
             'context_budget':{'max_model_len':MAX_CONTEXT_TOKENS,'max_prompt_tokens':MAX_PROMPT_TOKENS,
                               'actual_prompt_tokens':prompt_tokens,'requested_output_tokens':body.max_tokens},
             'vram_preflight':memory_receipt,'gpu_slot':'exclusive_local_qwen','attention_control':attention_receipt,
@@ -610,6 +720,7 @@ def infer(body):
         # still retain error.__context__ and its model.generate frame/weights.
         inference_phase='cleaning_gpu'
         model=processor=inputs=outputs=generated=None
+        generation_kwargs=prose_kwargs=repeat_guard=None
         last_gpu_cleanup=cleanup_gpu(torch,baseline)
         loaded=not last_gpu_cleanup['released']
         gpu_release_status='confirmed' if last_gpu_cleanup['released'] else 'unconfirmed'

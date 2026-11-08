@@ -27,6 +27,7 @@ runtime.MIN_VISION_PIXELS=64*32*32
 runtime.MAX_VISION_PIXELS=512*32*32
 runtime.VRAM_PREFLIGHT=True
 runtime.SAFE_TEXT_SDPA=True
+runtime.H3IR_PROSE_REPEAT_GUARD=True
 base_bytes=BASE.read_bytes()
 wrapper_bytes=Path(__file__).read_bytes()
 runtime.SCRIPT_SHA=hashlib.sha256(b'video-factory-qwen-profile-v1\0'+base_bytes+b'\0'+wrapper_bytes).hexdigest()
