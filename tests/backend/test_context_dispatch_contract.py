@@ -38,6 +38,10 @@ def dispatch_case(settings):
     try:
         with build_session_factory(engine)() as session:
             seed_local_services(session, settings)
+            # Context-IR is explicit on portable hosts; do not depend on the
+            # workstation-only Windows legacy fallback for service selection.
+            service = session.scalar(select(m.AIService).where(m.AIService.module == 'video_generation'))
+            service.settings_json = {**service.settings_json, 'workflow_profile': 'context_ir'}
             project = m.Project(name='Isolated cup-scale dispatch contract')
             product = m.Product(name='Green plush tree')
             session.add_all([project, product]); session.flush()
@@ -174,6 +178,7 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
         assert all(ref['sha256'][:16] in slot['file']
                    for ref, slot in zip(case.references, tray))
         assert envelope.seed == 743 and envelope.parameters['h3_workflow']['actual_steps'] == 4
+        assert envelope.parameters['service_snapshot']['settings']['workflow_profile'] == 'context_ir'
         assert job.status == 'failed' and job.provider_job_id is None
         assert job.error_code == 'context_ir_graph_rejected'
 
