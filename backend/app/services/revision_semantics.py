@@ -326,11 +326,41 @@ def _caller_scale_prefix(contract, definitions):
     return 'Current caller-authored product scale: ' + ' '.join(clauses) + ' '
 
 
+def _static_opening_intro(text):
+    """Recognize one brief setting-only sentence, never an earlier action.
+
+    The writer may establish a static camera or a person standing in the room
+    before describing the opening composition. Native subjects, product/hand
+    state, movement, and temporal transitions cannot be skipped this way.
+    """
+    if len(text) > 600 or len(text.split()) > 80 or _TAG.search(text):
+        return False
+    if re.fullmatch(r'(?:the\s+)?camera\s+holds\s+static(?:\s+throughout(?:\s+the\s+shot)?)?', text, re.I):
+        return True
+    intro = re.match(r'^(?:a|the)\s+(?:static|fixed|locked[- ]off)\s+'
+        r'(?:[A-Za-z-]+\s+){0,3}shot\s+establishes\s+(?:the\s+)?scene\s*:\s*', text, re.I)
+    if not intro:
+        return False
+    setting = text[intro.end():]
+    if not re.match(r'[^,:.;]{1,50}?\s+(?:stands|is\s+standing)\s+in\b', setting, re.I):
+        return False
+    return not (_HAND.search(setting) or _PALM.search(setting) or _CHEEK.search(setting)
+        or re.search(r'\b(?:product|plush|toy|packag(?:e|ing)|box|P\d+)\b|'
+            r'\b(?:will|later|after(?:ward)?s?|before|eventually|then|subsequently|soon|next|'
+            r'pick(?:s|ed|ing)?|lift(?:s|ed|ing)?|rais(?:e|es|ed|ing)|mov(?:e|es|ed|ing)|'
+            r'walk(?:s|ed|ing)?|enter(?:s|ed|ing)?|approach(?:es|ed|ing)?|'
+            r'put(?:s|ting)?|plac(?:e|es|ed|ing)|tak(?:e|es|ing)|took|'
+            r'hold(?:s|ing)?|held|support(?:s|ed|ing)?|grasp(?:s|ed|ing)?|'
+            r'grab(?:s|bed|bing)?|reach(?:es|ed|ing)?|carri(?:es|ed)|carry(?:ing)?|'
+            r'pan(?:s|ned|ning)?|push(?:es|ed|ing)?|pull(?:s|ed|ing)?|track(?:s|ed|ing)?)\b|'
+            r'随后|稍后|之后|之前|将会|再将|拿起|抬起|放下|走入|走进', setting, re.I))
+
+
 def _opening_palm_state(body, subjects, scale_prefix=''):
-    """Recognize a present held state in the first numbered shot sentence.
+    """Recognize the initial held state after at most one static setting intro.
 
     An initial composition can settle the opening without the literal words
-    "first frame". A future support action or a later sentence cannot.
+    "first frame". A future support action or an earlier action cannot.
     """
     shot = re.search(r'\[Shot\s*1\]\s*', body, re.I)
     if not shot:
@@ -338,7 +368,10 @@ def _opening_palm_state(body, subjects, scale_prefix=''):
     beginning = body[shot.end():]
     if scale_prefix and beginning.startswith(scale_prefix):
         beginning = beginning[len(scale_prefix):]
-    opening = next(_sentences(beginning), '')
+    sentences = iter(_sentences(beginning))
+    opening = next(sentences, '')
+    if _static_opening_intro(opening):
+        opening = next(sentences, '')
     if re.search(r'\b(?:will|later|after(?:ward)?s?|eventually|then|subsequently|soon|next)\b|随后|稍后|之后|将会|再将', opening, re.I):
         return ''
     state = re.search(r'\b(?:being\s+|(?:is|remains|stays)\s+(?:already\s+)?)'
@@ -350,7 +383,8 @@ def _opening_palm_state(body, subjects, scale_prefix=''):
     # turning a later pickup or a negated/future action into an opening state.
     state = state or re.search(r'\b(?:frames?|captures?|shows?)(?=\s|[^A-Za-z])'
         r'[^.;]{0,100},\s*holding\b', opening, re.I)
-    return opening if state and _target_action(_PALM, opening, subjects) else ''
+    return opening if state and any(_target_action(_PALM, clause, subjects)
+        for clause in _scene_clauses(opening)) else ''
 
 
 def _scene_clauses(body):

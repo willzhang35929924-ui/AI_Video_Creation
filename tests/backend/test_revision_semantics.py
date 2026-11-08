@@ -181,11 +181,54 @@ def test_actual_writer_opening_present_palm_state_is_first_frame_without_magic_w
     '<Subject 1> will later be held in the open left palm.',
     'The child picks up <Subject 1> from the carpet and holds it in the open left palm.',
     '<Subject 1> rests on the carpet. Later <Subject 1> is held in the open left palm.',
-    'The camera holds static. <Subject 1> is held in the open left palm.',
 ])
 def test_future_or_later_palm_support_is_not_an_initial_present_state(opening):
     text = prompt(opening + ' The hand and face are in the same frame with <Subject 1>. '
                   'The person raises <Subject 1> to their cheek.')
+    assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(text, contract(instruction=INSTRUCTION)))
+
+
+@pytest.mark.parametrize('intro', [
+    'The camera holds static.',
+    'A static medium shot establishes the scene:人物甲 stands in a cozy American middle-class living room '
+        'with beige sheepskin rug, background featuring lit string lights on a Christmas tree and a burning fireplace.',
+])
+def test_single_static_camera_or_setting_intro_preserves_initial_present_palm_state(intro):
+    text = prompt(intro + ' The camera holds static, framing人物甲 from waist up, showing her entire face, '
+        'her open left palm supporting <Subject 1> at chest level — not placed on floor, rug, or carpet — '
+        'and the full <Subject 1> in the frame. The product\'s deep green body is visible. '
+        'She lifts <Subject 1> to her right cheek, keeping the product and her face at equal depth.')
+    assert revision_semantic_findings(text, contract(instruction=INSTRUCTION)) == []
+
+
+@pytest.mark.parametrize('intro', [
+    'A static medium shot establishes the scene:人物甲 stands in a room and picks it up.',
+    'A static medium shot establishes the scene:人物甲 stands in a room after putting it on the carpet.',
+    'A static medium shot establishes the scene:人物甲 walks into a room.',
+    'A static medium shot establishes the scene:人物甲 stands in a room and the camera pans left.',
+    'A static medium shot establishes the scene:人物甲 stands in a room holding a plush toy.',
+    'A static medium shot establishes the scene: <Subject 1> rests on the carpet.',
+    'The camera pushes in.',
+    'The room is shown.',
+    'The camera holds static. The camera holds static.',
+])
+def test_prior_action_target_state_or_multiple_intros_cannot_be_skipped_for_opening_palm(intro):
+    text = prompt(intro + ' <Subject 1> is held in the open left palm, with the hand and face '
+        'visible in the same frame. She lifts <Subject 1> to her cheek.')
+    assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(text, contract(instruction=INSTRUCTION)))
+
+
+@pytest.mark.parametrize('state', [
+    '<Subject 1> will later be held in the open left palm.',
+    '<Subject 1> is not held in the open left palm.',
+    '<Subject 1> is held in the open right palm.',
+    '<Subject 1> rests on the carpet before she picks it up.',
+    '<Subject 2> is held in the open left palm while <Subject 1> remains on a stand.',
+])
+def test_static_intro_never_changes_future_negated_wrong_hand_floor_or_other_product_state(state):
+    text = prompt('The camera holds static. ' + state + ' She lifts <Subject 1> to her cheek.', definitions=(
+        '<Subject 1> is the green plush from <Picture 1> and <Picture 2>.\n'
+        '<Subject 2> is a gift box from <Picture 3>.'))
     assert 'target_first_frame_palm_support' in rules(revision_semantic_findings(text, contract(instruction=INSTRUCTION)))
 
 
