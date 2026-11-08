@@ -29,7 +29,7 @@ from urllib.parse import urlsplit
 import uuid
 
 VERSION='local-h3ir-qwen4b-v3'
-POLICY_REVISION='revision-integrity-20261107-v1'
+POLICY_REVISION='revision-semantics-20261107-v2'
 MODEL='Qwen/Qwen3-VL-4B-Instruct'
 MAX_OUTPUT=4096
 CARD_OUTPUT=3072
@@ -42,6 +42,9 @@ SERIALIZER_SHA256='e03828302d1134ca5cef228c2c0e08cad92631ef7dc182e803c2de16248dc
 RENDER_FIELDS_SHA256='6e2900fadda2d5ca7362f01af771c4862127daba11874b5a6c536fc8c6d601c4'
 CONDITION_SHA256='ad11fdeabba7c3f2a73ddc1c2821ea58e048c45dc30edf4a02fa932ef158883c'
 STOCK_H3_SHA256='108ceff11e5a5c9a34a57bbc380447cf9941beb673a1bd421abc818de54ccd5c'
+WRITTEN_CONTEXT_SHA256='15934b25540728207199551947ce7b4a6de80cccf82ee7b96f529956387a0256'
+WRITTEN_VALIDATE_SHA256='b84ea591ee561790dce790dd81c90796cf4a631e1485e24a59d8e84e79c29c79'
+COMPILE_BRIEF_SHA256='c75bdd18e15b9e1a1ac1feb06457f241e24e68ff7f00d8a10113a3bdcbc9dfd8'
 
 
 class LocalProfileFailure(RuntimeError):
@@ -56,16 +59,29 @@ def source_hash(function):
     return hashlib.sha256(inspect.getsource(function).encode('utf-8')).hexdigest()
 
 
-def _product_subject_labels(doc,contract,sources):
-    """Use model-verified object identities, never every object in a product photo."""
+def _product_subject_labels(doc,contract,sources,*,prompt=None):
+    """Match written identity anchors, not the per-file candidate Plan labels.
+
+    The native writer can merge/relabel its candidates. Their labels therefore
+    cannot identify the resulting prose. Only an exact leading noun phrase
+    already approved by real image verification anchors a physical product.
+    """
     verified=contract.get('verified_product_descriptors_by_native')
     if verified is None:return None  # Historical, explicitly recorded contracts.
-    labels=set()
-    for subject in doc.plan.subjects:
-        descriptor=_normal(subject.descriptor).casefold()
-        for source in set(subject.sources).intersection(sources):
-            if descriptor in {_normal(value).casefold() for value in verified.get(source,[])}:
-                labels.add(subject.label)
+    labels=set();descriptor_sources=set(sources)
+    for group in contract.get('groups',[]):
+        if group.get('category')=='product' and descriptor_sources.intersection(group.get('appearance_native',[])):
+            descriptor_sources.update(group.get('appearance_native',[]))
+    def noun(value):return re.sub(r'^(?:the|an?|same)\s+','',_normal(value).casefold())
+    descriptors={noun(value) for source in descriptor_sources for value in verified.get(source,[]) if noun(value)}
+    written=prompt if prompt is not None else doc.prompt
+    from h3ir.compile import _split_written
+    definitions=_split_written(written).get('subject_definitions','')
+    for match in _DEFINITION_PATTERN.finditer(definitions):
+        label,body=match[1],match[2]
+        refs=set(re.findall(r'<(?:Picture|Video|Audio)\s+\d+>',body))
+        if refs.intersection(sources) and any(re.match(re.escape(value)+r'(?=\W|$)',noun(body)) for value in descriptors):
+            labels.add(label)
     return labels
 
 
@@ -412,6 +428,74 @@ def _document_evidence(doc):
                         for f in getattr(doc,'findings',())]}
 
 
+def _revision_semantic_findings(prompt,scope,*,plan=None,final_folder=None):
+    from .revision_semantics import revision_semantic_findings
+    contract=scope.get('reference_contract') or {}
+    proof=scope.get('product_identity_verification') or {}
+    if proof.get('status')=='PASS' and plan is not None:
+        contract={**contract,'verified_product_descriptors_by_native':proof['approved_product_descriptors_by_native']}
+        targets={}
+        for key,name in contract.get('constraint_target_groups',{}).items():
+            group=next((g for g in contract.get('groups',[]) if g.get('group')==name),None)
+            if group is not None:
+                targets[key]=sorted(_product_subject_labels(None,contract,set(group['native_sources']),prompt=prompt))
+        contract={**contract,'verified_target_subjects':targets}
+    findings=revision_semantic_findings(prompt,contract)
+    index=scope.get('revision_validation_passes',0)+1
+    scope['revision_validation_passes']=index
+    record={'policy':POLICY_REVISION,'stage':'final_serialization' if final_folder else 'native_written_verification',
+        'status':'BLOCKED' if findings else 'PASS','prompt_sha256':hashlib.sha256(prompt.encode()).hexdigest(),
+        'findings':findings,'verified_target_subjects':contract.get('verified_target_subjects'),
+        'rewrites_creative_text':False,
+        'correction_owner':'pinned upstream compile_brief / fix_with_findings; maximum two rounds'}
+    write_json(scope['directory']/f'revision-verify-{index:03d}.json',record)
+    (scope['directory']/f'revision-verify-{index:03d}.prompt.txt').write_text(prompt,encoding='utf-8')
+    if final_folder:write_json(final_folder/'revision-semantics.final.json',record)
+    return findings
+
+
+def _install_revision_validation():
+    """Let the real upstream writer repair caller-contract conflicts.
+
+    The initial deterministic draft uses a different Context and must not be
+    mistaken for the writer's candidate. Keep the exact written Context objects
+    in this scope; no global policy or model is changed outside this wrapper.
+    """
+    import h3ir.compile as compiler
+    from h3ir.models import Finding
+    with _INSTALL_LOCK:
+        original_context=compiler._written_context
+        original_validate=compiler.validate
+        if getattr(original_validate,'_factory_revision_validation_version',None)==POLICY_REVISION:return
+        if (source_hash(inspect.unwrap(original_context))!=WRITTEN_CONTEXT_SHA256
+                or source_hash(inspect.unwrap(original_validate))!=WRITTEN_VALIDATE_SHA256
+                or source_hash(compiler.compile_brief)!=COMPILE_BRIEF_SHA256):
+            raise LocalProfileFailure('The audited native written verification/correction path changed')
+
+        @functools.wraps(original_context)
+        def written_context(*args,**kwargs):
+            context=original_context(*args,**kwargs)
+            scope=_ACTIVE.get()
+            if scope is not None:
+                scope.setdefault('written_contexts',[]).append(context)
+                plan=inspect.signature(original_context).bind(*args,**kwargs).arguments.get('plan')
+                scope.setdefault('written_plans',[]).append((context,plan))
+            return context
+
+        @functools.wraps(original_validate)
+        def validate_written(prompt,context,*args,**kwargs):
+            findings=original_validate(prompt,context,*args,**kwargs)
+            scope=_ACTIVE.get()
+            if scope is None or not any(context is item for item in scope.get('written_contexts',[])):
+                return findings
+            plan=next((plan for item,plan in scope.get('written_plans',[]) if item is context),None)
+            return [*findings,*[Finding(item['rule'],item['severity'],item['message'])
+                for item in _revision_semantic_findings(prompt,scope,plan=plan)]]
+        validate_written._factory_revision_validation_version=POLICY_REVISION
+        compiler._written_context=written_context
+        compiler.validate=validate_written
+
+
 def _install_document_gate(namespace):
     """Wrap the serializer's real namespace, never a replacement Main/output."""
     with _INSTALL_LOCK:
@@ -453,6 +537,10 @@ def _install_document_gate(namespace):
                         raise LocalProfileBlocked('Declared reference projection BLOCKED before H3 loading: '
                             +type(error).__name__+': '+str(error)+'; evidence: '+str(folder)) from error
                 doc=_apply_revision_constraints(doc,brief,scope,folder)
+                semantic_findings=_revision_semantic_findings(doc.prompt,scope,plan=doc.plan,final_folder=folder)
+                if semantic_findings:
+                    raise LocalProfileBlocked('Caller revision contract still conflicts before H3 loading: '
+                        +'; '.join(item['message'] for item in semantic_findings)+'; evidence: '+str(folder))
                 body=original(doc,brief)
                 write_json(folder/'body.json',body)
                 if not isinstance(body,dict) or body.get('degraded') is not False or body.get('fallback_reason'):
@@ -492,6 +580,7 @@ def install_compiler_gate(compile_here):
         raise LocalProfileFailure('The installed document serializer changed; source gate was not guessed')
     _install_document_gate(namespace)
     _install_analysis_capture()
+    _install_revision_validation()
     return {'compile_here_sha256':COMPILER_CALL_SHA256,'serializer_sha256':SERIALIZER_SHA256,
             'source_field':'actual h3ir.models.IRDocument.source',
             'required_source':'written','location':'before vendor serializer returns body to Main; before H3 loaders'}

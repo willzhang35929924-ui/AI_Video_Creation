@@ -114,6 +114,7 @@ jobs:
           PY
           python -m unittest discover -s tests -p test_product_reference_validation.py -v
           python -m unittest discover -s tests -p test_h3_revision_integrity.py -v
+          python -m unittest discover -s tests -p test_h3_revision_semantic_gate.py -v
       - name: Verify native Context-IR installer and supervisor boundaries without models
         run: python -m unittest discover -s scripts/local_inference -p test_native_runtime.py -v
       - name: Check verified backup and restore helper

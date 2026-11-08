@@ -11,6 +11,7 @@ from test_context_cold_start import HEALTH
 
 
 COMPILER='VideoFactoryLocalH3IRCompile'
+POLICY=['STRING',{'default':'revision_semantics_v1'}]
 
 
 def inventory(definition):
@@ -19,9 +20,20 @@ def inventory(definition):
 
 @pytest.mark.parametrize('definition',[
     {}, {'input':{}}, {'input':None},
-    {'input':{'optional':{'production_contract':['INT',{}]}}},
-    {'input':{'optional':{'production_contract':'STRING'}}},
-    {'input':{'optional':{'production_contract':[]}}},
+    {'input':{'optional':{'production_contract':['INT',{}],'caller_contract_policy':POLICY}}},
+    {'input':{'optional':{'production_contract':'STRING','caller_contract_policy':POLICY}}},
+    {'input':{'optional':{'production_contract':[],'caller_contract_policy':POLICY}}},
+    {'input':{'optional':{'production_contract':['STRING',{'default':''}]}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':['STRING',{'default':'legacy'}]}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':['STRING',{}]}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':['INT',{'default':'revision_semantics_v1'}]}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':'revision_semantics_v1'}}},
+    {'input':{'optional':{'production_contract':['STRING',{}],
+                          'caller_contract_policy':[]}}},
 ])
 def test_older_or_malformed_compiler_is_rejected_before_upload_or_qwen(definition):
     calls=[]
@@ -42,9 +54,11 @@ def test_older_or_malformed_compiler_is_rejected_before_upload_or_qwen(definitio
 
 
 @pytest.mark.parametrize('group',['required','optional'])
-def test_string_contract_in_required_or_optional_admits_current_local_service(group):
+@pytest.mark.parametrize('policy_group',['required','optional'])
+def test_string_contract_in_required_or_optional_admits_current_local_service(group,policy_group):
     calls=[]
     definition={'input':{group:{'production_contract':['STRING',{'default':''}]}}}
+    definition['input'].setdefault(policy_group,{})['caller_contract_policy']=deepcopy(POLICY)
     before=deepcopy(definition)
     def reply(request):
         calls.append((request.method,request.url.path))
@@ -79,7 +93,8 @@ def test_busy_queue_has_priority_over_upgrade_diagnostic():
 @pytest.mark.parametrize('current',[False,True])
 def test_connection_health_reports_compiler_upgrade_without_claiming_generation_ready(settings,monkeypatch,current):
     calls=[];real=httpx.AsyncClient
-    definition={'input':{'optional':{'production_contract':['STRING',{}]}}} if current else {}
+    definition={'input':{'optional':{'production_contract':['STRING',{}],
+                                     'caller_contract_policy':deepcopy(POLICY)}}} if current else {}
     def reply(request):
         calls.append((request.method,request.url.path))
         if request.url.path=='/queue':return httpx.Response(200,json={'queue_running':[],'queue_pending':[]})

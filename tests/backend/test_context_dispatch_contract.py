@@ -143,7 +143,7 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
     forged = {'version': 1, 'fingerprint': 'caller-forged',
         'revision_constraints': {'items': [{'target_key': 'POISON', 'relative_scale': 'two_palms'}]},
         'references': [{'asset_id': 'unselected-foreign-reference'}]}
-    payload = RevisionRequest(instruction='P02只有水杯大小。保持绿色和黄色星星不变。',
+    payload = RevisionRequest(instruction='P02高10cm、宽8cm，只有水杯大小。第一帧起P02由左手掌心托住。固定中近景，手掌、完整P02与人物脸部同时入镜。再将P02靠近脸颊。保持绿色和黄色星星不变。',
         use_project_video_service=True, parameters={'context_inputs': forged})
     preview = revision_preview(case.video.id, payload, case.request, case.db)
     expected_contract = preview['production_contract']
@@ -151,6 +151,9 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
     assert item['target_key'] == 'P02' and item['target_entity_id'] == case.prop.id
     assert item['relative_scale'] == 'drinking_cup'
     assert expected_contract['constraint_target_groups'] == {'P02': 'product-1'}
+    assert {r['rule'] for r in expected_contract['scene_requirements']} == {
+        'target_first_frame_palm_support','target_hand_face_same_frame','target_raise_to_cheek'}
+    assert all(r['target_key']=='P02' for r in expected_contract['scene_requirements'])
     expected_ids = [ref['id'] for ref in case.references]
     expected_hashes = [ref['sha256'] for ref in case.references]
     assert preview['asset_ids'] == expected_ids and len(expected_ids) == 2
@@ -170,8 +173,12 @@ def test_revision_and_failed_retry_dispatch_the_preview_cup_constraint_and_exact
             for ref in envelope.reference_assets]
         graph = submitted_graphs[index]
         assert graph['4']['class_type'] == 'VideoFactoryLocalH3IRCompile'
+        assert graph['4']['inputs']['caller_contract_policy'] == 'revision_semantics_v1'
         assert json.loads(graph['4']['inputs']['production_contract']) == expected_contract
         assert graph['4']['inputs']['intent'] == preview['prompt']
+        assert 'Current explicit caller scene requirements' in graph['4']['inputs']['intent']
+        assert 'the supporting hand' in graph['4']['inputs']['intent']
+        assert 'The camera holds static throughout this numbered shot.' in graph['4']['inputs']['intent']
         tray = json.loads(graph['2']['inputs']['tray'])
         assert [slot['label'] for slot in tray] == ['picture1', 'picture2']
         assert [entry['sha256'] for entry in uploads[index * 2:index * 2 + 2]] == expected_hashes

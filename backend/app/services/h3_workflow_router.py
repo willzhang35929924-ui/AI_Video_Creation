@@ -10,6 +10,7 @@ from pathlib import PurePosixPath
 
 from app.core.config import PROJECT_ROOT
 from app.core.errors import AppError
+from app.services.revision_semantics import CALLER_CONTRACT_POLICY
 
 
 CONTEXT_IR_VERSION = 'local-h3ir-qwen4b-v3'
@@ -165,7 +166,7 @@ def build_graph(snapshot, *, tray, intent, duration_seconds, aspect_ratio, seed,
         intent=intent, seconds=native_seconds, aspect=aspect_ratio, seed=seed,
         megapixels=megapixels, sizing='match', spoken_language=spoken_language, silent=silent,
         reference_groups=reference_groups, required_references=required_references,
-        motion_targets=motion_targets,
+        motion_targets=motion_targets, caller_contract_policy=CALLER_CONTRACT_POLICY,
     )
     graph['5']['inputs']['noise_seed'] = seed
     if production_contract is not None:

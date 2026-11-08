@@ -83,12 +83,13 @@
     {
       "name": "VideoFactoryLocalVLMGuard",
       "files": {
-        "compile_node.py": "372aa79c187ddc6f300b1b720ad440de76abdf029bdd74d1cda66184392e78c6",
+        "compile_node.py": "dda142875a156f4583359f0569e45b096a53976c61383c92be4d98a93c381c80",
         "guard.py": "e3a31b15b9dd518d5935515a7859133f602cbcb76b6e7cab74fb08b49240546c",
-        "local_h3ir_backend_profile.py": "ef3c6d4c20535d4ac5bfd00210723b4bf9a0fb4ae8095864d91944b04ceb6d35",
+        "local_h3ir_backend_profile.py": "8a7f97e64eb733b38241c1612abf3ec24bf05db35b4626706e2ca73befa5ec86",
         "__init__.py": "c370a05a4818652bb47e77563953fafac0253cb32c0a96e6760349045f9ac24c",
         "revision_constraints.py": "a9afe20edb0bed744aaac467207bb9e4eee53963c04e8bfeb651bc764aebb7b8",
-        "product_reference_validation.py": "443b70743c276caa012a22fdec4de85acee457b53cb4cbd3b55cb5f39c9f7179"
+        "product_reference_validation.py": "443b70743c276caa012a22fdec4de85acee457b53cb4cbd3b55cb5f39c9f7179",
+        "revision_semantics.py": "78fb67928b0027c1579dd95878360d8eb9ed2d8916270777f208dcbca091cfbd"
       }
     },
     {

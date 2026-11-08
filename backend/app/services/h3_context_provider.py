@@ -22,6 +22,7 @@ from app.core.paths import safe_media_path
 from app.core.trusted_service_origins import is_loopback_service, is_trusted_local_service, service_origin, local_service_client
 from app.services.gpu_gate import _connection_refused, gpu_submission
 from app.services.h3_workflow_router import build_graph
+from app.services.revision_semantics import CALLER_CONTRACT_POLICY, extract_scene_requirements
 from app.services.motion_references import prepare_motion_reference
 from app.services.providers import ComfyUIH3Provider, JobAccepted, ProviderHealth
 
@@ -284,7 +285,8 @@ def frozen_production_contract(images,declarations,context,prompt):
     # Caller labels that have no picture group still need a unique written
     # Subject. The compiler gate refuses absent/ambiguous anchors.
     return {'version':1,'product_groups':products,'revision_constraints':constraints,
-            'constraint_target_groups':target_groups}
+            'constraint_target_groups':target_groups,
+            'scene_requirements':extract_scene_requirements(context.get('instruction') or '',constraints)}
 
 
 
@@ -300,6 +302,21 @@ def prepare_context_compilation(prompt,negative_prompt,images,motion,context,*,s
                               'inside exactly one Subject definition, and use that Subject in the numbered shot. '
                               'Do not apply this target constraint to unrelated subjects.')
     intent=context_compiler_intent(prompt,negative_prompt,directions,silent=silent,staging=staging)
+    scene=[]
+    for requirement in contract['scene_requirements']:
+        key=requirement['target_key'];rule=requirement['rule']
+        if rule=='target_first_frame_palm_support':
+            hand=(requirement.get('hand')+' ') if requirement.get('hand') else ''
+            scene.append(f'At the first frame {key} is supported by the open {hand}palm, not placed on the floor or carpet.')
+        elif rule=='target_hand_face_same_frame':
+            scene.append(f'Keep the whole {key}, the supporting hand and the person\'s face visible together in the same frame.')
+        elif rule=='target_raise_to_cheek':
+            scene.append(f'Then the person raises {key} to the cheek while maintaining the requested product size.')
+    if scene:
+        if re.search(r'固定|\b(?:static|holds static)\b',context.get('instruction') or '',re.I):
+            scene.append('The camera holds static throughout this numbered shot.')
+        intent+='\nCurrent explicit caller scene requirements (override older framing or placement):\n'+'\n'.join(scene)
+        intent+='\nThese requirements govern only the physical target product, not its package. In the numbered shot replace each target name with its actual bound Subject tag; write these visible actions in the shot body.'
     return tray,declarations,intent,contract
 
 
@@ -406,6 +423,20 @@ async def check_context_qwen(url, profile_settings=None, *, runtime_required=Fal
         await require_context_qwen(client, context_origin(url, profile_settings), runtime_required=runtime_required)
 
 
+def compiler_contract_supported(definition):
+    inputs=definition.get('input',{}) if isinstance(definition,dict) else {}
+    if not isinstance(inputs,dict):return False
+    fields=[part for key in ('required','optional') if isinstance(part:=inputs.get(key),dict)]
+    def valid(name,*,policy=False):
+        for part in fields:
+            field=part.get(name)
+            if not isinstance(field,(list,tuple)) or not field or field[0]!='STRING':continue
+            if not policy:return True
+            if len(field)>1 and isinstance(field[1],dict) and field[1].get('default')==CALLER_CONTRACT_POLICY:return True
+        return False
+    return valid('production_contract') and valid('caller_contract_policy',policy=True)
+
+
 async def require_context_ready(client, origin, *, required_nodes=None, runtime_required=False):
     """Read-only admission check; never upload media or submit a graph here."""
     try:
@@ -433,10 +464,7 @@ async def require_context_ready(client, origin, *, required_nodes=None, runtime_
         raise AppError(409, 'local_gpu_busy', 'ComfyUI 队列尚未空闲；等待原任务结束，视频未提交')
     if 'VideoFactoryLocalH3IRCompile' in required:
         definition=nodes.get('VideoFactoryLocalH3IRCompile')
-        inputs=definition.get('input',{}) if isinstance(definition,dict) else {}
-        fields=[part.get('production_contract') for key in ('required','optional')
-                if isinstance(part:=inputs.get(key),dict)] if isinstance(inputs,dict) else []
-        if not any(isinstance(field,(list,tuple)) and field and field[0]=='STRING' for field in fields):
+        if not compiler_contract_supported(definition):
             raise AppError(409,'context_ir_compiler_update_required',
                 'Context-IR 项目编译节点版本过旧或输入不兼容；请更新项目自有节点，并在 ComfyUI 队列空闲后重启服务。视频未提交')
     await require_context_qwen(client, origin, runtime_required=runtime_required)
@@ -478,10 +506,7 @@ async def probe_context_health(settings, snapshot=None):
                 health.error = '本地 ComfyUI 缺少 Context-IR 编译节点'
             elif not busy:
                 definition=nodes['VideoFactoryLocalH3IRCompile']
-                inputs=definition.get('input',{}) if isinstance(definition,dict) else {}
-                fields=[part.get('production_contract') for key in ('required','optional')
-                        if isinstance(part:=inputs.get(key),dict)] if isinstance(inputs,dict) else []
-                if not any(isinstance(field,(list,tuple)) and field and field[0]=='STRING' for field in fields):
+                if not compiler_contract_supported(definition):
                     health.error='Context-IR 项目编译节点版本过旧或输入不兼容；请更新项目自有节点，并在 ComfyUI 队列空闲后重启服务'
                 else:
                     await require_context_qwen(client, origin, runtime_required=settings.container_mode

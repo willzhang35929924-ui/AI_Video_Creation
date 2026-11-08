@@ -3,6 +3,7 @@ from copy import deepcopy
 import inspect
 import json
 import re
+from .revision_semantics import CALLER_CONTRACT_POLICY
 
 
 # Audited Main calls compile_here before render_fields and every H3 loader.
@@ -83,7 +84,16 @@ def reference_contract(upstream,media,groups='',required='',motion='',production
         raise ValueError('Revision constraint target must name a declared product group')
     result.update(identity_validation_required=bool(product_groups),
                   revision_constraints=policy.get('revision_constraints') or {},
-                  constraint_target_groups=targets)
+                  constraint_target_groups=targets,
+                  scene_requirements=policy.get('scene_requirements') or [])
+    requirements=result['scene_requirements']
+    constraint_keys={item.get('target_key') for item in result['revision_constraints'].get('items',[])
+                     if isinstance(item,dict) and isinstance(item.get('target_key'),str)}
+    if (not isinstance(requirements,list) or any(not isinstance(row,dict)
+            or row.get('target_key') not in constraint_keys or not isinstance(row.get('source_text'),str)
+            or row.get('rule') not in {'target_first_frame_palm_support','target_hand_face_same_frame','target_raise_to_cheek'}
+            for row in requirements)):
+        raise ValueError('Unsupported caller scene requirement contract')
     return result
 
 
@@ -98,6 +108,8 @@ class VideoFactoryLocalH3IRCompile:
             ('motion_targets','Optional explicit motion source for a character group, one per line: person-name: clip-label. This is content reference, with no pure-motion isolation guarantee.'),
             ('production_contract','Frozen product identity and caller revision constraints as JSON. Validated before H3 loading.')):
             extra[name]=('STRING',{'default':'','multiline':True,'advanced':True,'tooltip':tip})
+        extra['caller_contract_policy']=('STRING',{'default':CALLER_CONTRACT_POLICY,'advanced':True,
+            'tooltip':'Required project caller-contract verification policy; cannot disable validation.'})
         return inputs
 
     RETURN_TYPES=('MODEL','CONDITIONING','LATENT','VAE','VAE','STRING','STRING')
@@ -109,11 +121,14 @@ class VideoFactoryLocalH3IRCompile:
     @classmethod
     def IS_CHANGED(cls,**kwargs):return float('nan')
 
-    def compile(self,reference_groups='',required_references='',motion_targets='',production_contract='',**kwargs):
+    def compile(self,reference_groups='',required_references='',motion_targets='',production_contract='',
+                caller_contract_policy=CALLER_CONTRACT_POLICY,**kwargs):
         import folder_paths
         from pathlib import Path
         from .guard import validate_setup
         from .local_h3ir_backend_profile import profile_scope, source_hash, write_json
+        if caller_contract_policy!=CALLER_CONTRACT_POLICY:
+            raise ValueError('Unsupported caller contract policy; update the project nodes before H3 loading')
         validate_setup(kwargs.get('setup'))
         upstream=upstream_main()
         if tuple(upstream.RETURN_TYPES)!=self.RETURN_TYPES or inspect.iscoroutinefunction(upstream.execute):
@@ -131,6 +146,7 @@ class VideoFactoryLocalH3IRCompile:
                            reference_contract=contract,sizing=kwargs.get('sizing','max')) as receipt:
             write_json(receipt.parent/'main-contract.json',{
                 'execute_sha256':MAIN_EXECUTE_SHA256,
+                'caller_contract_policy':caller_contract_policy,
                 'input_types':upstream.INPUT_TYPES(),
                 'return_types':list(upstream.RETURN_TYPES),
                 'return_names':list(upstream.RETURN_NAMES),
